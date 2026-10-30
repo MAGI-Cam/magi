@@ -13,9 +13,33 @@ Magi.effectConfig = [
       { id: 'intensity', label: 'Intensity', min: 0, max: 100, step: 1, default: 50 }
     ]
   },
-  { id: 'ascii', name: 'ASCII', ready: false, params: [] },
-  { id: 'binary', name: 'Binary', ready: false, params: [] },
-  { id: 'xs-and-os', name: "X's and O's", ready: false, params: [] }
+  {
+    id: 'ascii',
+    name: 'ASCII',
+    ready: true,
+    params: [
+      { id: 'scale', label: 'Scale', min: 1, max: 9, step: 1, default: 5 },
+      { id: 'intensity', label: 'Intensity', min: 0, max: 100, step: 1, default: 50 }
+    ]
+  },
+  {
+    id: 'binary',
+    name: 'Binary',
+    ready: true,
+    params: [
+      { id: 'scale', label: 'Scale', min: 1, max: 9, step: 1, default: 5 },
+      { id: 'intensity', label: 'Intensity', min: 0, max: 100, step: 1, default: 50 }
+    ]
+  },
+  {
+    id: 'xs-and-os',
+    name: "X's and O's",
+    ready: true,
+    params: [
+      { id: 'scale', label: 'Scale', min: 1, max: 9, step: 1, default: 5 },
+      { id: 'intensity', label: 'Intensity', min: 0, max: 100, step: 1, default: 50 }
+    ]
+  }
 ];
 
 Magi.defaultsFor = function (effect) {

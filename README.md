@@ -2,7 +2,12 @@
 
 A minimalist effects tool library. Apply a visual effect to your live camera or an uploaded photo or video, adjust it, capture, and save the result to your device.
 
-v0.1 ships one effect: **Bitmap**. Square pixels in pure black and white, with gray made only by how densely the black pixels sit.
+Effects:
+
+- **Bitmap**: square pixels in pure black and white, with gray made only by how densely the black pixels sit.
+- **ASCII**: one monospace character per cell; brighter areas get denser characters.
+- **Binary**: only `0`, `1` and empty space.
+- **X's and O's**: drawn crosses and rings that grow and thicken in brighter areas.
 
 ## Run it locally
 
@@ -39,7 +44,7 @@ These fill gaps the PRD leaves open. They are easy to change.
 | Photo export | PNG at the processed resolution (about 1280 px on the long edge). |
 | Video export | MP4 where the browser can record it (Safari, recent Chrome), otherwise WebM. 30 fps, no audio, no length limit. |
 | Saving on phones | Uses the share sheet when available, so the result can go to the camera roll. Desktop downloads the file. |
-| Future effects | ASCII, Binary and X's and O's appear in the tray as disabled tiles. |
+| Glyph effects | ASCII, Binary and X's and O's are white glyphs on black, snapped to pure black and white. Glyphs are ordered by measured ink coverage and dithered between neighbors. Scale sets the cell size (6–24 px, default 12 px). These looks are first interpretations, not from the PRD. |
 | Canvas fit | The whole frame is shown (contained) with black around it. Nothing is cropped or stretched. |
 
 ## Project layout
@@ -48,7 +53,8 @@ These fill gaps the PRD leaves open. They are easy to change.
 index.html            page structure
 css/magi.css          interface shell
 js/effects/config.js  effect names, order and parameters
-js/effects/bitmap.js  Bitmap renderer
+js/effects/shared.js  tone sampling, dithering, glyph renderer
+js/effects/*.js       one renderer per effect
 js/app.js             camera, upload, tray, capture, review, save
 docs/                 PRD, design file, project guidance (v0.1)
 ```

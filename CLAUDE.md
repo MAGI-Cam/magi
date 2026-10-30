@@ -1,6 +1,6 @@
 # Magi
 
-Minimalist effects tool library: apply a visual effect to live camera input or an uploaded photo/video, adjust it, capture, and save to the device. First release: **Bitmap**.
+Minimalist effects tool library: apply a visual effect to live camera input or an uploaded photo/video, adjust it, capture, and save to the device. Effects: **Bitmap**, ASCII, Binary, X's and O's.
 
 Source of truth for scope is the PRD in `docs/`. This file guides implementation. Both are starting points; update them when prototyping proves a better direction.
 
@@ -9,6 +9,7 @@ Source of truth for scope is the PRD in `docs/`. This file guides implementation
 - `index.html` — the single page. No build step; plain scripts load in order.
 - `css/magi.css` — interface shell (black and white only).
 - `js/effects/config.js` — effect names, order, availability and parameters (`Magi.effectConfig`). No rendering code.
+- `js/effects/shared.js` — helpers shared by effects: tone sampler, Bayer thresholds, glyph renderer (used by ASCII, Binary, X's and O's).
 - `js/effects/<effect>.js` — one file per effect. Registers a factory in `Magi.renderers[id]` returning `{ render(frame, outCanvas, params), reset() }`.
 - `js/app.js` — camera/upload input, tray, shared controls, capture, review, save. Must stay effect-agnostic.
 - `docs/` — PRD, design file and original guidance (v0.1 PDFs).
