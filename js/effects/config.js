@@ -13,7 +13,7 @@ Magi.effectConfig = [
       { id: 'intensity', label: 'Intensity', min: 0, max: 100, step: 1, default: 50 }
     ]
   },
-  { id: 'asi-symbols', name: 'ASI Symbols', ready: false, params: [] },
+  { id: 'ascii', name: 'ASCII', ready: false, params: [] },
   { id: 'binary', name: 'Binary', ready: false, params: [] },
   { id: 'xs-and-os', name: "X's and O's", ready: false, params: [] }
 ];

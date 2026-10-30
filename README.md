@@ -39,7 +39,7 @@ These fill gaps the PRD leaves open. They are easy to change.
 | Photo export | PNG at the processed resolution (about 1280 px on the long edge). |
 | Video export | MP4 where the browser can record it (Safari, recent Chrome), otherwise WebM. 30 fps, no audio, no length limit. |
 | Saving on phones | Uses the share sheet when available, so the result can go to the camera roll. Desktop downloads the file. |
-| Future effects | ASI Symbols, Binary and X's and O's appear in the tray as disabled tiles. |
+| Future effects | ASCII, Binary and X's and O's appear in the tray as disabled tiles. |
 | Canvas fit | The whole frame is shown (contained) with black around it. Nothing is cropped or stretched. |
 
 ## Project layout
