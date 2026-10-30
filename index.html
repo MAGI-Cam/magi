@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#000000">
+  <title>Magi</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400&display=swap">
+  <link rel="stylesheet" href="css/magi.css">
+</head>
+<body>
+  <div class="app" id="app" data-phase="live" data-mode="photo">
+    <main class="stage" id="stage">
+      <canvas class="view" id="view" aria-label="Effect preview"></canvas>
+      <video class="review-video" id="review-video" playsinline loop muted hidden></video>
+      <div class="notice" id="notice" hidden>
+        <div class="notice-body">
+          <p id="notice-text"></p>
+          <div class="notice-actions" id="notice-actions"></div>
+        </div>
+      </div>
+    </main>
+
+    <div class="mark" aria-hidden="true">M</div>
+
+    <button class="save" id="save" type="button" aria-label="Save to device" hidden>
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <g class="save-arrow"><path d="M12 4v11"/><path d="M7 10.5l5 5 5-5"/></g>
+        <path class="save-base" d="M5 20h14"/>
+      </svg>
+    </button>
+
+    <div class="timer" id="timer" role="timer" aria-live="off" hidden>00:00</div>
+
+    <section class="tray" id="tray" data-open="false" aria-label="Effects">
+      <div class="tiles" id="tiles" role="radiogroup" aria-label="Effect"></div>
+      <div class="controls" id="controls"></div>
+    </section>
+
+    <nav class="toolbar" aria-label="Camera controls">
+      <div class="tb-left">
+        <div class="modes" role="radiogroup" aria-label="Capture mode">
+          <button type="button" role="radio" data-mode-option="photo" aria-label="Photo" aria-checked="true">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="7" width="17" height="12"/><path d="M9 7l1.5-2.5h3L15 7"/><circle cx="12" cy="13" r="3.25"/></svg>
+          </button>
+          <button type="button" role="radio" data-mode-option="video" aria-label="Video" aria-checked="false">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="12.5" height="10"/><path d="M15.5 10.5l5.5-3v9l-5.5-3"/></svg>
+          </button>
+        </div>
+        <button class="icon-btn" id="upload" type="button" aria-label="Upload photo or video">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15V4"/><path d="M7 8.5l5-5 5 5"/><path d="M4.5 14v6h15v-6"/></svg>
+        </button>
+        <button class="icon-btn" id="camera" type="button" aria-label="Return to live camera" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.5"/></svg>
+        </button>
+      </div>
+
+      <button class="shutter" id="shutter" type="button" aria-label="Take photo">
+        <span class="shutter-core"></span>
+        <svg class="shutter-retake" viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 12a6.5 6.5 0 1 0 2-4.7"/><path d="M5 4v4h4"/></svg>
+      </button>
+
+      <div class="tb-right">
+        <button class="icon-btn caret" id="caret" type="button" aria-label="Show effects" aria-expanded="false" aria-controls="tray">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg>
+        </button>
+      </div>
+    </nav>
+
+    <input type="file" id="file" accept="image/*,video/*" hidden>
+  </div>
+
+  <script src="js/effects/config.js"></script>
+  <script src="js/effects/bitmap.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
