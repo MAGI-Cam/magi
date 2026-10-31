@@ -1,6 +1,7 @@
 // X's and O's: drawn crosses and rings that grow and thicken in brighter areas.
 (function () {
-  var CELL_SIZES = [6, 7, 8, 10, 12, 14, 16, 20, 24];
+  // Cell size in screen pixels for each Scale step (1–9).
+  var CELL_SIZES = [6, 7, 8, 9, 11, 13, 16, 19, 24];
 
   function cross(size, weight) {
     return function (g, cell) {

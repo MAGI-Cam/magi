@@ -2,7 +2,7 @@
 
 A minimalist effects tool library. Apply a visual effect to your live camera or an uploaded photo or video, adjust it, capture, and save the result to your device.
 
-Effects:
+The tray has **Normal** (the plain camera), then the **Halftone** effects. Halftone is the printing technique of faking gray with a pattern of marks; every effect here rebuilds the image from a grid of marks and lets their density carry the shading.
 
 - **Bitmap**: square pixels in pure black and white, with gray made only by how densely the black pixels sit.
 - **ASCII**: one character per cell, in five modes. Tap the ASCII tile again to switch mode:
@@ -42,7 +42,7 @@ To try it on a phone, the page has to be served over https (for example from Git
 - **Live camera** opens by default. The upload icon (bottom-left) switches to a photo or video. The camera icon in the same spot switches back.
 - **Photo / Video** toggle (bottom-left) picks the capture mode.
 - **Shutter** (center): photo mode captures a still. Video mode starts recording on the first tap and stops on the second.
-- **Effects tray** (caret, bottom-right): pick an effect and adjust its sliders. The circular arrow resets the sliders to defaults (an ASCII mode stays as chosen). Tapping the active ASCII tile switches mode; tapping any other active tile shows the unprocessed source.
+- **Effects tray** (caret, bottom-right): pick an effect and adjust its sliders. The circular arrow resets the sliders to defaults (an ASCII mode stays as chosen). Tapping the active ASCII tile switches mode. **Normal** shows the camera without an effect.
 - **Review**: after capture the preview freezes. The shutter becomes Retake. The download icon (top-right) saves the result.
 
 ## Decisions made for v0.1
@@ -57,10 +57,10 @@ These fill gaps the PRD leaves open. They are easy to change.
 | Intensity | 0–100, applied as contrast around mid-gray (0.25× at 0, 1× at 50, 4× at 100). Default 50. |
 | Depth | Not implemented yet. Bitmap responds to brightness only. |
 | Camera | Front-facing camera, mirrored like a photo booth. Saved results are mirrored too. |
-| Photo export | PNG at the processed resolution (about 1280 px on the long edge). |
+| Photo export | Halftone effects save PNG, which keeps hard pixel edges exact. Normal saves JPEG (quality 92). About 1280 px on the long edge. |
 | Video export | MP4 where the browser can record it (Safari, recent Chrome), otherwise WebM. 30 fps, no audio, no length limit. |
 | Saving on phones | Uses the share sheet when available, so the result can go to the camera roll. Desktop downloads the file. |
-| Glyph effects | ASCII, Binary and X's and O's are white glyphs on black, snapped to pure black and white. Glyphs are ordered by measured ink coverage and dithered between neighbors. Scale sets the cell size (6–24 px, default 12 px). These looks are first interpretations, not from the PRD. |
+| Glyph effects | ASCII, Binary and X's and O's are white glyphs on black, snapped to pure black and white. Glyphs are ordered by measured ink coverage and dithered between neighbors. Scale sets the cell size in screen pixels (6–24, default 11), so characters stay readable on a phone where the preview is shrunk. These looks are first interpretations, not from the PRD. |
 | Color | Saturation and Color tint whatever is lit (white pixels or glyphs); the black background stays black. Both default to 0, which is the original pure black and white. |
 | Canvas fit | The whole frame is shown (contained) with black around it. Nothing is cropped or stretched. |
 

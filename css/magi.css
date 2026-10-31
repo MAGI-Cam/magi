@@ -373,6 +373,16 @@ svg {
 
 .tile:disabled { color: var(--dim); opacity: 0.55; cursor: default; }
 
+/* Group heading inside the tile grid, e.g. "Halftone". */
+.tile-group {
+  grid-column: 1 / -1;
+  margin-top: 8px;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
 .tile-mode {
   font-size: 10px;
   letter-spacing: 0.14em;

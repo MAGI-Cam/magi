@@ -32,8 +32,11 @@
     return flat;
   })();
 
-  fx.cellSize = function (sizes, scale) {
-    return sizes[scale - 1] || sizes[(sizes.length / 2) | 0];
+  // Cell size in canvas pixels for a Scale step. Pass the frame to read the sizes as screen
+  // pixels instead, so characters stay legible whether the preview is shrunk (phones) or not.
+  fx.cellSize = function (sizes, scale, frame) {
+    var size = sizes[scale - 1] || sizes[(sizes.length / 2) | 0];
+    return frame ? Math.max(4, Math.round(size * (frame.pxPerCss || 1))) : size;
   };
 
   // Samples a frame onto a cols×rows grid with gentle easing over time. Returns
@@ -142,36 +145,46 @@
 
   // Renders draw(ctx, cell) functions side by side, snapped to pure white on transparent,
   // and measures each glyph's ink coverage (0–1).
+  // Glyphs are laid out in rows of ATLAS_COLUMNS to keep the canvas within phone size limits.
+  var ATLAS_COLUMNS = 16;
+
   fx.buildAtlas = function (glyphs, cell) {
     var canvas = document.createElement('canvas');
-    canvas.width = cell * glyphs.length;
-    canvas.height = cell;
+    canvas.width = cell * Math.min(glyphs.length, ATLAS_COLUMNS);
+    canvas.height = cell * Math.ceil(glyphs.length / ATLAS_COLUMNS);
     var g = canvas.getContext('2d', { willReadFrequently: true });
     glyphs.forEach(function (draw, i) {
+      var gx = (i % ATLAS_COLUMNS) * cell, gy = ((i / ATLAS_COLUMNS) | 0) * cell;
       g.save();
       g.beginPath();
-      g.rect(i * cell, 0, cell, cell);
+      g.rect(gx, gy, cell, cell);
       g.clip();
-      g.translate(i * cell, 0);
+      g.translate(gx, gy);
       g.fillStyle = g.strokeStyle = '#fff';
       draw(g, cell);
       g.restore();
     });
 
-    var img = g.getImageData(0, 0, canvas.width, cell);
+    var img = g.getImageData(0, 0, canvas.width, canvas.height);
     var d = img.data;
     var cover = new Float32Array(glyphs.length);
-    for (var y = 0; y < cell; y++) {
+    for (var y = 0; y < canvas.height; y++) {
       for (var x = 0; x < canvas.width; x++) {
         var p = (y * canvas.width + x) << 2;
         var on = d[p + 3] >= 128;
         d[p] = d[p + 1] = d[p + 2] = 255;
         d[p + 3] = on ? 255 : 0;
-        if (on) cover[(x / cell) | 0] += 1 / (cell * cell);
+        if (on) cover[((y / cell) | 0) * ATLAS_COLUMNS + ((x / cell) | 0)] += 1 / (cell * cell);
       }
     }
     g.putImageData(img, 0, 0);
-    return { canvas: canvas, cover: cover };
+    return { canvas: canvas, cover: cover, cell: cell };
+  };
+
+  // Draws glyph `index` from an atlas into the cell at (x, y) on ctx.
+  fx.drawGlyph = function (ctx, atlas, index, x, y) {
+    var c = atlas.cell;
+    ctx.drawImage(atlas.canvas, (index % ATLAS_COLUMNS) * c, ((index / ATLAS_COLUMNS) | 0) * c, c, c, x, y, c, c);
   };
 
   // Orders glyphs by coverage (dropping ones that render equally dense at this size) and
@@ -219,7 +232,7 @@
 
     return {
       render: function (frame, out, params) {
-        var cell = fx.cellSize(options.cellSizes, params.scale);
+        var cell = fx.cellSize(options.cellSizes, params.scale, frame);
         var cols = Math.max(1, Math.round(frame.width / cell));
         var rows = Math.max(1, Math.round(frame.height / cell));
         var sample = sampler.sample(frame, cols, rows, params.intensity);
@@ -249,7 +262,7 @@
               glyph = ramp.mix[t] > fx.BAYER[row | (x & 7)] ? ramp.hi[t] : ramp.lo[t];
               if (glyph < 0) continue;
             }
-            octx.drawImage(atlas.canvas, glyph * cell, 0, cell, cell, x * cell, y * cell, cell, cell);
+            fx.drawGlyph(octx, atlas, glyph, x * cell, y * cell);
           }
         }
         fx.applyInk(out, sample, params);

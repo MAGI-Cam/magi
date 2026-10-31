@@ -13,11 +13,21 @@ function sharedParams() {
   ];
 }
 
+// Halftone: effects that rebuild the image from a grid of marks (pixels, characters, symbols)
+// and fake every shade of gray with how densely those marks sit.
+Magi.effectGroups = [
+  { id: 'halftone', name: 'Halftone' }
+];
+
 Magi.effectConfig = [
-  { id: 'bitmap', name: 'Bitmap', ready: true, params: sharedParams() },
+  // Normal has no renderer: the camera or media is shown as is. Its photos save as JPEG,
+  // which suits continuous-tone images; halftone effects keep exact edges as PNG.
+  { id: 'normal', name: 'Normal', ready: true, params: [], photoType: 'image/jpeg' },
+  { id: 'bitmap', name: 'Bitmap', group: 'halftone', ready: true, params: sharedParams() },
   {
     id: 'ascii',
     name: 'ASCII',
+    group: 'halftone',
     ready: true,
     // Tapping the active tile steps through these in order.
     modes: [
@@ -29,8 +39,8 @@ Magi.effectConfig = [
     ],
     params: sharedParams()
   },
-  { id: 'binary', name: 'Binary', ready: true, params: sharedParams() },
-  { id: 'xs-and-os', name: "X's and O's", ready: true, params: sharedParams() }
+  { id: 'binary', name: 'Binary', group: 'halftone', ready: true, params: sharedParams() },
+  { id: 'xs-and-os', name: "X's and O's", group: 'halftone', ready: true, params: sharedParams() }
 ];
 
 Magi.defaultsFor = function (effect) {

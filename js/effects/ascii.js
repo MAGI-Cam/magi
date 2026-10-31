@@ -6,7 +6,8 @@
 // Edges     — outlines drawn with - | / \ along the image's edges, Classic ramp elsewhere.
 (function () {
   var fx = Magi.fx;
-  var CELL_SIZES = [6, 7, 8, 10, 12, 14, 16, 20, 24];
+  // Cell size in screen pixels for each Scale step (1–9).
+  var CELL_SIZES = [6, 7, 8, 9, 11, 13, 16, 19, 24];
   var CLASSIC = '.:-=+*#%@';
   var DETAILED = ".'`^\",:;Il!i><~+_-?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$";
 
@@ -51,7 +52,7 @@
 
     return {
       render: function (frame, out, params) {
-        var cell = fx.cellSize(CELL_SIZES, params.scale);
+        var cell = fx.cellSize(CELL_SIZES, params.scale, frame);
         var cols = Math.max(1, Math.round(frame.width / cell));
         var rows = Math.max(1, Math.round(frame.height / cell));
         var sw = cols * 2;
@@ -70,7 +71,7 @@
                 if (tone[sy * sw + sx] > fx.BAYER[((sy & 7) << 3) | (sx & 7)]) bits |= 1 << (c * 4 + r);
               }
             }
-            if (bits) octx.drawImage(atlas.canvas, bits * cell, 0, cell, cell, x * cell, y * cell, cell, cell);
+            if (bits) fx.drawGlyph(octx, atlas, bits, x * cell, y * cell);
           }
         }
         fx.applyInk(out, sample, params);
