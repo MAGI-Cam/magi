@@ -163,14 +163,10 @@
 
     var k = WORK_EDGE / Math.max(src.w, src.h);
     var w = Math.round(src.w * k), h = Math.round(src.h * k);
-    var r = stageSize();
     var frame = {
       width: w,
       height: h,
       moving: src.moving,
-      // Canvas pixels per screen (CSS) pixel once the frame is fitted to the stage. Effects
-      // that should look the same size on any screen, like characters, multiply by this.
-      pxPerCss: r.width && r.height ? 1 / Math.min(r.width / w, r.height / h) : 1,
       draw: function (c, dw, dh) {
         c.save();
         if (src.mirror) { c.translate(dw, 0); c.scale(-1, 1); }
@@ -194,17 +190,10 @@
     }
   }
 
-  var stageRect = null;
-  function stageSize() {
-    return stageRect || (stageRect = stage.getBoundingClientRect());
-  }
-
   // Contain the canvas in the stage without distortion.
   function fitView() {
-    stageRect = null;
-    dirty = true;
     if (!view.width || !view.height) return;
-    var r = stageSize();
+    var r = stage.getBoundingClientRect();
     var s = Math.min(r.width / view.width, r.height / view.height);
     view.style.width = Math.floor(view.width * s) + 'px';
     view.style.height = Math.floor(view.height * s) + 'px';
@@ -271,43 +260,34 @@
     caret.setAttribute('aria-label', open ? 'Hide effects' : 'Show effects');
   }
 
-  // Ungrouped effects (Normal) come first, then each group under its heading.
   function buildTiles() {
-    Magi.effectConfig.forEach(function (fx) { if (!fx.group) addTile(fx); });
-    Magi.effectGroups.forEach(function (group) {
-      var label = document.createElement('div');
-      label.className = 'tile-group';
-      label.textContent = group.name;
-      tiles.appendChild(label);
-      Magi.effectConfig.forEach(function (fx) { if (fx.group === group.id) addTile(fx); });
+    Magi.effectConfig.forEach(function (fx) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'tile';
+      b.dataset.effect = fx.id;
+      b.setAttribute('role', 'radio');
+      var name = document.createElement('span');
+      name.textContent = fx.name;
+      b.appendChild(name);
+      if (fx.modes) {
+        var mode = document.createElement('span');
+        mode.className = 'tile-mode';
+        b.appendChild(mode);
+      }
+      if (!fx.ready) {
+        b.disabled = true;
+        b.title = 'Coming later';
+      }
+      // Tapping the active tile steps through its modes; without modes it turns the effect off.
+      b.addEventListener('click', function () {
+        if (state.effectId !== fx.id) selectEffect(fx.id);
+        else if (fx.modes) nextMode(fx);
+        else selectEffect(null);
+      });
+      tiles.appendChild(b);
     });
     syncTileModes();
-  }
-
-  function addTile(fx) {
-    var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'tile';
-    b.dataset.effect = fx.id;
-    b.setAttribute('role', 'radio');
-    var name = document.createElement('span');
-    name.textContent = fx.name;
-    b.appendChild(name);
-    if (fx.modes) {
-      var mode = document.createElement('span');
-      mode.className = 'tile-mode';
-      b.appendChild(mode);
-    }
-    if (!fx.ready) {
-      b.disabled = true;
-      b.title = 'Coming later';
-    }
-    // Tapping the active tile steps through its modes, if it has any.
-    b.addEventListener('click', function () {
-      if (state.effectId !== fx.id) selectEffect(fx.id);
-      else if (fx.modes) nextMode(fx);
-    });
-    tiles.appendChild(b);
   }
 
   function modeOf(fx) {
@@ -343,7 +323,7 @@
   function selectEffect(id) {
     state.effectId = id;
     resetRenderers();
-    Array.prototype.forEach.call(tiles.querySelectorAll('.tile'), function (t) {
+    Array.prototype.forEach.call(tiles.children, function (t) {
       t.setAttribute('aria-checked', String(t.dataset.effect === id));
     });
     syncTileModes();
@@ -448,12 +428,7 @@
   function capturePhoto() {
     setPhase('review');
     result = new Promise(function (resolve) {
-      // PNG keeps halftone edges exact; plain photos save as JPEG (see config photoType).
-      var fx = currentEffect();
-      var type = (fx && fx.photoType) || 'image/png';
-      view.toBlob(function (blob) {
-        resolve({ blob: blob, ext: type === 'image/jpeg' ? 'jpg' : 'png' });
-      }, type, 0.92);
+      view.toBlob(function (blob) { resolve({ blob: blob, ext: 'png' }); }, 'image/png');
     });
   }
 
