@@ -265,17 +265,51 @@
       var b = document.createElement('button');
       b.type = 'button';
       b.className = 'tile';
-      b.textContent = fx.name;
       b.dataset.effect = fx.id;
       b.setAttribute('role', 'radio');
+      var name = document.createElement('span');
+      name.textContent = fx.name;
+      b.appendChild(name);
+      if (fx.modes) {
+        var mode = document.createElement('span');
+        mode.className = 'tile-mode';
+        b.appendChild(mode);
+      }
       if (!fx.ready) {
         b.disabled = true;
         b.title = 'Coming later';
       }
+      // Tapping the active tile steps through its modes; without modes it turns the effect off.
       b.addEventListener('click', function () {
-        selectEffect(state.effectId === fx.id ? null : fx.id);
+        if (state.effectId !== fx.id) selectEffect(fx.id);
+        else if (fx.modes) nextMode(fx);
+        else selectEffect(null);
       });
       tiles.appendChild(b);
+    });
+    syncTileModes();
+  }
+
+  function modeOf(fx) {
+    var id = state.params[fx.id].mode;
+    for (var i = 0; i < fx.modes.length; i++) if (fx.modes[i].id === id) return i;
+    return 0;
+  }
+
+  function nextMode(fx) {
+    state.params[fx.id].mode = fx.modes[(modeOf(fx) + 1) % fx.modes.length].id;
+    resetRenderers();
+    syncTileModes();
+  }
+
+  function syncTileModes() {
+    Magi.effectConfig.forEach(function (fx) {
+      if (!fx.modes) return;
+      var tile = tiles.querySelector('[data-effect="' + fx.id + '"]');
+      var mode = fx.modes[modeOf(fx)];
+      tile.querySelector('.tile-mode').textContent = mode.name;
+      tile.setAttribute('aria-label', fx.name + ', ' + mode.name + ' mode');
+      tile.title = state.effectId === fx.id ? 'Tap to change mode' : '';
     });
   }
 
@@ -292,7 +326,20 @@
     Array.prototype.forEach.call(tiles.children, function (t) {
       t.setAttribute('aria-checked', String(t.dataset.effect === id));
     });
+    syncTileModes();
     buildControls();
+  }
+
+  // Shows a slider's value: a number, or for the color slider a swatch of the chosen ink.
+  function showValue(p, input, out) {
+    if (p.track !== 'hue') {
+      out.textContent = input.value;
+      return;
+    }
+    var rgb = Magi.fx.inkColor(Number(input.value));
+    out.style.setProperty('--swatch', 'rgb(' + rgb.map(function (c) { return Math.round(c * 255); }).join(',') + ')');
+    var text = Number(input.value) === 0 ? 'White' : 'Hue ' + Math.round((input.value - 1) / 99 * 360) + '°';
+    input.setAttribute('aria-valuetext', text);
   }
 
   function setFill(input) {
@@ -312,7 +359,9 @@
       '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5.5 12a6.5 6.5 0 1 0 2-4.7"/><path d="M5 4v4h4"/></svg></button>';
     head.firstChild.textContent = fx.name;
     head.lastChild.addEventListener('click', function () {
+      var mode = state.params[fx.id].mode;
       state.params[fx.id] = Magi.defaultsFor(fx);
+      if (mode) state.params[fx.id].mode = mode; // reset adjusts sliders, not the chosen mode
       resetRenderers();
       buildControls();
     });
@@ -333,11 +382,15 @@
       input.max = p.max;
       input.step = p.step;
       input.value = state.params[fx.id][p.id];
-      out.textContent = input.value;
+      if (p.track === 'hue') {
+        input.classList.add('is-hue');
+        out.classList.add('swatch');
+      }
+      showValue(p, input, out);
       setFill(input);
       input.addEventListener('input', function () {
         state.params[fx.id][p.id] = Number(input.value);
-        out.textContent = input.value;
+        showValue(p, input, out);
         setFill(input);
         dirty = true;
       });

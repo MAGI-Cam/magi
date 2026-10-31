@@ -9,7 +9,8 @@ Source of truth for scope is the PRD in `docs/`. This file guides implementation
 - `index.html` — the single page. No build step; plain scripts load in order.
 - `css/magi.css` — interface shell (black and white only).
 - `js/effects/config.js` — effect names, order, availability and parameters (`Magi.effectConfig`). No rendering code.
-- `js/effects/shared.js` — helpers shared by effects: tone sampler, Bayer thresholds, glyph renderer (used by ASCII, Binary, X's and O's).
+- `js/effects/shared.js` — helpers shared by effects: tone/color sampler, Bayer thresholds, ink tinting (`applyInk`), glyph atlas and glyph renderer. Every renderer calls `applyInk` last.
+- `manifest.webmanifest`, `icons/` — install as an app (Dock, home screen).
 - `js/effects/<effect>.js` — one file per effect. Registers a factory in `Magi.renderers[id]` returning `{ render(frame, outCanvas, params), reset() }`.
 - `js/app.js` — camera/upload input, tray, shared controls, capture, review, save. Must stay effect-agnostic.
 - `docs/` — PRD, design file and original guidance (v0.1 PDFs).
@@ -20,8 +21,9 @@ To add an effect: add its entry in `config.js` with `ready: true`, create its re
 
 - Working Bitmap before expanding the library.
 - Live camera and uploaded photos/videos use the same workflow.
-- Bitmap: square pixels, pure black and white only; gray comes from pixel density.
-- Scale and Intensity controls, medium default Scale, reset-to-defaults.
+- Bitmap: square pixels; gray comes from pixel density. Pure black and white by default.
+- Shared controls: Scale, Intensity, Saturation (media color), Color (ink hue). Medium default Scale, reset-to-defaults. Defaults keep the original black-and-white look.
+- Effects can have modes (`modes` in config); tapping the active tile cycles them. ASCII has five.
 - Black-and-white, minimal UI. Text-only, uniform effect tiles. Icon-only fixed bottom toolbar with accessible names.
 - Capture, retake, save/download.
 

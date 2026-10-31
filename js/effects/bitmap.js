@@ -13,10 +13,11 @@
     return {
       // frame: { width, height, moving, draw(ctx, w, h) }; out: the visible canvas.
       render: function (frame, out, params) {
-        var cell = CELL_SIZES[params.scale - 1] || CELL_SIZES[4];
+        var cell = Magi.fx.cellSize(CELL_SIZES, params.scale);
         var cols = Math.max(1, Math.round(frame.width / cell));
         var rows = Math.max(1, Math.round(frame.height / cell));
-        var tone = sampler.sample(frame, cols, rows, params.intensity);
+        var sample = sampler.sample(frame, cols, rows, params.intensity);
+        var tone = sample.tone;
 
         if (pixels.width !== cols || pixels.height !== rows) {
           pixels.width = cols;
@@ -43,6 +44,7 @@
         var octx = out.getContext('2d');
         octx.imageSmoothingEnabled = false;
         octx.drawImage(pixels, 0, 0, w, h);
+        Magi.fx.applyInk(out, sample, params);
       },
 
       reset: function () { sampler.reset(); }
