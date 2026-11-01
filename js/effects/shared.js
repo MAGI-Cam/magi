@@ -130,19 +130,6 @@
     octx.restore();
   };
 
-  // Sizes the output canvas and clears it to black.
-  fx.prepareOut = function (out, w, h) {
-    if (out.width !== w || out.height !== h) {
-      out.width = w;
-      out.height = h;
-    }
-    var octx = out.getContext('2d');
-    octx.imageSmoothingEnabled = false;
-    octx.fillStyle = '#000';
-    octx.fillRect(0, 0, w, h);
-    return octx;
-  };
-
   // Renders draw(ctx, cell) functions side by side, snapped to pure white on transparent,
   // and measures each glyph's ink coverage (0–1). A pixel counts as ink when its coverage
   // reaches `threshold` (0–255, default half); fonts with hairlines need a lower one.
@@ -170,23 +157,46 @@
     var img = g.getImageData(0, 0, canvas.width, canvas.height);
     var d = img.data;
     var cover = new Float32Array(glyphs.length);
+    // One cell×cell on/off mask per glyph, for fast blitting.
+    var masks = glyphs.map(function () { return new Uint8Array(cell * cell); });
     for (var y = 0; y < canvas.height; y++) {
       for (var x = 0; x < canvas.width; x++) {
         var p = (y * canvas.width + x) << 2;
         var on = d[p + 3] >= cut;
         d[p] = d[p + 1] = d[p + 2] = 255;
         d[p + 3] = on ? 255 : 0;
-        if (on) cover[((y / cell) | 0) * ATLAS_COLUMNS + ((x / cell) | 0)] += 1 / (cell * cell);
+        if (on) {
+          var gi = ((y / cell) | 0) * ATLAS_COLUMNS + ((x / cell) | 0);
+          cover[gi] += 1 / (cell * cell);
+          masks[gi][(y % cell) * cell + (x % cell)] = 1;
+        }
       }
     }
     g.putImageData(img, 0, 0);
-    return { canvas: canvas, cover: cover, cell: cell };
+    return { canvas: canvas, cover: cover, cell: cell, masks: masks };
   };
 
-  // Draws glyph `index` from an atlas into the cell at (x, y) on ctx.
-  fx.drawGlyph = function (ctx, atlas, index, x, y) {
-    var c = atlas.cell;
-    ctx.drawImage(atlas.canvas, (index % ATLAS_COLUMNS) * c, ((index / ATLAS_COLUMNS) | 0) * c, c, c, x, y, c, c);
+  // Writes one glyph per cell straight into a pixel buffer (white on opaque black) and puts it
+  // on `out` in a single call. glyphs[i] is an atlas index, or −1 for an empty cell. Thousands of
+  // separate drawImage calls per frame were what made small scales lag.
+  var blitImage = null;
+  fx.blitGlyphs = function (out, atlas, glyphs, cols, rows) {
+    var c = atlas.cell, w = cols * c, h = rows * c;
+    if (out.width !== w || out.height !== h) { out.width = w; out.height = h; }
+    var octx = out.getContext('2d');
+    if (!blitImage || blitImage.width !== w || blitImage.height !== h) blitImage = octx.createImageData(w, h);
+    var buf = new Uint32Array(blitImage.data.buffer);
+    buf.fill(0xff000000); // opaque black (pixels are stored as ABGR on little-endian devices)
+    for (var i = 0, n = cols * rows; i < n; i++) {
+      var g = glyphs[i];
+      if (g < 0) continue;
+      var m = atlas.masks[g], ox = (i % cols) * c, oy = ((i / cols) | 0) * c;
+      for (var y = 0, k = 0; y < c; y++) {
+        var row = (oy + y) * w + ox;
+        for (var x = 0; x < c; x++, k++) if (m[k]) buf[row + x] = 0xffffffff;
+      }
+    }
+    octx.putImageData(blitImage, 0, 0);
   };
 
   // Orders glyphs by coverage (dropping ones that render equally dense at this size) and
@@ -237,6 +247,7 @@
     var atlases = {};
     var rampCount = options.glyphs.length;
     var fontLoaded = fx.fontReady(options.font);
+    var picks = null;
 
     function atlasFor(cell) {
       if (!fontLoaded && fx.fontReady(options.font)) {
@@ -261,7 +272,7 @@
         var sample = sampler.sample(frame, cols, rows, params.intensity);
         var tone = sample.tone;
         var atlas = atlasFor(cell), ramp = atlas.ramp;
-        var octx = fx.prepareOut(out, cols * cell, rows * cell);
+        if (!picks || picks.length !== cols * rows) picks = new Int16Array(cols * rows);
 
         for (var y = 0, i = 0; y < rows; y++) {
           var row = (y & 7) << 3;
@@ -283,11 +294,11 @@
             if (glyph < 0) {
               var t = (tone[i] * 255 + 0.5) | 0;
               glyph = ramp.mix[t] > fx.BAYER[row | (x & 7)] ? ramp.hi[t] : ramp.lo[t];
-              if (glyph < 0) continue;
             }
-            fx.drawGlyph(octx, atlas, glyph, x * cell, y * cell);
+            picks[i] = glyph;
           }
         }
+        fx.blitGlyphs(out, atlas, picks, cols, rows);
         fx.applyInk(out, sample, params);
       },
       reset: function () { sampler.reset(); }
@@ -314,8 +325,6 @@
   // `stack` is what the canvas draws with, falling back to the system monospace.
   fx.FONTS = {
     system: { family: null, stack: fx.MONO },
-    plex: { family: 'IBM Plex Mono', stack: '"IBM Plex Mono", ' + fx.MONO },
-    space: { family: 'Space Mono', stack: '"Space Mono", ' + fx.MONO },
     vt323: { family: 'VT323', stack: 'VT323, ' + fx.MONO },
     silkscreen: { family: 'Silkscreen', stack: 'Silkscreen, ' + fx.MONO },
     // Didone hairlines are under half a pixel at glyph sizes, so they need a low ink threshold.

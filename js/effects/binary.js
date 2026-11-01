@@ -18,11 +18,8 @@
 
   Magi.renderers.binary = function () {
     return fx.createModeRenderer({
-      system: digits(fx.FONTS.system),
-      plex: digits(fx.FONTS.plex),
-      space: digits(fx.FONTS.space),
       vt323: digits(fx.FONTS.vt323),
       silkscreen: digits(fx.FONTS.silkscreen)
-    }, 'system');
+    }, 'vt323');
   };
 })();

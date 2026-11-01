@@ -47,7 +47,7 @@
   function createBraille() {
     var sampler = fx.createToneSampler();
     var atlases = {};
-    var glyphs = [];
+    var glyphs = [], picks = null;
     for (var b = 0; b < 256; b++) glyphs.push(dots(b));
 
     return {
@@ -60,10 +60,10 @@
         var sample = sampler.sample(frame, sw, rows * 4, params.intensity);
         var tone = sample.tone;
         var atlas = atlases[cell] || (atlases[cell] = fx.buildAtlas(glyphs, cell));
-        var octx = fx.prepareOut(out, cols * cell, rows * cell);
+        if (!picks || picks.length !== cols * rows) picks = new Int16Array(cols * rows);
 
-        for (var y = 0; y < rows; y++) {
-          for (var x = 0; x < cols; x++) {
+        for (var y = 0, i = 0; y < rows; y++) {
+          for (var x = 0; x < cols; x++, i++) {
             var bits = 0;
             for (var c = 0; c < 2; c++) {
               for (var r = 0; r < 4; r++) {
@@ -71,9 +71,10 @@
                 if (tone[sy * sw + sx] > fx.BAYER[((sy & 7) << 3) | (sx & 7)]) bits |= 1 << (c * 4 + r);
               }
             }
-            if (bits) fx.drawGlyph(octx, atlas, bits, x * cell, y * cell);
+            picks[i] = bits ? bits : -1;
           }
         }
+        fx.blitGlyphs(out, atlas, picks, cols, rows);
         fx.applyInk(out, sample, params);
       },
       reset: function () { sampler.reset(); }

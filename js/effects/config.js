@@ -23,33 +23,17 @@ function halftoneParams() {
   ];
 }
 
-function facadeParams(shadeDefault) {
+function facadeParams(shadeDefault, scaleMax, scaleDefault) {
   return [
-    range('scale', 'Scale', 1, 9, 5),
+    range('scale', 'Scale', 1, scaleMax || 9, scaleDefault || 5),
     range('response', 'Response', 0, 100, 50),
     range('speed', 'Speed', 0, 100, 50),
     toggle('shade', 'Shade', shadeDefault, 'On: modules close against bright light. Off: they open toward it.')
   ];
 }
 
-function ifsParams(maxDepth, def) {
-  return [
-    range('depth', 'Depth', 0, maxDepth, def),
-    range('size', 'Size', 10, 100, 85),
-    range('spin', 'Spin', 0, 100, 0),
-    toggle('recursive', 'Recursive', true, 'On: every piece holds the whole image. Off: the shape is a window onto the camera.'),
-    toggle('notation', 'Notation', true, 'Show the formula in the corner.')
-  ];
-}
-
-function circleParams() {
-  return [
-    range('size', 'Size', 10, 100, 80),
-    range('spin', 'Spin', 0, 100, 0),
-    range('weight', 'Weight', 1, 9, 3),
-    toggle('parity', 'Parity', true, 'Invert the image where an odd number of circles overlap.'),
-    toggle('notation', 'Notation', true, 'Show the construction in the corner.')
-  ];
+function tintParams(saturationDefault) {
+  return [range('saturation', 'Saturation', 0, 100, saturationDefault), COLOR];
 }
 
 // Groups nest with `parent`. The tray's top level shows ungrouped effects and top-level groups.
@@ -59,9 +43,7 @@ Magi.effectGroups = [
   { id: 'halftone', name: 'Halftone' },
   { id: 'hand', name: 'Hand Tracking' },
   { id: 'face', name: 'Face Tracking' },
-  { id: 'geometry', name: 'Geometry' },
-  { id: 'facade', name: 'Facade', parent: 'geometry' },
-  { id: 'fractal', name: 'Fractal', parent: 'geometry' }
+  { id: 'facade', name: 'Facade' }
 ];
 
 Magi.effectConfig = [
@@ -91,9 +73,6 @@ Magi.effectConfig = [
     group: 'halftone',
     ready: true,
     modes: [
-      { id: 'system', name: 'System' },
-      { id: 'plex', name: 'Plex Mono' },
-      { id: 'space', name: 'Space Mono' },
       { id: 'vt323', name: 'VT323' },
       { id: 'silkscreen', name: 'Silkscreen' }
     ],
@@ -105,15 +84,20 @@ Magi.effectConfig = [
     group: 'halftone',
     ready: true,
     modes: [
-      { id: 'drawn', name: 'Drawn' },
       { id: 'bodoni', name: 'Bodoni' },
-      { id: 'plex', name: 'Plex Mono' },
-      { id: 'space', name: 'Space Mono' },
       { id: 'silkscreen', name: 'Silkscreen' }
     ],
     params: halftoneParams()
   },
 
+  {
+    id: 'hand-landmarks',
+    name: 'Landmarks',
+    group: 'hand',
+    ready: true,
+    photoType: 'image/jpeg',
+    params: [toggle('readouts', 'Readouts', true, 'Show handedness, pinch, rotation and distance.')]
+  },
   {
     id: 'mosh',
     name: 'Mosh',
@@ -121,6 +105,7 @@ Magi.effectConfig = [
     ready: true,
     photoType: 'image/jpeg',
     params: [
+      range('scale', 'Scale', 0, 100, 50),
       range('block', 'Block', 1, 9, 5),
       range('hold', 'Hold', 0, 100, 40),
       range('reach', 'Reach', 0, 100, 50)
@@ -128,48 +113,69 @@ Magi.effectConfig = [
   },
 
   {
-    id: 'text-cry',
-    name: 'Text Cry',
+    id: 'face-landmarks',
+    name: 'Landmarks',
+    group: 'face',
+    ready: true,
+    photoType: 'image/jpeg',
+    params: [
+      toggle('mesh', 'Mesh', true, 'Draw all 478 points as a triangle mesh.'),
+      toggle('readouts', 'Readouts', true, 'Show head pose and the strongest expressions.')
+    ]
+  },
+  {
+    id: 'token-cry',
+    name: 'Token Cry',
     group: 'face',
     ready: true,
     photoType: 'image/jpeg',
     params: [
       { id: 'text', label: 'Text', type: 'text', default: 'i’m fine ', placeholder: 'Type your tears', maxLength: 280 },
       range('speed', 'Speed', 1, 100, 40),
-      range('size', 'Size', 1, 100, 35),
-      toggle('pool', 'Pool', true, 'On: letters pool at the bottom of the frame. Off: they fall through.'),
+      range('scale', 'Scale', 1, 100, 30),
+      toggle('phrase', 'Phrase', false, 'On: each tear is the whole phrase. Off: one symbol at a time.'),
+      toggle('pool', 'Pool', true, 'On: tokens pile up at the bottom of the frame. Off: they fall through.'),
       COLOR
     ]
   },
 
-  { id: 'facade-interactive', name: 'Interactive', group: 'facade', ready: true, params: facadeParams(true) },
-  { id: 'facade-active', name: 'Active', group: 'facade', ready: true, params: facadeParams(true) },
-  { id: 'facade-biomimetic', name: 'Biomimetic', group: 'facade', ready: true, params: facadeParams(true) },
-  { id: 'facade-smart', name: 'Smart', group: 'facade', ready: true, params: facadeParams(true) },
-  { id: 'facade-bending', name: 'Bending', group: 'facade', ready: true, params: facadeParams(true) },
-  { id: 'facade-translation', name: 'Translation', group: 'facade', ready: true, params: facadeParams(true) },
-  { id: 'facade-scaling', name: 'Scaling', group: 'facade', ready: true, params: facadeParams(true) },
-  { id: 'facade-rolling', name: 'Rolling', group: 'facade', ready: true, params: facadeParams(true) },
-  // Pixel glazing displays the image, so by default its pixels spread where the image is bright.
-  { id: 'facade-electrokinetic', name: 'Electrokinetic', group: 'facade', ready: true, params: facadeParams(false) },
-
-  { id: 'fractal-vicsek', name: 'Vicsek', group: 'fractal', ready: true, params: ifsParams(5, 3) },
-  { id: 'fractal-sierpinski', name: 'Sierpiński', group: 'fractal', ready: true, params: ifsParams(8, 5) },
   {
-    id: 'fractal-anti-snowflake',
-    name: 'Anti-snowflake',
-    group: 'fractal',
+    id: 'facade-interactive',
+    name: 'Interactive',
+    group: 'facade',
     ready: true,
-    params: [
-      range('depth', 'Depth', 0, 6, 4),
-      range('size', 'Size', 10, 100, 85),
-      range('spin', 'Spin', 0, 100, 0),
-      toggle('notation', 'Notation', true, 'Show the formula in the corner.')
-    ]
+    params: facadeParams(true, 13, 9).concat(tintParams(0))
   },
-  { id: 'fractal-metatron', name: 'Metatron’s Cube', group: 'fractal', ready: true, params: circleParams() },
-  { id: 'fractal-vesica', name: 'Vesica Piscis', group: 'fractal', ready: true, params: circleParams() },
-  { id: 'fractal-egg', name: 'Egg of Life', group: 'fractal', ready: true, params: circleParams() }
+  {
+    id: 'facade-active',
+    name: 'Active',
+    group: 'facade',
+    ready: true,
+    modes: [
+      { id: 'square', name: 'Square' },
+      { id: 'hexagon', name: 'Hexagon' },
+      { id: 'triangle', name: 'Triangle' },
+      { id: 'diamond', name: 'Diamond' }
+    ],
+    params: facadeParams(true)
+  },
+  { id: 'facade-biomimetic', name: 'Biomimetic', group: 'facade', ready: true, params: facadeParams(true) },
+  { id: 'facade-translation', name: 'Translation', group: 'facade', ready: true, params: facadeParams(true) },
+  {
+    id: 'facade-electrokinetic',
+    name: 'Electrokinetic',
+    group: 'facade',
+    ready: true,
+    modes: [
+      { id: 'circle', name: 'Circle' },
+      { id: 'square', name: 'Square' },
+      { id: 'hexagon', name: 'Hexagon' },
+      { id: 'triangle', name: 'Triangle' },
+      { id: 'diamond', name: 'Diamond' }
+    ],
+    // Pixel glazing displays the image: by default pixels spread where it is bright, in its colors.
+    params: facadeParams(false, 12, 6).concat(tintParams(100))
+  }
 ];
 
 Magi.defaultsFor = function (effect) {

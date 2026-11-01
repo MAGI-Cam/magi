@@ -1,46 +1,9 @@
-// X's and O's: crosses and rings that grow and thicken in brighter areas. The Drawn mode uses
-// geometric strokes; the other modes set the letters in a typeface.
+// X's and O's: lower- and upper-case x and o set in a typeface, ordered by ink so brighter
+// areas get heavier letters. Modes switch the typeface.
 (function () {
   // Cell size in screen pixels for each Scale step (1–9).
   var CELL_SIZES = [6, 7, 8, 9, 11, 13, 16, 19, 24];
 
-  function cross(size, weight) {
-    return function (g, cell) {
-      var m = cell / 2, r = (cell * size) / 2;
-      g.lineWidth = Math.max(1, cell * weight);
-      g.lineCap = 'butt';
-      g.beginPath();
-      g.moveTo(m - r, m - r);
-      g.lineTo(m + r, m + r);
-      g.moveTo(m + r, m - r);
-      g.lineTo(m - r, m + r);
-      g.stroke();
-    };
-  }
-
-  function ring(size, weight) {
-    return function (g, cell) {
-      var w = Math.max(1, cell * weight);
-      g.lineWidth = w;
-      g.beginPath();
-      g.arc(cell / 2, cell / 2, Math.max(0.5, (cell * size - w) / 2), 0, Math.PI * 2);
-      g.stroke();
-    };
-  }
-
-  function drawn() {
-    return Magi.fx.createGlyphRenderer({
-      cellSizes: CELL_SIZES,
-      glyphs: [
-        cross(0.45, 0.1), ring(0.5, 0.1),
-        cross(0.7, 0.12), ring(0.75, 0.12),
-        cross(0.9, 0.16), ring(0.95, 0.18),
-        cross(1, 0.26), ring(1, 0.3)
-      ]
-    });
-  }
-
-  // Typed letters: lower and upper case give two sizes of each, ordered by ink like the rest.
   function typed(font) {
     return function () {
       return Magi.fx.createGlyphRenderer({
@@ -55,11 +18,8 @@
   Magi.renderers['xs-and-os'] = function () {
     var F = Magi.fx.FONTS;
     return Magi.fx.createModeRenderer({
-      drawn: drawn,
       bodoni: typed(F.bodoni),
-      plex: typed(F.plex),
-      space: typed(F.space),
       silkscreen: typed(F.silkscreen)
-    }, 'drawn');
+    }, 'bodoni');
   };
 })();
