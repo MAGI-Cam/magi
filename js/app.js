@@ -278,8 +278,9 @@
     tray.dataset.open = String(open);
     caret.setAttribute('aria-expanded', String(open));
     caret.setAttribute('aria-label', open ? 'Hide effects' : 'Show effects');
-    // Open where the active effect lives, so its neighbors are one tap away.
-    if (open) showLevel(currentEffect() ? currentEffect().group || null : null);
+    // Always open at the top level, so every parent tile is visible; the active effect's parent
+    // is outlined and names it, and its controls stay below.
+    if (open) showLevel(null);
   }
 
   function groupById(id) {

@@ -1,6 +1,6 @@
 # Magi
 
-Minimalist effects tool library: apply a visual effect to live camera input or an uploaded photo/video, adjust it, capture, and save to the device. Tray: **Normal** (no effect), then parent tiles: **Halftone** (Bitmap, ASCII, Binary, X's and O's), **Hand Tracking** (Mosh), **Face Tracking** (Text Cry), **Geometry** → **Facade** (9) and **Fractal** (6). Groups live in `Magi.effectGroups` and nest with `parent`; an effect joins one with `group`. The tray shows one level at a time with a back row.
+Minimalist effects tool library: apply a visual effect to live camera input or an uploaded photo/video, adjust it, capture, and save to the device. Tray: **Normal** (no effect), then parent tiles: **Halftone** (Bitmap, ASCII, Binary, X's and O's), **Hand Tracking** (Mosh), **Face Tracking** (Text Cry), **Geometry** → **Facade** (9) and **Fractal** (6). Groups live in `Magi.effectGroups` and nest with `parent`; an effect joins one with `group`. The tray shows one level at a time with a back row, and always opens at the top level.
 
 Source of truth for scope is the PRD in `docs/`. This file guides implementation. Both are starting points; update them when prototyping proves a better direction.
 
