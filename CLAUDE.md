@@ -1,6 +1,6 @@
 # Magi
 
-Minimalist effects tool library: apply a visual effect to live camera input or an uploaded photo/video, adjust it, capture, and save to the device. Tray: **Normal** (no effect), then parent tiles: **Halftone** (Bitmap, ASCII, Binary, XO), **Hand Tracking** (Landmarks, Mosh, Pinch Frame, Claw, Fluid Cube, Accordion), **Face Tracking** (Landmarks, Token Cry), **Facade** (Interactive, Electrokinetic). Groups live in `Magi.effectGroups` and nest with `parent`; an effect joins one with `group`. The tray shows one level at a time with a back row, and always opens at the top level.
+Minimalist effects tool library: apply a visual effect to live camera input or an uploaded photo/video, adjust it, capture, and save to the device. Tray: **Normal** (no effect), then parent tiles: **Halftone** (Bitmap, ASCII, Binary, XO), **Hand Tracking** (Landmarks, Mosh, Pinch Frame, Claw, Fluid Cube, Accordion, Tutting, Chromatic), **Face Tracking** (Landmarks, Token Cry), **Facade** (Interactive, Electrokinetic). Groups live in `Magi.effectGroups` and nest with `parent`; an effect joins one with `group`. The tray shows one level at a time with a back row, and always opens at the top level.
 
 Source of truth for scope is the PRD in `docs/`. This file guides implementation. Both are starting points; update them when prototyping proves a better direction.
 
@@ -17,6 +17,7 @@ Source of truth for scope is the PRD in `docs/`. This file guides implementation
 - Parameter types in config: range (default), `toggle` (with `hint`), `text`. `track: 'hue'` draws a color spectrum.
 - `js/app.js` — camera/upload input, tray, shared controls, capture, review, save. Must stay effect-agnostic.
 - `docs/` — PRD, design file and original guidance (v0.1 PDFs).
+- Data: `js/effects/color-names.js` is the xkcd color survey (949 names, CC0), extracted as text from matplotlib's `_color_data.py`.
 - External: Google Fonts (Inter and glyph faces) and MediaPipe Tasks Vision 0.10.14 from jsDelivr with models from storage.googleapis.com. Nothing else.
 
 To add an effect: add its entry in `config.js` with `ready: true`, create its renderer file, add a `<script>` tag in `index.html`.

@@ -183,6 +183,47 @@ Magi.effectConfig = [
   },
 
   {
+    id: 'tutting',
+    name: 'Tutting',
+    group: 'hand',
+    ready: true,
+    photoType: 'image/jpeg',
+    modes: [
+      { id: 'scatter', name: 'Scatter' },
+      { id: 'behind', name: 'Behind' }
+    ],
+    params: [
+      range('tiles', 'Tiles', 100, 1500, 600),
+      range('size', 'Size', 0, 100, 40),
+      range('fan', 'Fan', 0, 100, 70),
+      range('depth', 'Depth', 0, 100, 50),
+      range('drift', 'Drift', 0, 100, 30),
+      range('dim', 'Dim', 0, 100, 45),
+      toggle('edges', 'Edges', false, 'A hairline around each tile.')
+    ]
+  },
+  {
+    id: 'chromatic',
+    name: 'Chromatic',
+    group: 'hand',
+    ready: true,
+    modes: [
+      { id: 'lab', name: 'Lab' },
+      { id: 'hsl', name: 'HSL' },
+      { id: 'rgb', name: 'RGB' }
+    ],
+    params: [
+      range('size', 'Size', 30, 200, 100),
+      range('labels', 'Labels', 0, 100, 35),
+      range('text', 'Text', 20, 100, 45),
+      range('spin', 'Spin', 0, 100, 25),
+      range('dim', 'Dim', 0, 100, 70),
+      toggle('squares', 'Squares', true, 'A small square at every color.'),
+      toggle('axes', 'Axes', true, 'Draw the color space’s axes.')
+    ]
+  },
+
+  {
     id: 'face-landmarks',
     name: 'Landmarks',
     group: 'face',

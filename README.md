@@ -20,6 +20,8 @@ Halftone controls: Scale, Intensity, Saturation (how much of the media's own col
 - **Claw**: the hand as a 3D rig: octahedral wireframe bones, fingertip bones extended into claws, cylinders on the fingertips, a wrist target, knuckle crosshairs and drifting HUD brackets. Controls: Claw (length), Glyphs, Color (accent).
 - **Fluid Cube**: a wireframe cube full of particle fluid (Clavet et al. 2005 double density relaxation). Two hands hold it between the index fingertips (distance sets size, the line between them sets tilt); one hand scales it with thumb–index spread and tilts it with hand rotation. Gravity stays screen-down, so tilting pours the fluid, and fast moves make it slosh. Controls: Size, Particles, Gravity, Viscosity, Spin, Color, Cube, Glow.
 - **Accordion**: a bellows of colored panels between your palms that unfolds as you pull apart (more panels, a deeper waist) and folds to two as you come together. Controls: Panels, Waist, Size, Color, Spread (hue range), Opacity, Wires, Outline, Line.
+- **Tutting**: a volume of image tiles in the box between your palms; side by side it's a slab, one above the other a column. Tiles fan like book pages (edge-on at the center) and are cut from your own camera: Scatter (pieces of the room) or Behind (what's behind each tile, shifted by depth). Controls: Tiles, Size, Fan, Depth, Drift, Dim, Edges.
+- **Chromatic**: the 949 names of the xkcd color survey (public domain), each placed at its color in Lab (perceptual), HSL or RGB space. Point to turn the space, spread thumb and index to zoom; the name nearest your fingertip lights up with its hex. Controls: Size, Labels, Text, Spin, Dim, Squares, Axes.
 - **Mosh**: real datamoshing. Block motion vectors are measured with three-step search and applied, uncorrected, to a picture that never refreshes, inside the zone between thumb and index finger. Pinch to snap clean. Controls: Scale (vector strength), Block (macroblock size), Hold (how long the smear lasts before it unwinds block by block, newest first), Reach (zone size).
 
 **Face Tracking** (MediaPipe Face Landmarker: 478 points, 52 blendshapes, head pose)
@@ -99,6 +101,7 @@ css/magi.css          interface shell
 js/effects/config.js  effect names, order and parameters
 js/effects/shared.js  tone sampling, dithering, glyph renderer, fonts, modes
 js/effects/*.js       one renderer per effect (facades.js and landmarks.js hold families)
+js/effects/color-names.js  xkcd color survey names (CC0), data for Chromatic
 js/tracking.js        hand and face tracking (MediaPipe, loaded on demand)
 js/app.js             camera, upload, tray, capture, review, save
 docs/                 PRD, design file, project guidance (v0.1)

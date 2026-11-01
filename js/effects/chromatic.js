@@ -1,0 +1,161 @@
+// Chromatic: the 949 color names of the xkcd color survey, floating where their colors sit in a
+// 3D color space, turned and zoomed by your hand.
+//
+// Spaces (modes):
+//   Lab — CIELAB, the perceptual space: equal distances look roughly equally different to people.
+//         sRGB → linear (c ≤ 0.04045 ? c/12.92 : ((c + 0.055)/1.055)^2.4) → XYZ (D65 matrix)
+//         → L* = 116·f(Y) − 16, a* = 500·(f(X/Xn) − f(Y)), b* = 200·(f(Y) − f(Z/Zn)),
+//         f(t) = t^(1/3) above (6/29)³, else t/(3·(6/29)²) + 4/29. Lightness is height.
+//   HSL — a cylinder: hue is the angle, saturation the radius, lightness the height.
+//   RGB — the cube, red, green and blue on the three axes.
+// Hand: your index fingertip turns the space (left–right spins it, up–down tips it), and the
+// thumb–index spread zooms. The name nearest your fingertip lights up with its hex code.
+// With no hand the space turns slowly on its own.
+(function () {
+  var THUMB_TIP = 4, INDEX_TIP = 8, WRIST = 0, MIDDLE_MCP = 9, FOCAL = 3;
+
+  function linear(c) { return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
+  function f(t) { var d = 6 / 29; return t > d * d * d ? Math.cbrt(t) : t / (3 * d * d) + 4 / 29; }
+
+  function lab(r, g, b) {
+    var R = linear(r), G = linear(g), B = linear(b);
+    var X = 0.4124564 * R + 0.3575761 * G + 0.1804375 * B;
+    var Y = 0.2126729 * R + 0.7151522 * G + 0.0721750 * B;
+    var Z = 0.0193339 * R + 0.1191920 * G + 0.9503041 * B;
+    var fy = f(Y);
+    return [116 * fy - 16, 500 * (f(X / 0.95047) - fy), 200 * (fy - f(Z / 1.08883))];
+  }
+
+  function hsl(r, g, b) {
+    var max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2, d = max - min, h = 0, s = 0;
+    if (d) {
+      s = d / (1 - Math.abs(2 * l - 1));
+      h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+      h *= Math.PI / 3;
+    }
+    return [h, s, l];
+  }
+
+  // Each color's position in each space, in roughly −1…1, with y up.
+  var COLORS = (Magi.colorNames || []).map(function (c, i) {
+    var r = parseInt(c[1].slice(1, 3), 16) / 255, g = parseInt(c[1].slice(3, 5), 16) / 255, b = parseInt(c[1].slice(5, 7), 16) / 255;
+    var L = lab(r, g, b), H = hsl(r, g, b);
+    return {
+      name: c[0].toUpperCase(), hex: c[1], css: c[1],
+      // A fixed pseudo-random rank decides which names are labeled at a given Labels setting.
+      rank: ((i * 2654435761) >>> 0) / 4294967296,
+      pos: {
+        lab: [L[1] / 100, (L[0] - 50) / 50, L[2] / 100],
+        hsl: [H[1] * Math.cos(H[0]), (H[2] - 0.5) * 2, H[1] * Math.sin(H[0])],
+        rgb: [r * 2 - 1, g * 2 - 1, b * 2 - 1]
+      }
+    };
+  });
+
+  var AXES = {
+    lab: [[[0, -1, 0], [0, 1, 0]], [[-1, 0, 0], [1, 0, 0]], [[0, 0, -1], [0, 0, 1]]],
+    hsl: [[[0, -1, 0], [0, 1, 0]]],
+    rgb: [[[-1, -1, -1], [1, -1, -1]], [[-1, -1, -1], [-1, 1, -1]], [[-1, -1, -1], [-1, -1, 1]],
+      [[1, 1, 1], [-1, 1, 1]], [[1, 1, 1], [1, -1, 1]], [[1, 1, 1], [1, 1, -1]],
+      [[1, -1, -1], [1, 1, -1]], [[1, -1, -1], [1, -1, 1]], [[-1, 1, -1], [1, 1, -1]],
+      [[-1, 1, -1], [-1, 1, 1]], [[-1, -1, 1], [1, -1, 1]], [[-1, -1, 1], [-1, 1, 1]]]
+  };
+
+  function createChromatic() {
+    var view = { yaw: 0.6, pitch: 0.25, zoom: 1 }, last = 0;
+    return {
+      animated: true,
+      render: function (frame, out, params) {
+        var W = frame.width, H = frame.height, u = frame.pxPerCss;
+        if (out.width !== W || out.height !== H) { out.width = W; out.height = H; }
+        var ctx = out.getContext('2d');
+        frame.draw(ctx, W, H);
+        if (params.dim) {
+          ctx.fillStyle = 'rgba(0,0,0,' + (params.dim / 100 * 0.85).toFixed(3) + ')';
+          ctx.fillRect(0, 0, W, H);
+        }
+        var dt = last ? Math.min(0.05, (frame.time - last) / 1000) : 1 / 60;
+        last = frame.time;
+
+        var tracker = Magi.tracking.hands, hands = tracker.detect(frame), tip = null;
+        var e = 1 - Math.exp(-dt / 0.12);
+        if (hands.length) {
+          var p = hands[0];
+          tip = p[INDEX_TIP];
+          var palm = Math.hypot(p[MIDDLE_MCP].x - p[WRIST].x, p[MIDDLE_MCP].y - p[WRIST].y) || 1;
+          var spread = Math.hypot(p[THUMB_TIP].x - tip.x, p[THUMB_TIP].y - tip.y) / palm;
+          view.yaw += ((tip.x / W - 0.5) * Math.PI * 1.6 - view.yaw) * e;
+          view.pitch += ((tip.y / H - 0.5) * Math.PI * 0.7 - view.pitch) * e;
+          view.zoom += (Math.min(1.8, Math.max(0.5, 0.55 + spread * 0.7)) - view.zoom) * e;
+        } else {
+          view.yaw += (params.spin / 100) * 0.6 * dt;
+        }
+
+        var space = params.mode || 'lab';
+        // The RGB cube's corners reach √3 from its center, so it is drawn smaller to fit like the others.
+        var fit = space === 'rgb' ? 1 / Math.sqrt(3) : 1;
+        var R = Math.min(W, H) * 0.36 * fit * (params.size / 100) * view.zoom, cx = W / 2, cy = H / 2;
+        var cyw = Math.cos(view.yaw), syw = Math.sin(view.yaw), cp = Math.cos(view.pitch), sp = Math.sin(view.pitch);
+        function project(v) {
+          var x1 = v[0] * cyw + v[2] * syw, z1 = -v[0] * syw + v[2] * cyw;
+          var y2 = v[1] * cp - z1 * sp, z2 = v[1] * sp + z1 * cp;
+          var k = FOCAL / (FOCAL + z2);
+          return [cx + x1 * R * k, cy - y2 * R * k, z2, k];
+        }
+
+        if (params.axes) {
+          ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+          ctx.lineWidth = Math.max(1, u);
+          ctx.beginPath();
+          AXES[space].forEach(function (a) {
+            var p0 = project(a[0]), p1 = project(a[1]);
+            ctx.moveTo(p0[0], p0[1]);
+            ctx.lineTo(p1[0], p1[1]);
+          });
+          ctx.stroke();
+        }
+
+        var pts = COLORS.map(function (c) { var q = project(c.pos[space]); return { c: c, x: q[0], y: q[1], z: q[2], k: q[3] }; });
+        pts.sort(function (a, b) { return b.z - a.z; }); // far to near
+        var fs = Math.max(6, (params.text / 100) * 16 * u), show = params.labels / 100;
+        var box = Math.max(3, 5 * u), near = null, nearD = 28 * u;
+        ctx.font = '400 ' + Math.round(fs) + 'px ' + Magi.fx.MONO;
+        ctx.textBaseline = 'middle';
+        ctx.lineWidth = Math.max(1, u);
+        pts.forEach(function (q) {
+          var s = box * q.k;
+          ctx.strokeStyle = q.c.css;
+          ctx.fillStyle = q.c.css;
+          ctx.globalAlpha = 0.45 + 0.55 * Math.min(1, q.k);
+          if (params.squares) ctx.strokeRect(q.x - s, q.y - s, s * 2, s * 2);
+          if (q.c.rank < show) ctx.fillText(q.c.name, q.x + s * 1.6, q.y);
+          if (tip) {
+            var d = Math.hypot(q.x - tip.x, q.y - tip.y);
+            if (d < nearD) { nearD = d; near = q; }
+          }
+        });
+        ctx.globalAlpha = 1;
+        if (near) {
+          // The color under your fingertip, named.
+          var big = Math.round(fs * 1.7);
+          var label = near.c.name + '  ' + near.c.hex.toUpperCase();
+          ctx.font = '400 ' + big + 'px ' + Magi.fx.MONO;
+          var lw = ctx.measureText(label).width, lx = near.x + box * 3, ly = near.y - big;
+          ctx.fillStyle = 'rgba(0,0,0,0.8)';
+          ctx.fillRect(lx - big * 0.4, ly - big * 0.75, lw + big * 0.8, big * 1.5);
+          ctx.strokeStyle = '#fff';
+          ctx.strokeRect(near.x - box * 2, near.y - box * 2, box * 4, box * 4);
+          ctx.fillStyle = near.c.css;
+          ctx.fillRect(lx - big * 0.4, ly - big * 0.75, big * 0.25, big * 1.5); // the color itself, as a bar
+          ctx.fillText(label, lx, ly);
+        }
+
+        if (tracker.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, tracker, 'hand');
+        else if (!hands.length) Magi.tracking.hint(ctx, frame, 'Point to turn the colors. Spread thumb and index to zoom.');
+      },
+      reset: function () { last = 0; }
+    };
+  }
+
+  Magi.renderers.chromatic = createChromatic;
+})();
