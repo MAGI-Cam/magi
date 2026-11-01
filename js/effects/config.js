@@ -147,6 +147,42 @@ Magi.effectConfig = [
   },
 
   {
+    id: 'fluid-cube',
+    name: 'Fluid Cube',
+    group: 'hand',
+    ready: true,
+    photoType: 'image/jpeg',
+    params: [
+      range('size', 'Size', 30, 200, 100),
+      range('particles', 'Particles', 200, 1500, 700),
+      range('gravity', 'Gravity', 0, 100, 60),
+      range('viscosity', 'Viscosity', 0, 100, 20),
+      range('spin', 'Spin', 0, 100, 15),
+      { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 9, track: 'hue' },
+      toggle('outline', 'Cube', true, 'Draw the cube’s edges.'),
+      toggle('glow', 'Glow', true, 'Particles add light where they overlap.')
+    ]
+  },
+  {
+    id: 'accordion',
+    name: 'Accordion',
+    group: 'hand',
+    ready: true,
+    photoType: 'image/jpeg',
+    params: [
+      range('panels', 'Panels', 0, 100, 50),
+      range('waist', 'Waist', 0, 100, 60),
+      range('size', 'Size', 10, 100, 50),
+      { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 55, track: 'hue' },
+      range('spread', 'Spread', 0, 100, 45),
+      range('opacity', 'Opacity', 10, 100, 95),
+      toggle('wires', 'Wires', true, 'Thin wires tangled through the open middle.'),
+      toggle('outline', 'Outline', true, 'Black edges on each panel.'),
+      toggle('line', 'Line', true, 'Show the line and distance between your palms.')
+    ]
+  },
+
+  {
     id: 'face-landmarks',
     name: 'Landmarks',
     group: 'face',
