@@ -158,37 +158,16 @@
   Magi.tracking.hands = createTracker('hands');
   Magi.tracking.face = createTracker('face');
 
-  // A quiet status line drawn on the frame while a tracker loads or after it fails, so the
-  // effect never looks broken without saying why.
+  // A quiet status line while a tracker loads or after it fails, so the effect never looks broken
+  // without saying why. Shown as text over the preview through frame.say.
   Magi.tracking.drawStatus = function (ctx, frame, tracker, what) {
     var s = tracker.status();
-    var text = s === 'loading' || s === 'idle' ? 'Loading ' + what + ' tracking…'
-      : s === 'failed' ? what.charAt(0).toUpperCase() + what.slice(1) + ' tracking couldn’t load. Check your connection.'
-      : null;
-    if (!text) return;
-    var size = Math.round(13 * frame.pxPerCss);
-    ctx.save();
-    ctx.font = '400 ' + size + 'px Inter, "Helvetica Neue", Arial, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'bottom';
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    var w = ctx.measureText(text).width + size * 1.6;
-    ctx.fillRect(frame.width / 2 - w / 2, frame.height - size * 3.4, w, size * 2);
-    ctx.fillStyle = '#fff';
-    ctx.fillText(text, frame.width / 2, frame.height - size * 1.85);
-    ctx.restore();
+    if (s === 'loading' || s === 'idle') frame.say('Loading ' + what + ' tracking…');
+    else if (s === 'failed') frame.say(what.charAt(0).toUpperCase() + what.slice(1) + ' tracking couldn’t load. Check your connection.');
   };
 
   // A one-line instruction when tracking is ready but nobody is in view.
   Magi.tracking.hint = function (ctx, frame, text) {
-    var size = Math.round(13 * frame.pxPerCss);
-    ctx.save();
-    ctx.font = '400 ' + size + 'px Inter, "Helvetica Neue", Arial, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'bottom';
-    ctx.globalCompositeOperation = 'difference';
-    ctx.fillStyle = '#fff';
-    ctx.fillText(text, frame.width / 2, frame.height - size * 1.8);
-    ctx.restore();
+    frame.say(text);
   };
 })();

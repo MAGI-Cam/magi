@@ -155,7 +155,7 @@
 
         var speed = params.speed / 100;
         var g = H * (0.9 + speed * 2.4);                       // gravity, frame pixels per s²
-        var rate = params.phrase ? 0.35 + speed * 1.6 : 1.5 + speed * 11; // tears per second per eye
+        var rate = 1.5 + speed * 11; // tears per second per eye, the same for symbols and phrases
 
         var faces = Magi.tracking.face.detect(frame);
         var face = faces[0];
@@ -217,7 +217,10 @@
         ctx.fillStyle = 'rgb(' + ink.map(function (v) { return Math.round(v * 255); }).join(',') + ')';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.shadowColor = 'rgba(0,0,0,0.45)';
+        // Inverse: tokens invert whatever is beneath them (difference blend), so they read on any
+        // background. Otherwise they are solid ink with a soft shadow.
+        if (params.inverse) ctx.globalCompositeOperation = 'difference';
+        else ctx.shadowColor = 'rgba(0,0,0,0.45)';
         bodies.forEach(function (b) {
           var p = b.pts, a = p[0], z = p[p.length - 1], x, y, angle;
           if (p.length > 1) {
@@ -232,7 +235,7 @@
             x = a.x; y = a.y; angle = b.angle;
           }
           ctx.globalAlpha = Math.max(0, b.alpha);
-          ctx.shadowBlur = b.size * 0.2;
+          if (!params.inverse) ctx.shadowBlur = b.size * 0.2;
           ctx.font = '400 ' + b.size + 'px ' + FONT;
           ctx.setTransform(Math.cos(angle), Math.sin(angle), -Math.sin(angle), Math.cos(angle), x, y);
           ctx.fillText(b.ch, 0, 0);

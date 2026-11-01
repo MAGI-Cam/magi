@@ -80,7 +80,7 @@ Magi.effectConfig = [
   },
   {
     id: 'xs-and-os',
-    name: "X's and O's",
+    name: 'XO',
     group: 'halftone',
     ready: true,
     modes: [
@@ -96,7 +96,11 @@ Magi.effectConfig = [
     group: 'hand',
     ready: true,
     photoType: 'image/jpeg',
-    params: [toggle('readouts', 'Readouts', true, 'Show handedness, pinch, rotation and distance.')]
+    params: [
+      toggle('readouts', 'Readouts', true, 'Show which hand it is, the tracking score and rotation.'),
+      toggle('pinch', 'Pinch', true, 'Show the thumb–index line and pinch value.'),
+      toggle('distance', 'Distance', true, 'Show the line and distance between two hands.')
+    ]
   },
   {
     id: 'mosh',
@@ -135,6 +139,7 @@ Magi.effectConfig = [
       range('scale', 'Scale', 1, 100, 30),
       toggle('phrase', 'Phrase', false, 'On: each tear is the whole phrase. Off: one symbol at a time.'),
       toggle('pool', 'Pool', true, 'On: tokens pile up at the bottom of the frame. Off: they fall through.'),
+      toggle('inverse', 'Inverse', false, 'Tokens invert the colors beneath them.'),
       COLOR
     ]
   },
@@ -147,21 +152,6 @@ Magi.effectConfig = [
     params: facadeParams(true, 13, 9).concat(tintParams(0))
   },
   {
-    id: 'facade-active',
-    name: 'Active',
-    group: 'facade',
-    ready: true,
-    modes: [
-      { id: 'square', name: 'Square' },
-      { id: 'hexagon', name: 'Hexagon' },
-      { id: 'triangle', name: 'Triangle' },
-      { id: 'diamond', name: 'Diamond' }
-    ],
-    params: facadeParams(true)
-  },
-  { id: 'facade-biomimetic', name: 'Biomimetic', group: 'facade', ready: true, params: facadeParams(true) },
-  { id: 'facade-translation', name: 'Translation', group: 'facade', ready: true, params: facadeParams(true) },
-  {
     id: 'facade-electrokinetic',
     name: 'Electrokinetic',
     group: 'facade',
@@ -173,7 +163,8 @@ Magi.effectConfig = [
       { id: 'triangle', name: 'Triangle' },
       { id: 'diamond', name: 'Diamond' }
     ],
-    // Pixel glazing displays the image: by default pixels spread where it is bright, in its colors.
+    // Pixel glazing displays the image: by default pixels spread where it is bright, in its own
+    // colors. Here Saturation scales the colors' saturation and Color rotates their hues.
     params: facadeParams(false, 12, 6).concat(tintParams(100))
   }
 ];

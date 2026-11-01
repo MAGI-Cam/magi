@@ -9,29 +9,28 @@ The tray opens on **Normal** (the plain camera) and four parent tiles. Tap a par
 - **Bitmap**: square pixels in pure black and white.
 - **ASCII**: one character per cell. Tap the active tile to switch mode: *Classic* (`.:-=+*#%@`), *Detailed* (Paul Bourke's 70-character ramp), *Blocks* (░ ▒ ▓ █), *Braille* (2×4 dots per cell, 8× finer), *Edges* (`- | / \` along edges).
 - **Binary**: only `0`, `1` and space, in VT323 or Silkscreen.
-- **X's and O's**: x, o, X, O in Bodoni or Silkscreen.
+- **XO**: x, o, X, O in Bodoni or Silkscreen.
 
 Halftone controls: Scale, Intensity, Saturation (how much of the media's own color shows) and Color (ink: white at the far left, then the hue wheel). Glyphs are written straight into one pixel buffer per frame, so the smallest scales keep up with live video.
 
 **Hand Tracking** (MediaPipe Hand Landmarker, the same model TouchDesigner's MediaPipe plugin uses)
 
-- **Landmarks**: the 21-point skeleton per hand, with handedness, pinch (thumb–index distance over palm length), rotation and the distance between two hands.
+- **Landmarks**: the 21-point skeleton per hand. Switches: Readouts (handedness, score, rotation), Pinch (thumb–index distance over palm length), Distance (between two hands).
 - **Mosh**: real datamoshing. Block motion vectors are measured with three-step search and applied, uncorrected, to a picture that never refreshes, inside the zone between thumb and index finger. Pinch to snap clean. Controls: Scale (vector strength), Block (macroblock size), Hold (how long the smear lasts before it unwinds block by block, newest first), Reach (zone size).
 
 **Face Tracking** (MediaPipe Face Landmarker: 478 points, 52 blendshapes, head pose)
 
 - **Landmarks**: the full mesh with eye, iris, brow, lip and face-oval contours, head yaw/pitch/roll and the strongest expressions.
-- **Token Cry**: your text (any language, emoji) pours from your lower eyelids along your face's own "down", following head movement. Tokens are Verlet-physics bodies: a symbol is a circle, a phrase a rigid stick, so they tumble, bounce a little and pile up like objects in a jar. Controls: Text, Speed, Scale (relative to your eyes, so tokens grow as you come closer), Phrase (whole phrase per tear, or one symbol at a time), Pool (pile up, or fall through), Color.
+- **Token Cry**: your text (any language, emoji) pours from your lower eyelids along your face's own "down", following head movement. Tokens are Verlet-physics bodies: a symbol is a circle, a phrase a rigid stick, so they tumble, bounce a little and pile up like objects in a jar. Controls: Text, Speed, Scale (relative to your eyes, so tokens grow as you come closer), Phrase (whole phrase per tear, or one symbol at a time), Pool (pile up, or fall through), Inverse (tokens invert what's beneath them), Color.
 
 All landmarks are smoothed with a One Euro filter, which holds points steady at rest without adding lag to fast moves.
 
 **Facade**: the camera is the sun behind an adaptive building envelope. Every module reads the light (Interactive: motion) behind it and moves with first-order lag, a → a* with time constant τ. Controls: Scale, Response, Speed, Shade (on: close against bright light; off: open toward it).
 
-- *Interactive*: pivoting louvers that turn face-on where something moves. Adds Saturation and Color.
-- *Active*: ETFE cushions whose rise follows the light, drawn as paraboloid contours. Modes: Square, Hexagon, Triangle, Diamond.
-- *Biomimetic*: hygromorphic scales placed by Vogel's phyllotaxis (n·137.5°, c√n) that lift open.
-- *Translation*: panels sliding along tracks.
-- *Electrokinetic*: pixel glazing; colored particles spread over each pixel, area ∝ signal. Modes: Circle, Square, Hexagon, Triangle, Diamond. Adds Saturation and Color.
+- *Interactive*: pivoting louvers that turn face-on where something moves. Saturation and Color tint the louvers.
+- *Electrokinetic*: pixel glazing; colored particles spread over each pixel, area ∝ signal. Modes: Circle, Square, Hexagon, Triangle, Diamond. Saturation scales the image's color saturation and Color rotates its hues. Shapes are anti-aliased and placed to the quarter pixel.
+
+Instructions and loading states from effects ("Raise a hand.") show as text over the preview, never in saved photos.
 
 ## Install it
 
@@ -78,7 +77,7 @@ These fill gaps the PRD leaves open. They are easy to change.
 | Video export | MP4 where the browser can record it (Safari, recent Chrome), otherwise WebM. 30 fps, no audio, no length limit. |
 | Saving on phones | Uses the share sheet when available, so the result can go to the camera roll. Desktop downloads the file. |
 | Tracking | Google MediaPipe (Hand Landmarker, Face Landmarker), loaded from jsDelivr and Google's model storage the first time a tracking effect is picked. It needs a connection then; a status line on the frame says when it is loading or failed. |
-| Glyph effects | ASCII, Binary and X's and O's are white glyphs on black, snapped to pure black and white. Glyphs are ordered by measured ink coverage and dithered between neighbors. Scale sets the cell size in screen pixels (6–24, default 11), so characters stay readable on a phone where the preview is shrunk. These looks are first interpretations, not from the PRD. |
+| Glyph effects | ASCII, Binary and XO are white glyphs on black, snapped to pure black and white. Glyphs are ordered by measured ink coverage and dithered between neighbors. Scale sets the cell size in screen pixels (6–24, default 11), so characters stay readable on a phone where the preview is shrunk. These looks are first interpretations, not from the PRD. |
 | Color | Saturation and Color tint whatever is lit (white pixels or glyphs); the black background stays black. Both default to 0, which is the original pure black and white. |
 | Canvas fit | The whole frame is shown (contained) with black around it. Nothing is cropped or stretched. |
 

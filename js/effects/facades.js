@@ -1,25 +1,15 @@
 // Facades: the camera as the sun, seen through an adaptive building envelope.
 //
-// Each module (louver, cushion, panel, scale, pixel) reads the light (or, for Interactive, the
-// motion) behind it and actuates toward a target a* with first-order lag, the way a facade drive
-// or a switchable glazing layer responds:
+// Each module reads the light (or, for Interactive, the motion) behind it and actuates toward a
+// target a* with first-order lag, the way a facade drive or a switchable glazing layer responds:
 //     a(t + dt) = a* + (a(t) − a*)·e^(−dt/τ)
 // "Shade" on: modules close against bright light, as a shading facade does. Off: they open to it.
-// Each facade's geometry follows the mechanism it is named for; see the notes on each.
 (function () {
   var fx = Magi.fx;
-  // Module size in screen pixels per Scale step. Interactive and Electrokinetic go finer.
-  var MODULE = [28, 36, 44, 54, 66, 80, 96, 116, 140];
+  // Module size in screen pixels per Scale step.
   var MODULE_FINE = [8, 12, 16, 22, 28, 36, 44, 54, 66, 80, 96, 116, 140];
   var MODULE_PIXEL = [16, 20, 24, 28, 36, 44, 54, 66, 80, 96, 116, 140];
-  var GOLDEN = Math.PI * (3 - Math.sqrt(5)); // 137.507…°, the golden angle
   var SQRT3 = Math.sqrt(3);
-  var SEAM = '#111111';
-
-  function gray(v) { // v in 0–1
-    var g = Math.round(110 + v * 132);
-    return 'rgb(' + g + ',' + g + ',' + (g - 3) + ')';
-  }
 
   function rgb(c, k) { // c: [r, g, b] in 0–1, k: brightness
     return 'rgb(' + Math.round(c[0] * k * 255) + ',' + Math.round(c[1] * k * 255) + ',' + Math.round(c[2] * k * 255) + ')';
@@ -29,6 +19,21 @@
   function tint(params, src) {
     var ink = fx.inkColor(params.color), s = (params.saturation || 0) / 100;
     return [ink[0] + (src[0] - ink[0]) * s, ink[1] + (src[1] - ink[1]) * s, ink[2] + (src[2] - ink[2]) * s];
+  }
+
+  // The camera's color profile adjusted in HSV: hue rotated by the Color slider (0 = unchanged,
+  // then once around the wheel) and saturation scaled by the Saturation slider (0 = gray).
+  function profile(params, c) {
+    var max = Math.max(c[0], c[1], c[2]), min = Math.min(c[0], c[1], c[2]), d = max - min, h = 0;
+    if (d > 0) {
+      h = max === c[0] ? ((c[1] - c[2]) / d) % 6 : max === c[1] ? (c[2] - c[0]) / d + 2 : (c[0] - c[1]) / d + 4;
+    }
+    var shift = params.color > 0 ? ((params.color - 1) / 99) * 6 : 0;
+    h = (((h + shift) % 6) + 6) % 6;
+    var s = (max ? d / max : 0) * (params.saturation / 100), v = max;
+    var x = v * s * (1 - Math.abs((h % 2) - 1)), m = v - v * s, cc = v * s;
+    var t = [[cc, x, 0], [x, cc, 0], [0, cc, x], [0, x, cc], [x, 0, cc], [cc, 0, x]][Math.floor(h) % 6];
+    return [t[0] + m, t[1] + m, t[2] + m];
   }
 
   // Light, motion and color behind the frame on a coarse grid, read by position.
@@ -88,8 +93,8 @@
 
   // Generic facade: a layout of modules, each with a sample rectangle and a state a in 0–1.
   // spec.layout(w, h, m) → modules; spec.target(module, signal, params, dt) → a* (optional);
-  // spec.draw(ctx, module, a, m, frame, signal, params); spec.before for a shared backdrop;
-  // spec.paint(ctx, modules, state, w, h, signal, params) replaces per-module drawing entirely.
+  // spec.draw(ctx, module, a, signal, params) per module over the camera, or
+  // spec.paint(ctx, modules, state, frame, signal, params) to draw the whole frame itself.
   function facade(spec) {
     return function () {
       var signal = createSignal(), modules = null, state = null, key = '', last = 0;
@@ -99,7 +104,7 @@
           var w = frame.width, h = frame.height;
           if (out.width !== w || out.height !== h) { out.width = w; out.height = h; }
           var ctx = out.getContext('2d');
-          var m = fx.cellSize(spec.sizes || MODULE, params.scale, frame);
+          var m = fx.cellSize(spec.sizes, params.scale, frame);
           var k = w + 'x' + h + ':' + m;
           if (k !== key) {
             key = k;
@@ -123,14 +128,13 @@
             state[i] += (target - state[i]) * ease;
           }
 
+          if (spec.paint) {
+            spec.paint(ctx, modules, state, frame, signal, params);
+            return;
+          }
           ctx.save();
           frame.draw(ctx, w, h);
-          ctx.lineWidth = Math.max(1, frame.pxPerCss * 0.9);
-          ctx.strokeStyle = SEAM;
-          if (spec.before) spec.before(ctx, w, h);
-          if (spec.paint) spec.paint(ctx, modules, state, w, h, signal, params);
-          else for (var j = 0; j < modules.length; j++) spec.draw(ctx, modules[j], state[j], m, frame, signal, params);
-          if (spec.after) spec.after(ctx, w, h, m);
+          for (var j = 0; j < modules.length; j++) spec.draw(ctx, modules[j], state[j], signal, params);
           ctx.restore();
         },
         reset: function () { key = ''; }
@@ -138,12 +142,39 @@
     };
   }
 
-  function rectModule(x, y, cw, ch) {
-    return { x: x + cw / 2, y: y + ch / 2, w: cw, h: ch, x0: x, y0: y, x1: x + cw, y1: y + ch };
-  }
+  // Interactive: pivoting louvers that answer movement in front of them. A module whose motion
+  // passes the threshold turns face-on for 1.2 s, then turns back. A louver at angle θ shows a
+  // projected width of m·cos θ and catches light in proportion to cos θ.
+  var interactive = facade({
+    lag: 0.25,
+    sizes: MODULE_FINE,
+    layout: function (w, h, m) {
+      var out = [];
+      for (var y = 0; y < h; y += m) for (var x = 0; x < w; x += m) {
+        out.push({ x: x + m / 2, y: y + m / 2, w: m, h: m, x0: x, y0: y, x1: x + m, y1: y + m, hold: 0 });
+      }
+      return out;
+    },
+    target: function (md, signal, params, dt) {
+      var threshold = 0.035 * Math.pow(2, (50 - params.response) / 25);
+      if (signal.mean('motion', md.x0, md.y0, md.x1, md.y1) > threshold) md.hold = 1.2;
+      else md.hold = Math.max(0, md.hold - dt);
+      return (md.hold > 0) === !!params.shade ? 1 : 0;
+    },
+    draw: function (ctx, md, a, signal, params) {
+      var cos = Math.cos((1 - a) * Math.PI / 2), pw = md.w * 0.94 * cos;
+      if (pw < 0.75) return;
+      ctx.fillStyle = rgb(tint(params, signal.color(md.x, md.y)), 0.35 + 0.65 * cos);
+      ctx.fillRect(md.x - pw / 2, md.y0 + md.h * 0.03, pw, md.h * 0.94);
+    }
+  });
 
-  // Tilings shared by Active and Electrokinetic. Each module has a center (x, y), a polygon
-  // relative to that center (null for circles) and a sample rectangle.
+  // Electrokinetic pixel glazing: each pixel holds colored particles in clear fluid. Driven, they
+  // spread across the pixel (colored); released, they compact out of view (clear). Spread area
+  // follows the signal, so the shape's linear size scales by √a.
+  //
+  // Tilings: circles and hexagons on a hexagonal lattice, squares on a square grid, triangles
+  // alternating up and down, diamonds (rhombi 1.35 × taller than wide) on a staggered grid.
   function tiling(shape, w, h, m) {
     var out = [];
     function add(x, y, poly, rx, ry, kind) {
@@ -160,7 +191,7 @@
         for (var hx = (j % 2 ? m / 2 : 0); hx < w + m; hx += m) add(hx, hy, shape === 'circle' ? null : hex, m / 2, R);
       }
     } else if (shape === 'triangle') {
-      // Equilateral triangles of side m, alternating up and down; centers at the centroids.
+      // Equilateral triangles of side m; centers at the centroids.
       var th = m * SQRT3 / 2;
       for (var r = 0, ty = 0; ty < h; r++, ty += th) {
         for (var i = 0; ; i++) {
@@ -172,7 +203,7 @@
           add(gx, gy, v.map(function (q) { return [q[0] - gx, q[1] - gy]; }), m / 2, th / 2, up ? 'up' : 'down');
         }
       }
-    } else { // diamond: rhombi m wide and 1.35m tall, rows offset by half
+    } else {
       var dw = m, dh = m * 1.35, rh = [[0, -dh / 2], [dw / 2, 0], [0, dh / 2], [-dw / 2, 0]];
       for (var dj = 0, dy = 0; dy < h + dh; dj++, dy += dh / 2) {
         for (var dx = (dj % 2 ? dw / 2 : 0); dx < w + dw; dx += dw) add(dx, dy, rh, dw / 2, dh / 2);
@@ -181,183 +212,82 @@
     return out;
   }
 
-  // Traces a module's polygon (or circle) scaled by k about its center.
-  function shapePath(ctx, md, k) {
+  function shapePath(ctx, md, cx, cy, k) {
     ctx.beginPath();
     if (!md.poly) {
-      ctx.arc(md.x, md.y, (md.size / 2) * k, 0, Math.PI * 2);
+      ctx.arc(cx, cy, (md.size / 2) * k, 0, Math.PI * 2);
       return;
     }
     md.poly.forEach(function (q, i) {
-      var x = md.x + q[0] * k, y = md.y + q[1] * k;
+      var x = cx + q[0] * k, y = cy + q[1] * k;
       i ? ctx.lineTo(x, y) : ctx.moveTo(x, y);
     });
     ctx.closePath();
   }
 
-  // Interactive: pivoting louvers that answer movement in front of them. A module whose motion
-  // passes the threshold turns face-on for 1.2 s, then turns back. A louver at angle θ shows a
-  // projected width of m·cos θ and catches light in proportion to cos θ.
-  var interactive = facade({
-    lag: 0.25,
-    sizes: MODULE_FINE,
-    layout: function (w, h, m) {
-      var out = [];
-      for (var y = 0; y < h; y += m) for (var x = 0; x < w; x += m) {
-        var md = rectModule(x, y, m, m);
-        md.hold = 0;
-        out.push(md);
-      }
-      return out;
-    },
-    target: function (md, signal, params, dt) {
-      var threshold = 0.035 * Math.pow(2, (50 - params.response) / 25);
-      if (signal.mean('motion', md.x0, md.y0, md.x1, md.y1) > threshold) md.hold = 1.2;
-      else md.hold = Math.max(0, md.hold - dt);
-      return (md.hold > 0) === !!params.shade ? 1 : 0;
-    },
-    draw: function (ctx, md, a, m, frame, signal, params) {
-      var cos = Math.cos((1 - a) * Math.PI / 2), pw = md.w * 0.94 * cos;
-      if (pw < 0.75) return;
-      ctx.fillStyle = rgb(tint(params, signal.color(md.x, md.y)), 0.35 + 0.65 * cos);
-      ctx.fillRect(md.x - pw / 2, md.y0 + md.h * 0.03, pw, md.h * 0.94);
-    }
-  });
+  // Tens of thousands of pixels are too many to draw one call at a time, so each shape is
+  // rasterized once (anti-aliased) per size level and per quarter-pixel position, and stamped
+  // into one pixel buffer per frame. Stamping at the module's exact sub-pixel position keeps
+  // neighbors aligned and edges smooth.
+  var LEVELS = 32, PHASES = 4;
 
-  // Active: pneumatic ETFE cushions (after Media-TIC), in square, hexagonal, triangular or
-  // diamond tilings. Each cushion is a paraboloid membrane z = p·(1 − ρ²) whose rise p follows
-  // the light. Contours at equal heights Δ sit at ρₖ = √(1 − kΔ/p), so fuller cushions show more
-  // rings, and the frit thickens with the rise.
-  function active(shape) {
-    return facade({
-      layout: function (w, h, m) { return tiling(shape, w, h, m); },
-      draw: function (ctx, md, p) {
-        shapePath(ctx, md, 0.98);
-        ctx.fillStyle = 'rgba(238,238,234,' + (0.08 + 0.55 * p).toFixed(3) + ')';
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(255,255,255,0.4)';
-        ctx.stroke();
-        ctx.strokeStyle = 'rgba(255,255,255,0.7)';
-        for (var k = 1, step = 0.14; k * step < p; k++) {
-          shapePath(ctx, md, 0.98 * Math.sqrt(1 - k * step / p));
-          ctx.stroke();
-        }
-      }
-    });
-  }
-
-  // Biomimetic: hygromorphic scales, like a pine cone that opens as it dries, placed by Vogel's
-  // model of phyllotaxis: scale n sits at angle n·137.507° and radius c·√n. An opening scale
-  // lifts by φ = (1 − a)·72°, so its projected length shrinks to ℓ·cos φ.
-  var biomimetic = facade({
-    layout: function (w, h, m) {
-      var c = m * 0.42, cx = w / 2, cy = h / 2;
-      var N = Math.ceil(Math.pow(Math.hypot(w, h) / 2 / c, 2)) + 12, out = [];
-      for (var n = N; n >= 0; n--) { // outermost first, so inner scales overlap them
-        var th = n * GOLDEN, r = c * Math.sqrt(n);
-        var x = cx + r * Math.cos(th), y = cy + r * Math.sin(th);
-        out.push({ x: x, y: y, th: th, c: c, x0: x - c, y0: y - c, x1: x + c, y1: y + c });
-      }
-      return out;
-    },
-    draw: function (ctx, md, a) {
-      // A pointed scale from its base (toward the center) to its tip (outward). Neighbors in
-      // Vogel's spiral sit about c·√π ≈ 1.77c apart, so a closed scale (1.85c wide, 2.3c long)
-      // overlaps them the way a cone's scales do.
-      var phi = (1 - a) * 1.25, len = md.c * 2.3 * Math.cos(phi), bulge = md.c * 1.85;
-      if (len < 0.5) return;
-      ctx.save();
-      ctx.translate(md.x, md.y);
-      ctx.rotate(md.th);
-      ctx.fillStyle = gray(0.35 + 0.6 * Math.cos(phi));
-      ctx.beginPath();
-      ctx.moveTo(-md.c * 0.2, 0);
-      ctx.quadraticCurveTo(len * 0.4, bulge, len, 0);
-      ctx.quadraticCurveTo(len * 0.4, -bulge, -md.c * 0.2, 0);
-      ctx.fill();
-      ctx.stroke();
-      ctx.restore();
-    }
-  });
-
-  // Translation: panels slide sideways in their bays (rigid translation along a track).
-  // Panel offset = (1 − a)·0.92·bay width, so an open panel parks over its neighbor.
-  var translation = facade({
-    layout: function (w, h, m) {
-      var out = [];
-      for (var y = 0; y < h; y += m * 1.5) for (var x = 0; x < w + m; x += m) out.push(rectModule(x, y, m, m * 1.5));
-      return out;
-    },
-    draw: function (ctx, md, a) {
-      var x = md.x0 + (1 - a) * 0.92 * md.w, inset = md.h * 0.04;
-      ctx.fillStyle = gray(0.85);
-      ctx.fillRect(x, md.y0 + inset, md.w, md.h - inset * 2);
-      ctx.fillStyle = gray(0.62);
-      var slat = Math.max(2, md.w / 9);
-      for (var sx = x + slat; sx < x + md.w - 1; sx += slat) ctx.fillRect(sx, md.y0 + inset * 2, 1, md.h - inset * 4);
-      ctx.strokeRect(x + 0.5, md.y0 + inset + 0.5, md.w - 1, md.h - inset * 2 - 1);
-    },
-    after: function (ctx, w, h, m) {
-      ctx.fillStyle = SEAM;
-      for (var y = 0; y < h; y += m * 1.5) ctx.fillRect(0, y, w, Math.max(1, m * 0.035)); // tracks
-    }
-  });
-
-  // Electrokinetic pixel glazing: each pixel holds colored particles in clear fluid. Driven, they
-  // spread across the pixel (colored); released, they compact into a small reservoir (clear).
-  // Spread area follows the signal, so the shape's linear size scales by √a.
-  // Tens of thousands of pixels are too many to draw one by one, so each shape is rasterized
-  // once at LEVELS sizes and stamped into a single pixel buffer per frame.
-  var LEVELS = 24;
-
-  // Pixel offsets (dx, dy from the center) covered by a module's shape at each size level.
-  function maskSet(md) {
+  function rasterize(md, k, px, py) {
     var reach = Math.ceil(md.size * 0.9) + 2, side = reach * 2 + 1;
-    var c = document.createElement('canvas');
-    c.width = c.height = side;
+    var c = rasterize.canvas || (rasterize.canvas = document.createElement('canvas'));
+    if (c.width !== side) { c.width = c.height = side; }
     var g = c.getContext('2d', { willReadFrequently: true });
-    var probe = { x: reach + 0.5, y: reach + 0.5, poly: md.poly, size: md.size };
-    var set = [];
-    for (var L = 0; L < LEVELS; L++) {
-      g.clearRect(0, 0, side, side);
-      g.fillStyle = '#fff';
-      shapePath(g, probe, (L / (LEVELS - 1)) * 1.02);
-      g.fill();
-      var d = g.getImageData(0, 0, side, side).data, offs = [];
-      for (var y = 0; y < side; y++) for (var x = 0; x < side; x++) if (d[(y * side + x) * 4 + 3] >= 128) offs.push(x - reach, y - reach);
-      set.push(new Int16Array(offs));
+    g.clearRect(0, 0, side, side);
+    g.fillStyle = '#fff';
+    shapePath(g, md, reach + px, reach + py, k);
+    g.fill();
+    var d = g.getImageData(0, 0, side, side).data, offs = [], alpha = [];
+    for (var y = 0; y < side; y++) {
+      for (var x = 0; x < side; x++) {
+        var a = d[(y * side + x) * 4 + 3];
+        if (a) { offs.push(x - reach, y - reach); alpha.push(a); }
+      }
     }
-    return set;
+    return { offs: new Int16Array(offs), alpha: new Uint8Array(alpha) };
   }
 
   function electrokinetic(shape) {
-    var masks = {}, masksFor = '';
+    var cache = {}, cacheFor = '';
+    // Work on a CPU-side canvas: reading pixels back from a GPU canvas every frame is slow.
+    var work = document.createElement('canvas'), wctx = work.getContext('2d', { willReadFrequently: true });
     return facade({
       sizes: MODULE_PIXEL,
       layout: function (w, h, m) { return tiling(shape, w, h, m * 0.42); },
-      before: function (ctx, w, h) {
-        ctx.fillStyle = 'rgba(0,0,0,0.82)';
-        ctx.fillRect(0, 0, w, h);
-      },
-      paint: function (ctx, modules, state, w, h, signal, params) {
-        if (!modules.length) return;
-        var size = modules[0].size;
-        if (masksFor !== String(size)) { masks = {}; masksFor = String(size); }
-        var img = ctx.getImageData(0, 0, w, h), buf = new Uint32Array(img.data.buffer);
+      paint: function (ctx, modules, state, frame, signal, params) {
+        var w = frame.width, h = frame.height;
+        if (work.width !== w || work.height !== h) { work.width = w; work.height = h; }
+        // Clear glass in front of a dim interior: the camera at 18% over black.
+        wctx.globalAlpha = 1;
+        wctx.fillStyle = '#000';
+        wctx.fillRect(0, 0, w, h);
+        wctx.globalAlpha = 0.18;
+        frame.draw(wctx, w, h);
+        wctx.globalAlpha = 1;
+        var img = wctx.getImageData(0, 0, w, h), d = img.data;
+        if (modules.length && cacheFor !== String(modules[0].size)) { cache = {}; cacheFor = String(modules[0].size); }
         for (var i = 0; i < modules.length; i++) {
-          var md = modules[i], a = state[i];
-          var set = masks[md.kind] || (masks[md.kind] = maskSet(md));
-          var c = tint(params, signal.color(md.x, md.y));
-          var color = 0xff000000 | (Math.round(c[2] * 255) << 16) | (Math.round(c[1] * 255) << 8) | Math.round(c[0] * 255);
-          var cx = Math.round(md.x), cy = Math.round(md.y);
-          var offs = set[Math.round(Math.sqrt(a) * (LEVELS - 1))];
-          for (var k = 0; k < offs.length; k += 2) {
-            var x = cx + offs[k], y = cy + offs[k + 1];
-            if (x >= 0 && y >= 0 && x < w && y < h) buf[y * w + x] = color;
-          }
-          if (a < 0.5) { // compacted particles in the reservoir at the pixel's corner
-            var rx = Math.round(md.x - size * 0.36), ry = Math.round(md.y - size * 0.36);
-            if (rx >= 0 && ry >= 0 && rx < w && ry < h) buf[ry * w + rx] = color;
+          var md = modules[i], level = Math.round(Math.sqrt(state[i]) * (LEVELS - 1));
+          if (!level) continue;
+          var fx0 = Math.floor(md.x), fy0 = Math.floor(md.y);
+          var phx = Math.round((md.x - fx0) * PHASES), phy = Math.round((md.y - fy0) * PHASES);
+          if (phx === PHASES) { phx = 0; fx0++; }
+          if (phy === PHASES) { phy = 0; fy0++; }
+          var key = md.kind + phx + '.' + phy + ':' + level;
+          var mask = cache[key] || (cache[key] = rasterize(md, (level / (LEVELS - 1)) * 1.02, phx / PHASES, phy / PHASES));
+          var c = profile(params, signal.color(md.x, md.y));
+          var r = c[0] * 255, g = c[1] * 255, b = c[2] * 255;
+          var offs = mask.offs, alpha = mask.alpha;
+          for (var k = 0, n = 0; k < offs.length; k += 2, n++) {
+            var x = fx0 + offs[k], y = fy0 + offs[k + 1];
+            if (x < 0 || y < 0 || x >= w || y >= h) continue;
+            var p = (y * w + x) * 4, a = alpha[n] / 255;
+            d[p] += (r - d[p]) * a;
+            d[p + 1] += (g - d[p + 1]) * a;
+            d[p + 2] += (b - d[p + 2]) * a;
           }
         }
         ctx.putImageData(img, 0, 0);
@@ -372,8 +302,5 @@
   }
 
   Magi.renderers['facade-interactive'] = interactive;
-  Magi.renderers['facade-active'] = modes(active, ['square', 'hexagon', 'triangle', 'diamond'], 'square');
-  Magi.renderers['facade-biomimetic'] = biomimetic;
-  Magi.renderers['facade-translation'] = translation;
   Magi.renderers['facade-electrokinetic'] = modes(electrokinetic, ['circle', 'square', 'hexagon', 'triangle', 'diamond'], 'circle');
 })();

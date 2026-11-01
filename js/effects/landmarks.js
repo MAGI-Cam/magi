@@ -64,30 +64,30 @@
             ctx.arc(q.x, q.y, Math.max(1.5, 3.5 * u), 0, Math.PI * 2);
             ctx.fill();
           });
-          if (!params.readouts) return;
           var palm = dist(p[WRIST], p[MIDDLE_MCP]) || 1;
           var pinch = dist(p[THUMB_TIP], p[INDEX_TIP]) / palm;
           var v = { x: p[MIDDLE_MCP].x - p[WRIST].x, y: p[MIDDLE_MCP].y - p[WRIST].y };
           var rot = Math.atan2(v.x, -v.y) * 180 / Math.PI;
-          // Pinch line between thumb and index tips.
-          ctx.save();
-          ctx.setLineDash([4 * u, 4 * u]);
-          ctx.strokeStyle = '#fff';
-          ctx.lineWidth = Math.max(1, u);
-          ctx.beginPath();
-          ctx.moveTo(p[THUMB_TIP].x, p[THUMB_TIP].y);
-          ctx.lineTo(p[INDEX_TIP].x, p[INDEX_TIP].y);
-          ctx.stroke();
-          ctx.restore();
-          var d = info[i] || { label: 'Hand', score: 0 };
-          label(ctx, frame, [
-            d.label + '  ' + d.score.toFixed(2),
-            'pinch    ' + pinch.toFixed(2) + (pinch < 0.25 ? '  closed' : ''),
-            'rotation ' + (rot >= 0 ? ' ' : '') + rot.toFixed(0) + '°'
-          ], p[WRIST].x + 14 * u, p[WRIST].y + 10 * u);
+          if (params.pinch) {
+            // Pinch line between thumb and index tips.
+            ctx.save();
+            ctx.setLineDash([4 * u, 4 * u]);
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = Math.max(1, u);
+            ctx.beginPath();
+            ctx.moveTo(p[THUMB_TIP].x, p[THUMB_TIP].y);
+            ctx.lineTo(p[INDEX_TIP].x, p[INDEX_TIP].y);
+            ctx.stroke();
+            ctx.restore();
+          }
+          var d = info[i] || { label: 'Hand', score: 0 }, lines = [];
+          if (params.readouts) lines.push(d.label + '  ' + d.score.toFixed(2));
+          if (params.pinch) lines.push('pinch    ' + pinch.toFixed(2) + (pinch < 0.25 ? '  closed' : ''));
+          if (params.readouts) lines.push('rotation ' + (rot >= 0 ? ' ' : '') + rot.toFixed(0) + '°');
+          if (lines.length) label(ctx, frame, lines, p[WRIST].x + 14 * u, p[WRIST].y + 10 * u);
         });
 
-        if (params.readouts && hands.length === 2) {
+        if (params.distance && hands.length === 2) {
           var a = palmCenter(hands[0]), b = palmCenter(hands[1]);
           ctx.save();
           ctx.strokeStyle = '#fff';

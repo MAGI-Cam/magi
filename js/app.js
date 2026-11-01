@@ -10,7 +10,7 @@
   var app = $('app'), stage = $('stage'), view = $('view'), reviewVideo = $('review-video');
   var notice = $('notice'), noticeText = $('notice-text'), noticeActions = $('notice-actions');
   var shutter = $('shutter'), saveBtn = $('save'), timer = $('timer');
-  var caret = $('caret'), tray = $('tray'), tiles = $('tiles'), controls = $('controls');
+  var caret = $('caret'), tray = $('tray'), tiles = $('tiles'), controls = $('controls'), hint = $('hint');
   var uploadBtn = $('upload'), cameraBtn = $('camera'), fileInput = $('file');
   var modeButtons = Array.prototype.slice.call(document.querySelectorAll('[data-mode-option]'));
   var ctx = view.getContext('2d');
@@ -178,6 +178,9 @@
       source: src.el,
       mirror: src.mirror,
       time: performance.now(),
+      // A one-line instruction or status for the viewer, shown as text over the preview (sharp at
+      // any size, and never part of a saved photo). Only lasts for the frame that says it.
+      say: function (text) { said = text; },
       draw: function (c, dw, dh) {
         c.save();
         if (src.mirror) { c.translate(dw, 0); c.scale(-1, 1); }
@@ -186,12 +189,16 @@
       }
     };
 
+    var said = null;
     if (renderer) {
       renderer.render(frame, view, state.params[state.effectId]);
     } else {
       if (view.width !== w || view.height !== h) { view.width = w; view.height = h; }
       frame.draw(ctx, w, h);
     }
+
+    if (said !== hint.textContent) hint.textContent = said || '';
+    hint.hidden = !said;
 
     if (view.width !== shownW || view.height !== shownH) {
       shownW = view.width;
@@ -413,6 +420,7 @@
 
   function selectEffect(id) {
     state.effectId = id;
+    hint.hidden = true;
     resetRenderers();
     syncTiles();
     buildControls();
