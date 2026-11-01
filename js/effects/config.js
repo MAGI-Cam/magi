@@ -117,6 +117,36 @@ Magi.effectConfig = [
   },
 
   {
+    id: 'pinch-frame',
+    name: 'Pinch Frame',
+    group: 'hand',
+    ready: true,
+    photoType: 'image/jpeg',
+    modes: [
+      { id: 'acid', name: 'Acid' },
+      { id: 'thermal', name: 'Thermal' },
+      { id: 'invert', name: 'Invert' }
+    ],
+    params: [
+      range('bands', 'Bands', 1, 12, 3),
+      range('speed', 'Speed', 0, 100, 30),
+      toggle('skeleton', 'Skeleton', true, 'Draw the hand skeleton.')
+    ]
+  },
+  {
+    id: 'claw',
+    name: 'Claw',
+    group: 'hand',
+    ready: true,
+    photoType: 'image/jpeg',
+    params: [
+      range('claw', 'Claw', 0, 100, 35),
+      toggle('glyphs', 'Glyphs', true, 'Show the drifting HUD brackets around the hand.'),
+      { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 35, track: 'hue' }
+    ]
+  },
+
+  {
     id: 'face-landmarks',
     name: 'Landmarks',
     group: 'face',

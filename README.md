@@ -16,6 +16,8 @@ Halftone controls: Scale, Intensity, Saturation (how much of the media's own col
 **Hand Tracking** (MediaPipe Hand Landmarker, the same model TouchDesigner's MediaPipe plugin uses)
 
 - **Landmarks**: the 21-point skeleton per hand. Switches: Readouts (handedness, score, rotation), Pinch (thumb–index distance over palm length), Distance (between two hands).
+- **Pinch Frame**: make an L with thumb and index finger on both hands; the four fingertips span a window where the camera shows in false color. Modes: Acid (brightness becomes hue bands that cycle), Thermal (heat ramp), Invert. Controls: Bands, Speed, Skeleton.
+- **Claw**: the hand as a 3D rig: octahedral wireframe bones, fingertip bones extended into claws, cylinders on the fingertips, a wrist target, knuckle crosshairs and drifting HUD brackets. Controls: Claw (length), Glyphs, Color (accent).
 - **Mosh**: real datamoshing. Block motion vectors are measured with three-step search and applied, uncorrected, to a picture that never refreshes, inside the zone between thumb and index finger. Pinch to snap clean. Controls: Scale (vector strength), Block (macroblock size), Hold (how long the smear lasts before it unwinds block by block, newest first), Reach (zone size).
 
 **Face Tracking** (MediaPipe Face Landmarker: 478 points, 52 blendshapes, head pose)
