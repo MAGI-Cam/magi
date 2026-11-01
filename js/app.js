@@ -735,24 +735,36 @@
   /* ---------- Updates ---------- */
 
   // GitHub Pages lets browsers keep the page for up to 10 minutes, so a new release could take
-  // that long to appear. When Magi opens or comes back into view, it asks for the published
-  // version number (skipping every cache); if it's newer than this page, it loads the new one
-  // under a fresh URL, which the cache hasn't seen. Never while recording or reviewing.
+  // that long to appear. When Magi opens, comes back into view, and every 30 s while open, it
+  // asks for the published version number (skipping every cache); if it's newer than this page,
+  // it loads the new one under a fresh URL, which the cache hasn't seen. It waits until nothing
+  // would be lost: not while recording, reviewing a capture or using the tray.
   var VERSION = (document.querySelector('meta[name="magi-version"]') || {}).content;
 
+  var pendingVersion = null;
+
   function checkForUpdate() {
-    if (!VERSION || !window.fetch || state.phase !== 'live') return;
+    if (!VERSION || !window.fetch || document.hidden) return;
     fetch('version.json?t=' + Date.now(), { cache: 'no-store' })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (v) {
         if (!v || !v.version || String(v.version) === VERSION) return;
         if (new RegExp('[?&]v=' + v.version + '(&|$)').test(location.search)) return; // already tried
-        location.replace(location.pathname + '?v=' + v.version);
+        pendingVersion = v.version;
+        applyUpdate();
       })
       .catch(function () {});
   }
 
+  // Reload into the new release once nothing would be lost: live preview, tray closed.
+  function applyUpdate() {
+    if (!pendingVersion || state.phase !== 'live' || state.trayOpen) return;
+    location.replace(location.pathname + '?v=' + pendingVersion);
+  }
+
   checkForUpdate();
+  setInterval(checkForUpdate, 30000); // also while Magi stays open
+  setInterval(applyUpdate, 2000);
   document.addEventListener('visibilitychange', function () {
     if (!document.hidden) checkForUpdate();
   });

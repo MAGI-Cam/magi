@@ -6,7 +6,7 @@ Source of truth for scope is the PRD in `docs/`. This file guides implementation
 
 ## Structure
 
-- `index.html` — the single page. No build step; plain scripts load in order. Every release bumps one number N in three places: the `magi-version` meta in `index.html`, the `?v=N` on every CSS/JS link, and `version.json`. The app compares its meta with `version.json` on open and when refocused, and reloads under `?v=N` if a newer release is published, so changes appear about a minute after a push without a hard refresh.
+- `index.html` — the single page. No build step; plain scripts load in order. Every release bumps one number N in three places: the `magi-version` meta in `index.html`, the `?v=N` on every CSS/JS link, and `version.json`. The app compares its meta with `version.json` on open, on refocus and every 30 s, and reloads under `?v=N` when a newer release is published and nothing would be lost. GitHub Pages rejects a deploy while another is still in progress, so after every push check `gh run list -R MAGI-Cam/magi -L 3` until it succeeds, and rerun a failed one (`gh run rerun <id> -R MAGI-Cam/magi`).
 - `css/magi.css` — interface shell (black and white only).
 - `js/effects/config.js` — effect names, order, availability and parameters (`Magi.effectConfig`). No rendering code.
 - `js/effects/shared.js` — helpers shared by effects: tone/color sampler, Bayer thresholds, ink tinting (`applyInk`), glyph atlas and glyph renderer. Every renderer calls `applyInk` last.

@@ -49,7 +49,7 @@ Open https://magi-cam.github.io/magi/ and install it like an app:
 
 ## Updates
 
-Magi checks for a new release when it opens and whenever you switch back to it, and reloads itself if one is published. A push to `main` reaches the site in about a minute (GitHub Pages build time); no hard refresh is needed.
+Magi checks for a new release when it opens, when you switch back to it, and every 30 seconds while open, and reloads itself once you're not recording, reviewing or in the tray. A push to `main` is live in about 30 seconds once GitHub Pages finishes its deploy.
 
 ## Run it locally
 
