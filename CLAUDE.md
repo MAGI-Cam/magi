@@ -6,7 +6,7 @@ Source of truth for scope is the PRD in `docs/`. This file guides implementation
 
 ## Structure
 
-- `index.html` — the single page. No build step; plain scripts load in order. CSS/JS links carry `?v=N`; bump N on every release so browsers and installed apps don't mix cached old files with new ones.
+- `index.html` — the single page. No build step; plain scripts load in order. Every release bumps one number N in three places: the `magi-version` meta in `index.html`, the `?v=N` on every CSS/JS link, and `version.json`. The app compares its meta with `version.json` on open and when refocused, and reloads under `?v=N` if a newer release is published, so changes appear about a minute after a push without a hard refresh.
 - `css/magi.css` — interface shell (black and white only).
 - `js/effects/config.js` — effect names, order, availability and parameters (`Magi.effectConfig`). No rendering code.
 - `js/effects/shared.js` — helpers shared by effects: tone/color sampler, Bayer thresholds, ink tinting (`applyInk`), glyph atlas and glyph renderer. Every renderer calls `applyInk` last.

@@ -43,6 +43,10 @@ Open https://magi-cam.github.io/magi/ and install it like an app:
 - **iPhone:** Safari → Share → Add to Home Screen.
 - **Android:** Chrome → ⋮ → Add to Home screen.
 
+## Updates
+
+Magi checks for a new release when it opens and whenever you switch back to it, and reloads itself if one is published. A push to `main` reaches the site in about a minute (GitHub Pages build time); no hard refresh is needed.
+
 ## Run it locally
 
 No build step and no dependencies. The camera only works over `https` or `localhost`, so serve the folder rather than opening the file directly:

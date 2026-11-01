@@ -731,4 +731,29 @@
   setPhase('live');
   startCamera();
   requestAnimationFrame(tick);
+
+  /* ---------- Updates ---------- */
+
+  // GitHub Pages lets browsers keep the page for up to 10 minutes, so a new release could take
+  // that long to appear. When Magi opens or comes back into view, it asks for the published
+  // version number (skipping every cache); if it's newer than this page, it loads the new one
+  // under a fresh URL, which the cache hasn't seen. Never while recording or reviewing.
+  var VERSION = (document.querySelector('meta[name="magi-version"]') || {}).content;
+
+  function checkForUpdate() {
+    if (!VERSION || !window.fetch || state.phase !== 'live') return;
+    fetch('version.json?t=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (v) {
+        if (!v || !v.version || String(v.version) === VERSION) return;
+        if (new RegExp('[?&]v=' + v.version + '(&|$)').test(location.search)) return; // already tried
+        location.replace(location.pathname + '?v=' + v.version);
+      })
+      .catch(function () {});
+  }
+
+  checkForUpdate();
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) checkForUpdate();
+  });
 })();
