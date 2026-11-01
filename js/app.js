@@ -158,7 +158,9 @@
     if (state.phase === 'review') return;
     var src = currentSource();
     if (!src || !src.w || !src.h) return;
-    if (!src.moving && !dirty) return;
+    var renderer = activeRenderer();
+    // Still images only re-render on change, unless the effect animates on its own.
+    if (!src.moving && !dirty && !(renderer && renderer.animated)) return;
     dirty = false;
 
     var k = WORK_EDGE / Math.max(src.w, src.h);
@@ -171,6 +173,11 @@
       // Canvas pixels per screen (CSS) pixel once the frame is fitted to the stage. Effects
       // that should look the same size on any screen, like characters, multiply by this.
       pxPerCss: r.width && r.height ? 1 / Math.min(r.width / w, r.height / h) : 1,
+      // For effects that track hands or faces: the raw element, whether the preview is
+      // mirrored, and a clock in milliseconds.
+      source: src.el,
+      mirror: src.mirror,
+      time: performance.now(),
       draw: function (c, dw, dh) {
         c.save();
         if (src.mirror) { c.translate(dw, 0); c.scale(-1, 1); }
@@ -179,7 +186,6 @@
       }
     };
 
-    var renderer = activeRenderer();
     if (renderer) {
       renderer.render(frame, view, state.params[state.effectId]);
     } else {
@@ -208,6 +214,9 @@
     var s = Math.min(r.width / view.width, r.height / view.height);
     view.style.width = Math.floor(view.width * s) + 'px';
     view.style.height = Math.floor(view.height * s) + 'px';
+    // Nearest-pixel scaling keeps pixels square when enlarging, but when shrinking it drops whole
+    // rows and columns (thin strokes vanish), so shrink smoothly instead.
+    view.classList.toggle('is-reduced', s * (window.devicePixelRatio || 1) < 1);
   }
 
   /* ---------- Notices ---------- */
@@ -269,19 +278,66 @@
     tray.dataset.open = String(open);
     caret.setAttribute('aria-expanded', String(open));
     caret.setAttribute('aria-label', open ? 'Hide effects' : 'Show effects');
+    // Open where the active effect lives, so its neighbors are one tap away.
+    if (open) showLevel(currentEffect() ? currentEffect().group || null : null);
   }
 
-  // Ungrouped effects (Normal) come first, then each group under its heading.
-  function buildTiles() {
-    Magi.effectConfig.forEach(function (fx) { if (!fx.group) addTile(fx); });
-    Magi.effectGroups.forEach(function (group) {
-      var label = document.createElement('div');
-      label.className = 'tile-group';
-      label.textContent = group.name;
-      tiles.appendChild(label);
-      Magi.effectConfig.forEach(function (fx) { if (fx.group === group.id) addTile(fx); });
+  function groupById(id) {
+    for (var i = 0; i < Magi.effectGroups.length; i++) {
+      if (Magi.effectGroups[i].id === id) return Magi.effectGroups[i];
+    }
+    return null;
+  }
+
+  // True when the effect sits in the group, directly or inside one of its subgroups.
+  function inGroup(fx, groupId) {
+    var g = fx && fx.group ? groupById(fx.group) : null;
+    while (g) {
+      if (g.id === groupId) return true;
+      g = g.parent ? groupById(g.parent) : null;
+    }
+    return false;
+  }
+
+  // The tray shows one level at a time: the top (Normal and the parent tiles) or one group's
+  // effects and subgroups, with a back row. `level` is the group id, or null for the top.
+  var level = null;
+
+  function showLevel(groupId) {
+    level = groupId;
+    tiles.textContent = '';
+    var group = groupById(groupId);
+    if (group) {
+      var back = document.createElement('button');
+      back.type = 'button';
+      back.className = 'tray-back';
+      var parent = groupById(group.parent);
+      back.innerHTML = '<span aria-hidden="true">‹</span><span class="tray-path"></span>';
+      back.lastChild.textContent = (parent ? parent.name + ' / ' : '') + group.name;
+      back.setAttribute('aria-label', 'Back to ' + (parent ? parent.name : 'all effects'));
+      back.addEventListener('click', function () {
+        showLevel(group.parent || null);
+        tiles.querySelector('button').focus();
+      });
+      tiles.appendChild(back);
+    }
+    Magi.effectConfig.forEach(function (fx) { if ((fx.group || null) === groupId) addTile(fx); });
+    Magi.effectGroups.forEach(function (g) { if ((g.parent || null) === groupId) addGroupTile(g); });
+    syncTiles();
+  }
+
+  function addGroupTile(group) {
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'tile tile-parent';
+    b.dataset.group = group.id;
+    b.innerHTML = '<span></span><span class="tile-mode"></span>';
+    b.firstChild.textContent = group.name;
+    b.addEventListener('click', function () {
+      showLevel(group.id);
+      tiles.querySelector('.tile').focus();
     });
-    syncTileModes();
+    tiles.appendChild(b);
   }
 
   function addTile(fx) {
@@ -319,34 +375,45 @@
   function nextMode(fx) {
     state.params[fx.id].mode = fx.modes[(modeOf(fx) + 1) % fx.modes.length].id;
     resetRenderers();
-    syncTileModes();
+    syncTiles();
   }
 
-  function syncTileModes() {
-    Magi.effectConfig.forEach(function (fx) {
+  // Marks the active effect, shows each effect's current mode, and on parent tiles names the
+  // active effect inside them.
+  function syncTiles() {
+    var active = currentEffect();
+    Array.prototype.forEach.call(tiles.querySelectorAll('.tile'), function (tile) {
+      if (tile.dataset.group) {
+        var holds = inGroup(active, tile.dataset.group);
+        tile.classList.toggle('is-current', holds);
+        tile.querySelector('.tile-mode').textContent = holds ? active.name : '';
+        return;
+      }
+      var fx = effectById(tile.dataset.effect);
+      tile.setAttribute('aria-checked', String(fx === active));
       if (!fx.modes) return;
-      var tile = tiles.querySelector('[data-effect="' + fx.id + '"]');
       var mode = fx.modes[modeOf(fx)];
       tile.querySelector('.tile-mode').textContent = mode.name;
       tile.setAttribute('aria-label', fx.name + ', ' + mode.name + ' mode');
-      tile.title = state.effectId === fx.id ? 'Tap to change mode' : '';
+      tile.title = fx === active ? 'Tap to change mode' : '';
     });
   }
 
-  function currentEffect() {
+  function effectById(id) {
     for (var i = 0; i < Magi.effectConfig.length; i++) {
-      if (Magi.effectConfig[i].id === state.effectId) return Magi.effectConfig[i];
+      if (Magi.effectConfig[i].id === id) return Magi.effectConfig[i];
     }
     return null;
+  }
+
+  function currentEffect() {
+    return effectById(state.effectId);
   }
 
   function selectEffect(id) {
     state.effectId = id;
     resetRenderers();
-    Array.prototype.forEach.call(tiles.querySelectorAll('.tile'), function (t) {
-      t.setAttribute('aria-checked', String(t.dataset.effect === id));
-    });
-    syncTileModes();
+    syncTiles();
     buildControls();
   }
 
@@ -388,6 +455,8 @@
     controls.appendChild(head);
 
     fx.params.forEach(function (p) {
+      if (p.type === 'toggle') return controls.appendChild(toggleControl(fx, p));
+      if (p.type === 'text') return controls.appendChild(textControl(fx, p));
       var id = 'param-' + fx.id + '-' + p.id;
       var wrap = document.createElement('div');
       wrap.className = 'control';
@@ -416,6 +485,52 @@
       });
       controls.appendChild(wrap);
     });
+  }
+
+  // On/off switch. The label says what "on" does; the switch shows the state.
+  function toggleControl(fx, p) {
+    var wrap = document.createElement('div');
+    wrap.className = 'control control-row';
+    wrap.innerHTML = '<span class="control-label"></span><button class="switch" type="button" role="switch"></button>';
+    var label = wrap.firstChild, sw = wrap.lastChild;
+    label.id = 'param-' + fx.id + '-' + p.id + '-label';
+    label.textContent = p.label;
+    sw.id = 'param-' + fx.id + '-' + p.id;
+    sw.setAttribute('aria-labelledby', label.id);
+    if (p.hint) sw.title = p.hint;
+    function show() { sw.setAttribute('aria-checked', String(!!state.params[fx.id][p.id])); }
+    show();
+    sw.addEventListener('click', function () {
+      state.params[fx.id][p.id] = !state.params[fx.id][p.id];
+      show();
+      dirty = true;
+    });
+    return wrap;
+  }
+
+  // Free text. A plain input, so every keyboard, language and emoji works as the device provides.
+  function textControl(fx, p) {
+    var id = 'param-' + fx.id + '-' + p.id;
+    var wrap = document.createElement('div');
+    wrap.className = 'control';
+    wrap.innerHTML = '<label class="control-label"></label><input class="control-text" type="text">';
+    var label = wrap.firstChild, input = wrap.lastChild;
+    label.textContent = p.label;
+    label.htmlFor = id;
+    input.id = id;
+    input.maxLength = p.maxLength || 280;
+    input.placeholder = p.placeholder || '';
+    input.autocomplete = 'off';
+    input.setAttribute('enterkeyhint', 'done');
+    input.value = state.params[fx.id][p.id];
+    input.addEventListener('input', function () {
+      state.params[fx.id][p.id] = input.value;
+      dirty = true;
+    });
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') input.blur();
+    });
+    return wrap;
   }
 
   /* ---------- Capture, review and save ---------- */
@@ -601,7 +716,7 @@
   window.addEventListener('resize', fitView);
   if (window.ResizeObserver) new ResizeObserver(fitView).observe(stage);
 
-  buildTiles();
+  showLevel(null);
   selectEffect('bitmap');
   setMode('photo');
   setPhase('live');

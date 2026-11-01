@@ -101,14 +101,6 @@
   };
 
   Magi.renderers.ascii = function () {
-    var made = {};
-    function mode(id) {
-      if (!MODES[id]) id = 'classic';
-      return made[id] || (made[id] = MODES[id]());
-    }
-    return {
-      render: function (frame, out, params) { mode(params.mode).render(frame, out, params); },
-      reset: function () { Object.keys(made).forEach(function (id) { made[id].reset(); }); }
-    };
+    return fx.createModeRenderer(MODES, 'classic');
   };
 })();

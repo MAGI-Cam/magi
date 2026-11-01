@@ -2,19 +2,38 @@
 
 A minimalist effects tool library. Apply a visual effect to your live camera or an uploaded photo or video, adjust it, capture, and save the result to your device.
 
-The tray has **Normal** (the plain camera), then the **Halftone** effects. Halftone is the printing technique of faking gray with a pattern of marks; every effect here rebuilds the image from a grid of marks and lets their density carry the shading.
+The tray opens on **Normal** (the plain camera) and four parent tiles. Tap a parent to see its effects; the back row returns. A parent tile shows which of its effects is on.
 
-- **Bitmap**: square pixels in pure black and white, with gray made only by how densely the black pixels sit.
-- **ASCII**: one character per cell, in five modes. Tap the ASCII tile again to switch mode:
-  - *Classic*: the short `.:-=+*#%@` ramp most ASCII art uses.
-  - *Detailed*: Paul Bourke's 70-character ramp, with finer tonal steps.
-  - *Blocks*: the DOS-era shade characters ░ ▒ ▓ █, drawn as pixel patterns.
-  - *Braille*: each cell is a 2×4 grid of dots, so detail is 8× finer.
-  - *Edges*: outlines drawn with `- | / \` along edges, Classic ramp elsewhere.
-- **Binary**: only `0`, `1` and empty space.
-- **X's and O's**: drawn crosses and rings that grow and thicken in brighter areas.
+**Halftone**: rebuild the image from a grid of marks and let their density carry the shading.
 
-Every effect has the same controls: **Scale**, **Intensity**, **Saturation** (how much of the media's own color shows) and **Color** (the ink color: white at the far left, then the hue wheel). With both up, Saturation blends from the chosen color toward the media's color.
+- **Bitmap**: square pixels in pure black and white.
+- **ASCII**: one character per cell. Tap the active tile to switch mode: *Classic* (`.:-=+*#%@`), *Detailed* (Paul Bourke's 70-character ramp), *Blocks* (░ ▒ ▓ █), *Braille* (2×4 dots per cell, 8× finer), *Edges* (`- | / \` along edges).
+- **Binary**: only `0`, `1` and space. Modes switch the typeface: System, Plex Mono, Space Mono, VT323, Silkscreen.
+- **X's and O's**: crosses and rings. Modes: Drawn (geometric strokes), Bodoni, Plex Mono, Space Mono, Silkscreen.
+
+Halftone controls: Scale, Intensity, Saturation (how much of the media's own color shows) and Color (ink: white at the far left, then the hue wheel).
+
+**Hand Tracking**
+
+- **Mosh**: real datamoshing. Block motion vectors are measured from the camera with three-step search and applied, with no correction, to a picture that never refreshes, but only around your hand. Spread thumb and index finger to grow the zone; pinch to snap clean (a fresh keyframe). Controls: Block (macroblock size), Hold (how long the smear lingers), Reach (zone size).
+
+**Face Tracking**
+
+- **Text Cry**: type anything (any language, emoji) and it pours from your lower eyelids as falling letters. Controls: Text, Speed, Size, Pool (on: letters pool at the bottom like sand; off: they fall through), Color.
+
+**Geometry**
+
+- **Facade**: the camera is the sun behind an adaptive building envelope. Every module reads the light (Interactive: motion) behind it and moves with first-order lag, a → a* with time constant τ. Controls: Scale, Response, Speed, Shade (on: close against bright light; off: open toward it).
+  - *Interactive*: pivoting louvers that turn face-on where something moves.
+  - *Active*: ETFE cushions whose rise follows the light, drawn as paraboloid contours.
+  - *Biomimetic*: hygromorphic scales placed by Vogel's phyllotaxis (n·137.5°, c√n) that lift open.
+  - *Smart*: electrochromic panes that tint from the edges in, like real EC glass.
+  - *Bending*: lamellae bent as cantilevers, w(y) = δ·(y/L)²·(3 − y/L)/2.
+  - *Translation*: panels sliding along tracks.
+  - *Scaling*: Al Bahar-style triangular units scaled about their centroids.
+  - *Rolling*: roller blinds whose roll radius follows r = √(r₀² + t·(L − l)/π).
+  - *Electrokinetic*: pixel glazing; colored particles spread over each pixel, area ∝ signal.
+- **Fractal**: exact constructions over the camera. Sierpiński and Vicsek iterate the image itself through their maps (Recursive on: each piece holds the whole picture; off: the shape is a window). Anti-snowflake uses inward Koch edges (area → (√3/10)·s²). Metatron's Cube, Vesica Piscis and Egg of Life are circle constructions; Parity inverts where an odd number of circles overlap. Notation shows the formula.
 
 ## Install it
 
@@ -60,6 +79,7 @@ These fill gaps the PRD leaves open. They are easy to change.
 | Photo export | Halftone effects save PNG, which keeps hard pixel edges exact. Normal saves JPEG (quality 92). About 1280 px on the long edge. |
 | Video export | MP4 where the browser can record it (Safari, recent Chrome), otherwise WebM. 30 fps, no audio, no length limit. |
 | Saving on phones | Uses the share sheet when available, so the result can go to the camera roll. Desktop downloads the file. |
+| Tracking | Google MediaPipe (Hand Landmarker, Face Landmarker), loaded from jsDelivr and Google's model storage the first time a tracking effect is picked. It needs a connection then; a status line on the frame says when it is loading or failed. |
 | Glyph effects | ASCII, Binary and X's and O's are white glyphs on black, snapped to pure black and white. Glyphs are ordered by measured ink coverage and dithered between neighbors. Scale sets the cell size in screen pixels (6–24, default 11), so characters stay readable on a phone where the preview is shrunk. These looks are first interpretations, not from the PRD. |
 | Color | Saturation and Color tint whatever is lit (white pixels or glyphs); the black background stays black. Both default to 0, which is the original pure black and white. |
 | Canvas fit | The whole frame is shown (contained) with black around it. Nothing is cropped or stretched. |
@@ -72,8 +92,9 @@ manifest.webmanifest  install details (name, icons, standalone window)
 icons/                app icons (pixel M)
 css/magi.css          interface shell
 js/effects/config.js  effect names, order and parameters
-js/effects/shared.js  tone sampling, dithering, glyph renderer
-js/effects/*.js       one renderer per effect
+js/effects/shared.js  tone sampling, dithering, glyph renderer, fonts, modes
+js/effects/*.js       one renderer per effect (facades.js and fractals.js hold families)
+js/tracking.js        hand and face tracking (MediaPipe, loaded on demand)
 js/app.js             camera, upload, tray, capture, review, save
 docs/                 PRD, design file, project guidance (v0.1)
 ```

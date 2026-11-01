@@ -144,11 +144,13 @@
   };
 
   // Renders draw(ctx, cell) functions side by side, snapped to pure white on transparent,
-  // and measures each glyph's ink coverage (0–1).
+  // and measures each glyph's ink coverage (0–1). A pixel counts as ink when its coverage
+  // reaches `threshold` (0–255, default half); fonts with hairlines need a lower one.
   // Glyphs are laid out in rows of ATLAS_COLUMNS to keep the canvas within phone size limits.
   var ATLAS_COLUMNS = 16;
 
-  fx.buildAtlas = function (glyphs, cell) {
+  fx.buildAtlas = function (glyphs, cell, threshold) {
+    var cut = threshold || 128;
     var canvas = document.createElement('canvas');
     canvas.width = cell * Math.min(glyphs.length, ATLAS_COLUMNS);
     canvas.height = cell * Math.ceil(glyphs.length / ATLAS_COLUMNS);
@@ -171,7 +173,7 @@
     for (var y = 0; y < canvas.height; y++) {
       for (var x = 0; x < canvas.width; x++) {
         var p = (y * canvas.width + x) << 2;
-        var on = d[p + 3] >= 128;
+        var on = d[p + 3] >= cut;
         d[p] = d[p + 1] = d[p + 2] = 255;
         d[p + 3] = on ? 255 : 0;
         if (on) cover[((y / cell) | 0) * ATLAS_COLUMNS + ((x / cell) | 0)] += 1 / (cell * cell);
@@ -211,19 +213,38 @@
     return { lo: lo, hi: hi, mix: mix };
   };
 
+  // Web fonts must finish loading before glyphs are drawn into an atlas, or the browser draws
+  // a fallback face. Returns true once the family is ready; until then it starts the download.
+  var fontState = {};
+  fx.fontReady = function (family) {
+    if (!family || !document.fonts) return true;
+    if (fontState[family] === undefined) {
+      fontState[family] = false;
+      var done = function () { fontState[family] = true; };
+      document.fonts.load('32px "' + family + '"').then(done, done);
+    }
+    return fontState[family];
+  };
+
   // Builds a renderer that draws one glyph per cell, white on black, then applies ink.
   // options.cellSizes: pixel size per Scale step. options.glyphs: draw(ctx, cell) functions
   // forming the tone ramp; brighter cells get denser glyphs and in-between tones dither.
   // options.edges (optional): [horizontal, vertical, rising, falling] glyphs drawn in place
   // of the ramp wherever the image has a strong edge, following its direction.
+  // options.font (optional): web font family the glyphs use; atlases are redrawn once it loads.
   fx.createGlyphRenderer = function (options) {
     var sampler = fx.createToneSampler();
     var atlases = {};
     var rampCount = options.glyphs.length;
+    var fontLoaded = fx.fontReady(options.font);
 
     function atlasFor(cell) {
+      if (!fontLoaded && fx.fontReady(options.font)) {
+        fontLoaded = true;
+        atlases = {};
+      }
       if (!atlases[cell]) {
-        var atlas = fx.buildAtlas(options.glyphs.concat(options.edges || []), cell);
+        var atlas = fx.buildAtlas(options.glyphs.concat(options.edges || []), cell, options.threshold);
         atlas.ramp = fx.buildRamp(atlas.cover, rampCount);
         atlases[cell] = atlas;
       }
@@ -231,6 +252,8 @@
     }
 
     return {
+      // Keep redrawing still images until the font arrives, so the real face replaces the fallback.
+      get animated() { return !fontLoaded; },
       render: function (frame, out, params) {
         var cell = fx.cellSize(options.cellSizes, params.scale, frame);
         var cols = Math.max(1, Math.round(frame.width / cell));
@@ -286,4 +309,34 @@
   };
 
   fx.MONO = 'Menlo, Consolas, "DejaVu Sans Mono", "Courier New", monospace';
+
+  // Glyph typefaces offered as modes. `family` is the web font (loaded in index.html);
+  // `stack` is what the canvas draws with, falling back to the system monospace.
+  fx.FONTS = {
+    system: { family: null, stack: fx.MONO },
+    plex: { family: 'IBM Plex Mono', stack: '"IBM Plex Mono", ' + fx.MONO },
+    space: { family: 'Space Mono', stack: '"Space Mono", ' + fx.MONO },
+    vt323: { family: 'VT323', stack: 'VT323, ' + fx.MONO },
+    silkscreen: { family: 'Silkscreen', stack: 'Silkscreen, ' + fx.MONO },
+    // Didone hairlines are under half a pixel at glyph sizes, so they need a low ink threshold.
+    bodoni: { family: 'Bodoni Moda', stack: '"Bodoni Moda", Didot, "Bodoni 72", Georgia, serif', threshold: 40 }
+  };
+
+  // Wraps one renderer per mode, built on first use, and draws with the mode in params.mode.
+  fx.createModeRenderer = function (modes, fallback) {
+    var made = {};
+    var current = null;
+    function get(id) {
+      if (!modes[id]) id = fallback;
+      return made[id] || (made[id] = modes[id]());
+    }
+    return {
+      get animated() { return !!(current && current.animated); },
+      render: function (frame, out, params) {
+        current = get(params.mode);
+        current.render(frame, out, params);
+      },
+      reset: function () { Object.keys(made).forEach(function (id) { made[id].reset(); }); }
+    };
+  };
 })();

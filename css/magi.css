@@ -71,6 +71,8 @@ svg {
   image-rendering: pixelated;
 }
 
+.view.is-reduced { image-rendering: auto; }
+
 .review-video {
   position: absolute;
   inset: 0;
@@ -373,6 +375,42 @@ svg {
 
 .tile:disabled { color: var(--dim); opacity: 0.55; cursor: default; }
 
+/* Parent tiles open a group; the subtitle names the active effect inside it. */
+.tile-parent { position: relative; padding-right: 30px; }
+
+.tile-parent::after {
+  content: "›";
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-52%);
+  font-size: 16px;
+  opacity: 0.6;
+}
+
+.tile-parent.is-current { border-color: var(--paper); }
+
+/* Back row at the top of a group: "‹ Geometry / Facade". */
+.tray-back {
+  grid-column: 1 / -1;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dim);
+  text-align: left;
+}
+
+.tray-back span:first-child { font-size: 16px; letter-spacing: 0; color: var(--paper); }
+
+@media (hover: hover) {
+  .tray-back:hover { color: var(--paper); }
+}
+
 /* Group heading inside the tile grid, e.g. "Halftone". */
 .tile-group {
   grid-column: 1 / -1;
@@ -463,6 +501,47 @@ svg {
   border-radius: 0;
   background: var(--paper);
 }
+
+/* On/off switch: a square knob that slides right and fills when on. */
+.switch {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  flex: none;
+  border: 1px solid var(--line);
+  transition: border-color 0.2s var(--ease), background-color 0.2s var(--ease);
+}
+
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 12px;
+  height: 12px;
+  background: var(--dim);
+  transition: transform 0.2s var(--ease), background-color 0.2s var(--ease);
+}
+
+.switch[aria-checked="true"] { border-color: var(--paper); }
+.switch[aria-checked="true"]::after { transform: translateX(16px); background: var(--paper); }
+
+.control-row.control { align-items: center; }
+
+/* Free text. 16px keeps iOS from zooming the page when the field is focused. */
+.control-text {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--paper);
+  font: 300 16px var(--font);
+}
+
+.control-text:focus { border-color: var(--paper); outline: none; }
+.control-text::placeholder { color: var(--dim); }
 
 /* Color slider: white at the far left, then once around the hue wheel. */
 .control input.is-hue::-webkit-slider-runnable-track {

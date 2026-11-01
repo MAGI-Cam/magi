@@ -1,4 +1,5 @@
-// X's and O's: drawn crosses and rings that grow and thicken in brighter areas.
+// X's and O's: crosses and rings that grow and thicken in brighter areas. The Drawn mode uses
+// geometric strokes; the other modes set the letters in a typeface.
 (function () {
   // Cell size in screen pixels for each Scale step (1–9).
   var CELL_SIZES = [6, 7, 8, 9, 11, 13, 16, 19, 24];
@@ -27,7 +28,7 @@
     };
   }
 
-  Magi.renderers['xs-and-os'] = function () {
+  function drawn() {
     return Magi.fx.createGlyphRenderer({
       cellSizes: CELL_SIZES,
       glyphs: [
@@ -37,5 +38,28 @@
         cross(1, 0.26), ring(1, 0.3)
       ]
     });
+  }
+
+  // Typed letters: lower and upper case give two sizes of each, ordered by ink like the rest.
+  function typed(font) {
+    return function () {
+      return Magi.fx.createGlyphRenderer({
+        cellSizes: CELL_SIZES,
+        font: font.family,
+        threshold: font.threshold,
+        glyphs: ['x', 'o', 'X', 'O'].map(function (ch) { return Magi.fx.textGlyph(ch, font.stack); })
+      });
+    };
+  }
+
+  Magi.renderers['xs-and-os'] = function () {
+    var F = Magi.fx.FONTS;
+    return Magi.fx.createModeRenderer({
+      drawn: drawn,
+      bodoni: typed(F.bodoni),
+      plex: typed(F.plex),
+      space: typed(F.space),
+      silkscreen: typed(F.silkscreen)
+    }, 'drawn');
   };
 })();
