@@ -714,6 +714,56 @@
     if (e.key === 'Escape' && state.trayOpen) { setTray(false); caret.focus(); }
   });
 
+  // Touch: a one-finger swipe down on the open tray closes it. The tray follows the finger, and
+  // a short or slow pull springs back. Swipes that start while the tray's list is scrolled down
+  // scroll the list instead.
+  var drag = null;
+  tray.addEventListener('touchstart', function (e) {
+    if (!state.trayOpen || e.touches.length !== 1 || tray.scrollTop > 0) { drag = null; return; }
+    drag = { y: e.touches[0].clientY, t: performance.now(), dy: 0 };
+  }, { passive: true });
+  tray.addEventListener('touchmove', function (e) {
+    if (!drag) return;
+    drag.dy = e.touches[0].clientY - drag.y;
+    if (drag.dy > 0) {
+      e.preventDefault(); // pulling down: move the tray, don't scroll the page
+      tray.style.transition = 'none';
+      tray.style.transform = 'translateY(' + drag.dy + 'px)';
+    }
+  }, { passive: false });
+  tray.addEventListener('touchend', function () {
+    if (!drag) return;
+    var speed = drag.dy / Math.max(1, performance.now() - drag.t); // px per ms
+    tray.style.transition = '';
+    tray.style.transform = '';
+    if (drag.dy > 80 || (drag.dy > 24 && speed > 0.5)) setTray(false);
+    drag = null;
+  });
+
+  // Trackpad: a two-finger swipe up opens the tray, down closes it. Over the tray, a swipe that
+  // can still scroll its list scrolls it instead. Pinch-zoom (ctrl + wheel) is left alone.
+  var swipe = { sum: 0, last: 0, quietUntil: 0 };
+  window.addEventListener('wheel', function (e) {
+    if (e.ctrlKey || Math.abs(e.deltaY) < Math.abs(e.deltaX)) return;
+    if (tray.contains(e.target)) {
+      var canScroll = e.deltaY > 0 ? tray.scrollTop + tray.clientHeight < tray.scrollHeight - 1 : tray.scrollTop > 0;
+      if (canScroll) return;
+    }
+    var now = performance.now();
+    if (now < swipe.quietUntil) return; // one gesture, one action
+    if (now - swipe.last > 250) swipe.sum = 0;
+    swipe.last = now;
+    swipe.sum += e.deltaY;
+    // With natural scrolling, fingers moving up give positive deltaY.
+    if (swipe.sum > 60 && !state.trayOpen && state.phase === 'live') {
+      setTray(true);
+      swipe.sum = 0; swipe.quietUntil = now + 600;
+    } else if (swipe.sum < -60 && state.trayOpen) {
+      setTray(false);
+      swipe.sum = 0; swipe.quietUntil = now + 600;
+    }
+  }, { passive: true });
+
   uploadBtn.addEventListener('click', function () { fileInput.click(); });
   cameraBtn.addEventListener('click', startCamera);
   fileInput.addEventListener('change', function () {

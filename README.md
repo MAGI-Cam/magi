@@ -68,7 +68,7 @@ To try it on a phone, the page has to be served over https (for example from Git
 - **Live camera** opens by default. The upload icon (bottom-left) switches to a photo or video. The camera icon in the same spot switches back.
 - **Photo / Video** toggle (bottom-left) picks the capture mode.
 - **Shutter** (center): photo mode captures a still. Video mode starts recording on the first tap and stops on the second.
-- **Effects tray** (caret, bottom-right): pick an effect and adjust its sliders. The circular arrow resets the sliders to defaults (an ASCII mode stays as chosen). Tapping the active ASCII tile switches mode. **Normal** shows the camera without an effect.
+- **Effects tray** (caret, bottom-right; or swipe up with two fingers on a trackpad, and down to close; on a phone, swipe down on the tray to close it): pick an effect and adjust its sliders. The circular arrow resets the sliders to defaults (an ASCII mode stays as chosen). Tapping the active ASCII tile switches mode. **Normal** shows the camera without an effect.
 - **Review**: after capture the preview freezes. The shutter becomes Retake. The download icon (top-right) saves the result.
 
 ## Decisions made for v0.1
