@@ -6,7 +6,14 @@
 //
 // Landmarks come back in frame pixels, mirrored to match the preview, and smoothed with the
 // One Euro filter (Casiez, Roussel & Vogel, CHI 2012): a low-pass filter whose cutoff rises with
-// speed, so points hold still when you do and still follow fast moves without lag.
+// speed, so points hold still when you do and still follow fast moves without lag. Depth (z) is
+// smoothed the same way.
+//
+// Detection runs once per camera frame, not once per screen refresh (a 120 Hz screen would
+// otherwise analyze each 30 fps camera frame four times); later calls in the same camera frame
+// get the cached result. Hands are followed by position from frame to frame, so a hand keeps its
+// identity and its filters even when MediaPipe's left/right label flickers; the label itself is
+// a running vote. A hand that drops out is held for 200 ms before it disappears.
 (function () {
   var VERSION = '0.10.14';
   var BASE = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@' + VERSION;
@@ -15,9 +22,30 @@
     face: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
     body: 'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/1/selfie_segmenter.tflite'
   };
-  // One Euro settings, in frame pixels: steady at rest (1.5 Hz cutoff), opening up by
-  // 0.02 Hz per pixel/second of speed.
-  var MIN_CUTOFF = 1.5, BETA = 0.02, D_CUTOFF = 1;
+  // One Euro settings, in frame pixels: steady at rest (1.5 Hz cutoff), opening up by 0.05 Hz per
+  // pixel/second of speed, with the speed itself filtered at 4 Hz so the filter opens within a few
+  // frames of a hand starting to move. Simulated at 30 fps with 1.5 px of landmark noise: worst
+  // lag behind a hand starting at 1000–2000 px/s is about 7 px (it was 17–24 px with β 0.02 and a
+  // 1 Hz speed filter), at the cost of 0.8 px of jitter at rest instead of 0.6 px.
+  var MIN_CUTOFF = 1.5, BETA = 0.05, D_CUTOFF = 4;
+  var HOLD_MS = 200;
+
+  // An id for the picture currently in `el`: it changes exactly when a new camera or video frame
+  // is shown. Uses requestVideoFrameCallback where the browser has it, else the video's time.
+  var frameCounters = new WeakMap();
+  function frameId(el) {
+    if (!el || el.tagName !== 'VIDEO') return el ? 'img:' + (el.currentSrc || el.src) : '';
+    var c = frameCounters.get(el);
+    if (!c) {
+      c = { n: 0, rvfc: typeof el.requestVideoFrameCallback === 'function' };
+      frameCounters.set(el, c);
+      if (c.rvfc) {
+        var onFrame = function (now, meta) { c.n = (meta && meta.presentedFrames) || c.n + 1; el.requestVideoFrameCallback(onFrame); };
+        el.requestVideoFrameCallback(onFrame);
+      }
+    }
+    return c.rvfc ? 'v' + c.n : 't' + el.currentTime;
+  }
 
   Magi.tracking = { connections: null };
 
@@ -64,7 +92,8 @@
 
   function createTracker(kind) {
     var status = 'idle'; // 'idle' | 'loading' | 'ready' | 'failed'
-    var task = null, lastTs = 0, last = [], details = [], filters = {};
+    var task = null, lastTs = 0, last = [], details = [], filters = {}, lastKey = null;
+    var tracks = [], nextId = 1; // hands: { id, x, y, vote, seen, points, detail }
 
     function create(v, delegate) {
       var options = {
@@ -97,16 +126,60 @@
       });
     }
 
-    // Smooths one set of points. `key` keeps each hand's filters with that hand.
+    // Smooths one set of points. `key` keeps each hand's filters with that hand. z is filtered
+    // in pixels (z × width, its own scale) and returned in MediaPipe's units.
     function smooth(key, points, dt, frame) {
       var f = filters[key];
       if (!f || f.length !== points.length) {
-        f = filters[key] = points.map(function () { return [new OneEuro(), new OneEuro()]; });
+        f = filters[key] = points.map(function () { return [new OneEuro(), new OneEuro(), new OneEuro()]; });
       }
       return points.map(function (p, i) {
         var x = (frame.mirror ? 1 - p.x : p.x) * frame.width, y = p.y * frame.height;
-        return { x: f[i][0].filter(x, dt), y: f[i][1].filter(y, dt), z: p.z };
+        return { x: f[i][0].filter(x, dt), y: f[i][1].filter(y, dt), z: f[i][2].filter((p.z || 0) * frame.width, dt) / frame.width };
       });
+    }
+
+    // Matches this frame's hands to the hands already followed, by palm position (wrist and
+    // middle knuckle): with two of each, whichever pairing moves them less in total.
+    function matchHands(hands, labels, frame, dt, now) {
+      var found = hands.map(function (points, i) {
+        var x = ((frame.mirror ? 1 - points[0].x : points[0].x) + (frame.mirror ? 1 - points[9].x : points[9].x)) / 2 * frame.width;
+        var y = (points[0].y + points[9].y) / 2 * frame.height;
+        var c = (labels[i] && labels[i][0]) || { categoryName: 'Hand', score: 0 };
+        // MediaPipe labels hands as if the image were mirrored; MAGI feeds it the raw camera
+        // image, so the labels come back swapped.
+        var right = c.categoryName === 'Left' ? 1 : c.categoryName === 'Right' ? -1 : 0;
+        return { i: i, x: x, y: y, right: right, score: c.score || 0 };
+      });
+      var pairs = [], used = {};
+      function d(t, h) { return Math.hypot(t.x - h.x, t.y - h.y); }
+      if (tracks.length === 2 && found.length === 2) {
+        var keep = d(tracks[0], found[0]) + d(tracks[1], found[1]), swap = d(tracks[0], found[1]) + d(tracks[1], found[0]);
+        pairs = keep <= swap ? [[tracks[0], found[0]], [tracks[1], found[1]]] : [[tracks[0], found[1]], [tracks[1], found[0]]];
+      } else {
+        found.forEach(function (h) {
+          var best = null;
+          tracks.forEach(function (t) { if (!used[t.id] && (!best || d(t, h) < d(best, h))) best = t; });
+          if (best && d(best, h) < frame.width * 0.35) { used[best.id] = true; pairs.push([best, h]); }
+          else pairs.push([null, h]);
+        });
+      }
+      tracks.forEach(function (t) { t.idx = -1; });
+      pairs.forEach(function (pr) {
+        var t = pr[0], h = pr[1];
+        if (!t) { t = { id: 'hand' + nextId++, vote: 0 }; tracks.push(t); }
+        t.x = h.x; t.y = h.y; t.seen = now; t.idx = h.i;
+        t.vote += (h.right * h.score - t.vote) * 0.25; // running left/right vote
+        t.points = smooth(t.id, hands[h.i], dt, frame);
+        t.detail = { label: t.vote >= 0 ? 'Right' : 'Left', score: h.score, key: t.id };
+      });
+      tracks = tracks.filter(function (t) {
+        if (now - t.seen <= HOLD_MS) return true;
+        delete filters[t.id];
+        return false;
+      }).slice(0, 2);
+      last = tracks.map(function (t) { return t.points; });
+      details = tracks.map(function (t) { return t.detail; });
     }
 
     return {
@@ -116,6 +189,10 @@
       detect: function (frame) {
         if (status === 'idle') load();
         if (!task) return last;
+        // Once per camera frame: the same picture (at the same size) returns the cached result.
+        var key = frameId(frame.source) + '|' + frame.width + 'x' + frame.height + (frame.mirror ? 'm' : '');
+        if (key === lastKey) return last;
+        lastKey = key;
         var ts = Math.max(frame.time, lastTs + 1); // timestamps must strictly increase
         var dt = Math.min(0.1, Math.max(0.001, (ts - lastTs) / 1000));
         lastTs = ts;
@@ -125,20 +202,17 @@
         } catch (e) {
           return last;
         }
-        var seen = {};
         if (kind === 'hands') {
-          var hands = res.landmarks || [], labels = res.handedness || res.handednesses || [];
-          details = hands.map(function (points, i) {
-            var c = (labels[i] && labels[i][0]) || { categoryName: 'Hand', score: 0 };
-            // MediaPipe labels hands as if the image were mirrored; MAGI feeds it the raw camera
-            // image, so the labels come back swapped.
-            var label = c.categoryName === 'Left' ? 'Right' : c.categoryName === 'Right' ? 'Left' : c.categoryName;
-            var key = seen[label] ? label + i : label;
-            seen[key] = true;
-            return { label: label, score: c.score, key: key };
+          matchHands(res.landmarks || [], res.handedness || res.handednesses || [], frame, dt, ts);
+          // Metric 3D points (meters, centered on the hand), mirrored like the preview. Angles
+          // between bones measured on these don't change with distance from the camera.
+          var world = res.worldLandmarks || [];
+          tracks.forEach(function (t) {
+            var w = t.idx >= 0 && world[t.idx];
+            if (w) t.detail.world = w.map(function (q) { return { x: frame.mirror ? -q.x : q.x, y: q.y, z: q.z }; });
           });
-          last = hands.map(function (points, i) { return smooth(details[i].key, points, dt, frame); });
         } else {
+          var seen = {};
           var faces = res.faceLandmarks || [];
           last = faces.map(function (points, i) { seen['face' + i] = true; return smooth('face' + i, points, dt, frame); });
           details = faces.map(function (points, i) {
@@ -146,13 +220,13 @@
             var matrix = res.facialTransformationMatrixes && res.facialTransformationMatrixes[i];
             return { blendshapes: shapes, matrix: matrix ? matrix.data : null };
           });
+          Object.keys(filters).forEach(function (k) { if (!seen[k]) delete filters[k]; });
         }
-        Object.keys(filters).forEach(function (k) { if (!seen[k]) delete filters[k]; });
         return last;
       },
       // Extra results for the latest detection, parallel to detect()'s array:
-      // hands: { label: 'Left' | 'Right', score }; face: { blendshapes: [{ categoryName, score }],
-      // matrix: 4×4 column-major head transform }.
+      // hands: { label: 'Left' | 'Right', score, key (stable per hand), world (metric points) };
+      // face: { blendshapes: [{ categoryName, score }], matrix: 4×4 column-major head transform }.
       details: function () { return details; }
     };
   }

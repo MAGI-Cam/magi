@@ -2,6 +2,9 @@
 // Hands: MediaPipe's 21-point skeleton per hand (green bones, red joints), handedness and score,
 // pinch (thumb tip to index tip, divided by palm length so it doesn't change with distance),
 // rotation (wrist → middle knuckle, 0° = pointing up) and the distance between two hands.
+// Signals: what the Interaction Engine (js/interaction.js) reads from each hand: finger count and
+// which fingers are extended, curl, spread, pointing or fist, pinches to each finger, size,
+// speed and the latest swipe, flick or shake.
 // Face: the 478-point mesh, MediaPipe's eye, iris, brow, lip and oval contours, head pose
 // (yaw, pitch, roll from the face transform) and the strongest of the 52 blendshapes.
 (function () {
@@ -42,6 +45,7 @@
   }
 
   function createHands() {
+    var lastEvent = {};
     return {
       animated: true,
       render: function (frame, out, params) {
@@ -51,6 +55,8 @@
         frame.draw(ctx, w, h);
         var tracker = Magi.tracking.hands;
         var hands = tracker.detect(frame), info = tracker.details(), C = Magi.tracking.connections;
+        var ix = Magi.interaction.read(frame);
+        if (params.signals) ix.events.forEach(function (e) { lastEvent[e.hand] = e; });
 
         hands.forEach(function (p, i) {
           if (C) {
@@ -64,10 +70,9 @@
             ctx.arc(q.x, q.y, Math.max(1.5, 3.5 * u), 0, Math.PI * 2);
             ctx.fill();
           });
-          var palm = dist(p[WRIST], p[MIDDLE_MCP]) || 1;
-          var pinch = dist(p[THUMB_TIP], p[INDEX_TIP]) / palm;
-          var v = { x: p[MIDDLE_MCP].x - p[WRIST].x, y: p[MIDDLE_MCP].y - p[WRIST].y };
-          var rot = Math.atan2(v.x, -v.y) * 180 / Math.PI;
+          var sig = ix.hands[i];
+          var pinch = sig ? sig.pinchWith.index.distance : dist(p[THUMB_TIP], p[INDEX_TIP]) / (dist(p[WRIST], p[MIDDLE_MCP]) || 1);
+          var rot = sig ? sig.rotation : 0;
           if (params.pinch) {
             // Pinch line between thumb and index tips.
             ctx.save();
@@ -82,8 +87,22 @@
           }
           var d = info[i] || { label: 'Hand', score: 0 }, lines = [];
           if (params.readouts) lines.push(d.label + '  ' + d.score.toFixed(2));
-          if (params.pinch) lines.push('pinch    ' + pinch.toFixed(2) + (pinch < 0.25 ? '  closed' : ''));
+          if (params.pinch) lines.push('pinch    ' + pinch.toFixed(2) + (sig && sig.pinched ? '  closed' : ''));
           if (params.readouts) lines.push('rotation ' + (rot >= 0 ? ' ' : '') + rot.toFixed(0) + '°');
+          if (params.signals && sig) {
+            // What the Interaction Engine reads from this hand.
+            var f = sig.fingers;
+            lines.push('fingers  ' + sig.count + '  ' + ['thumb', 'index', 'middle', 'ring', 'pinky'].map(function (n) {
+              return f[n].extended ? n.charAt(0).toUpperCase() : '·';
+            }).join(' '));
+            lines.push('curl     ' + ['thumb', 'index', 'middle', 'ring', 'pinky'].map(function (n) { return f[n].curl.toFixed(1); }).join(' '));
+            lines.push('spread   ' + sig.spread.toFixed(2) + (sig.pointing ? '  pointing' : sig.fist ? '  fist' : ''));
+            lines.push('pinch to ' + ['middle', 'ring', 'pinky'].map(function (n) { return n.charAt(0) + (sig.pinchWith[n].on ? '●' : '○'); }).join(' '));
+            lines.push('size     ' + Math.round(sig.size) + ' px' + (ix.pair && ix.pair.closer === sig ? '  closer' : ''));
+            lines.push('speed    ' + (sig.speed / frame.height).toFixed(1) + ' h/s');
+            var e = lastEvent[sig.id];
+            if (e && frame.time / 1000 - e.t < 1.5) lines.push('motion   ' + e.type + (e.dir ? ' ' + e.dir : ''));
+          }
           if (lines.length) label(ctx, frame, lines, p[WRIST].x + 14 * u, p[WRIST].y + 10 * u);
         });
 

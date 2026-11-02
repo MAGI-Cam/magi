@@ -102,7 +102,8 @@ Magi.effectConfig = [
     params: [
       toggle('readouts', 'Readouts', true, 'Show which hand it is, the tracking score and rotation.'),
       toggle('pinch', 'Pinch', true, 'Show the thumb–index line and pinch value.'),
-      toggle('distance', 'Distance', true, 'Show the line and distance between two hands.')
+      toggle('distance', 'Distance', true, 'Show the line and distance between two hands.'),
+      toggle('signals', 'Signals', false, 'Show what MAGI reads from each hand: fingers, curl, spread, pinches, speed and motions.')
     ]
   },
   {
