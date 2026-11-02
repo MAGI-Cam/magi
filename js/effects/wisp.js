@@ -17,7 +17,9 @@
 //            Δ ≈ −(1 − 1/n)·H·∇h with n = 1.33 (water) and H the layer's thickness (Refract);
 //            trails carry the color of the hand that made them.
 //   Smoke  — the height field alone, lit, on black.
-// The fluid runs on the CPU; Liquid's per-pixel refraction is a WebGL fragment shader.
+// Two versions: the GPU one below (WebGL2) runs the whole fluid as shaders at higher resolution,
+// with vorticity confinement and speed-proportional emission; this CPU one (refraction on WebGL1)
+// is the fallback where WebGL2 can't render to half-float textures.
 // Gloss adds Blinn–Phong highlights (exponent 48) and a Schlick Fresnel rim, F0 = 0.02 (water).
 (function () {
   var WRIST = 0, MIDDLE_MCP = 9;
@@ -384,5 +386,279 @@
     };
   }
 
-  Magi.renderers.wisp = createWisp;
+  // ---------------------------------------------------------------------------------------------
+  // GPU version (WebGL2, half-float render targets): the same Stable Fluids steps as fragment
+  // shaders, after Stam 1999 and the common WebGL formulation of it, at a quarter of the frame for
+  // velocity and pressure and half the frame for dye, with vorticity confinement (Fedkiw, Stam &
+  // Jensen 2001): the curl ω = ∂v/∂x − ∂u/∂y is measured, and a force ε·(N × ω) with
+  // N = ∇|ω|/|∇|ω|| pushes the flow back around its own eddies, so small swirls survive the grid's
+  // numerical smoothing and the dye curls into wisps instead of blurring away.
+  // Hands emit dye and drag the fluid in proportion to each bone's own speed (a still hand emits
+  // nothing). Velocities are in simulation texels per second; GL's y points up.
+  // Smoke is drawn as translucent light over the camera: opacity a = 1 − e^(−2.4·ρ), lit from the
+  // top left by the density's gradient. Liquid refracts the camera as before.
+  // ---------------------------------------------------------------------------------------------
+  function createGPUWisp() {
+    var canvas = document.createElement('canvas');
+    var gl = canvas.getContext('webgl2', { premultipliedAlpha: false, preserveDrawingBuffer: true, antialias: false, alpha: false });
+    if (!gl || !gl.getExtension('EXT_color_buffer_float')) return null;
+
+    var VS = '#version 300 es\nin vec2 p; uniform vec2 texel; out vec2 uv, vL, vR, vT, vB;\n' +
+      'void main() { uv = p * 0.5 + 0.5; vL = uv - vec2(texel.x, 0.0); vR = uv + vec2(texel.x, 0.0); ' +
+      'vT = uv + vec2(0.0, texel.y); vB = uv - vec2(0.0, texel.y); gl_Position = vec4(p, 0.0, 1.0); }';
+    var HEAD = '#version 300 es\nprecision highp float;\nin vec2 uv, vL, vR, vT, vB;\nout vec4 o;\n';
+    var FS = {
+      // Hand drag, curl-noise swirl (ψ = sin·sin, force = (∂ψ/∂y, −∂ψ/∂x)) and gravity on the dye.
+      force: 'uniform sampler2D vel, mask, dye; uniform vec2 size; uniform float flow, dt, swirl, drip, t, damp;\n' +
+        'void main() { vec2 v = texture(vel, uv).xy; vec4 m = texture(mask, uv);\n' +
+        '  v = mix(v, m.yz, clamp(m.w * flow, 0.0, 1.0));\n' +
+        '  vec2 q = uv * size; float a1 = 6.2832 / (size.x / 3.1), a2 = 6.2832 / (size.x / 7.3);\n' +
+        '  vec2 f = swirl * vec2(sin(a1 * q.x + t * 0.7) * cos(a1 * q.y - t * 0.5) + 0.5 * sin(a2 * q.x - t * 1.3) * cos(a2 * q.y + t * 1.1),\n' +
+        '    -(cos(a1 * q.x + t * 0.7) * sin(a1 * q.y - t * 0.5) + 0.5 * cos(a2 * q.x - t * 1.3) * sin(a2 * q.y + t * 1.1)));\n' +
+        '  f.y -= drip * texture(dye, uv).a;\n' +
+        '  o = vec4((v + f * dt) * damp, 0.0, 1.0); }',
+      // Hands add dye: density takes the larger of old and new; color moves toward the camera's.
+      emit: 'uniform sampler2D dye, mask, cam;\n' +
+        'void main() { vec4 d = texture(dye, uv); float add = texture(mask, uv).x; vec3 c = texture(cam, uv).rgb;\n' +
+        '  float a = max(d.a, add); vec3 col = d.a > 1e-4 ? d.rgb / d.a : c;\n' +
+        '  col = mix(col, c, add > 0.0 ? clamp(add / max(a, 1e-4), 0.0, 1.0) : 0.0);\n' +
+        '  o = vec4(col * a, a); }',
+      curl: 'uniform sampler2D vel;\n' +
+        'void main() { float L = texture(vel, vL).y, R = texture(vel, vR).y, T = texture(vel, vT).x, B = texture(vel, vB).x;\n' +
+        '  o = vec4(0.5 * ((R - L) - (T - B)), 0.0, 0.0, 1.0); }',
+      vorticity: 'uniform sampler2D vel, curl; uniform float strength, dt;\n' +
+        'void main() { float L = texture(curl, vL).x, R = texture(curl, vR).x, T = texture(curl, vT).x, B = texture(curl, vB).x, C = texture(curl, uv).x;\n' +
+        '  vec2 f = 0.5 * vec2(abs(T) - abs(B), abs(R) - abs(L)); f /= length(f) + 1e-4; f *= strength * C; f.y *= -1.0;\n' +
+        '  o = vec4(texture(vel, uv).xy + f * dt, 0.0, 1.0); }',
+      // Divergence with solid walls: outside the frame the normal velocity is reflected.
+      divergence: 'uniform sampler2D vel;\n' +
+        'void main() { vec2 C = texture(vel, uv).xy; float L = texture(vel, vL).x, R = texture(vel, vR).x, T = texture(vel, vT).y, B = texture(vel, vB).y;\n' +
+        '  if (vL.x < 0.0) L = -C.x; if (vR.x > 1.0) R = -C.x; if (vT.y > 1.0) T = -C.y; if (vB.y < 0.0) B = -C.y;\n' +
+        '  o = vec4(0.5 * (R - L + T - B), 0.0, 0.0, 1.0); }',
+      scale: 'uniform sampler2D src; uniform float k;\nvoid main() { o = texture(src, uv) * k; }',
+      // Jacobi iteration for ∇²p = ∇·v.
+      pressure: 'uniform sampler2D pr, dv;\n' +
+        'void main() { o = vec4((texture(pr, vL).x + texture(pr, vR).x + texture(pr, vB).x + texture(pr, vT).x - texture(dv, uv).x) * 0.25, 0.0, 0.0, 1.0); }',
+      gradient: 'uniform sampler2D vel, pr;\n' +
+        'void main() { vec2 v = texture(vel, uv).xy - 0.5 * vec2(texture(pr, vR).x - texture(pr, vL).x, texture(pr, vT).x - texture(pr, vB).x);\n' +
+        '  o = vec4(v, 0.0, 1.0); }',
+      // Semi-Lagrangian advection: look back along the velocity, then fade.
+      advect: 'uniform sampler2D vel, src; uniform vec2 velTexel; uniform float dt, keep;\n' +
+        'void main() { vec2 back = uv - dt * texture(vel, uv).xy * velTexel; o = keep * texture(src, back); }',
+      smoke: 'uniform sampler2D cam, dye; uniform vec2 dyeTexel; uniform vec3 ink, light, halfV; uniform float gloss;\n' +
+        'float den(vec2 p) { return texture(dye, p).a; }\n' +
+        'void main() { vec2 dx = vec2(dyeTexel.x, 0.0), dy = vec2(0.0, dyeTexel.y);\n' +
+        '  float d = (4.0 * den(uv) + den(uv + dx) + den(uv - dx) + den(uv + dy) + den(uv - dy)) / 8.0;\n' +
+        '  float a = 1.0 - exp(-2.4 * d);\n' +
+        '  vec2 g = vec2(den(uv + 2.0 * dx) - den(uv - 2.0 * dx), den(uv + 2.0 * dy) - den(uv - 2.0 * dy));\n' +
+        '  vec3 n = normalize(vec3(-g * 3.0, 1.0)); float lit = 0.75 + 0.35 * dot(n, light);\n' +
+        '  vec3 c = texture(cam, uv).rgb * (1.0 - 0.45 * a) + ink * lit * 0.85 * a;\n' +
+        '  c += gloss * vec3(pow(max(0.0, dot(n, halfV)), 30.0)) * a * 0.5;\n' +
+        '  o = vec4(clamp(c, 0.0, 1.0), 1.0); }',
+      // Liquid: Δ = −(1 − 1/n)·H·∇h on the blurred density, Blinn–Phong and Schlick on its normal.
+      liquid: 'uniform sampler2D cam, dye; uniform vec2 dyeTexel, size; uniform float shift, k, gloss, lo, hi; uniform vec3 halfV;\n' +
+        'float den(vec2 p) { return texture(dye, p).a; }\n' +
+        'float blur(vec2 p) { vec2 dx = vec2(dyeTexel.x, 0.0), dy = vec2(0.0, dyeTexel.y);\n' +
+        '  return (4.0 * den(p) + 2.0 * (den(p + dx) + den(p - dx) + den(p + dy) + den(p - dy)) + den(p + dx + dy) + den(p - dx - dy) + den(p + dx - dy) + den(p - dx + dy)) / 16.0; }\n' +
+        'void main() { float h = blur(uv); float s = smoothstep(lo, hi, h);\n' +
+        '  if (s <= 0.0) { o = vec4(texture(cam, uv).rgb, 1.0); return; }\n' +
+        '  vec2 g = vec2(blur(uv + vec2(dyeTexel.x, 0.0)) - blur(uv - vec2(dyeTexel.x, 0.0)), blur(uv + vec2(0.0, dyeTexel.y)) - blur(uv - vec2(0.0, dyeTexel.y)));\n' +
+        '  vec2 d = -shift * g * s;\n' +
+        '  vec3 col = texture(cam, clamp(uv + d / size, 0.0, 1.0)).rgb;\n' +
+        '  vec4 dc = texture(dye, uv); col = mix(col, dc.a > 1e-4 ? dc.rgb / dc.a : col, s * 0.85);\n' +
+        '  vec3 n = normalize(vec3(d / k, 1.0));\n' +
+        '  float spec = pow(max(0.0, dot(n, halfV)), 48.0), fres = pow(1.0 - n.z, 5.0) * 0.98;\n' +
+        '  col += (1.0 - col) * clamp(spec * 0.85 + fres * 0.9, 0.0, 1.0) * gloss;\n' +
+        '  o = vec4(col, 1.0); }'
+    };
+
+    function compile(type, src) {
+      var sh = gl.createShader(type);
+      gl.shaderSource(sh, src);
+      gl.compileShader(sh);
+      if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) console.warn('Magi wisp shader:', gl.getShaderInfoLog(sh));
+      return sh;
+    }
+    var vs = compile(gl.VERTEX_SHADER, VS), progs = {}, ok = true;
+    Object.keys(FS).forEach(function (name) {
+      var pr = gl.createProgram();
+      gl.attachShader(pr, vs);
+      gl.attachShader(pr, compile(gl.FRAGMENT_SHADER, HEAD + FS[name]));
+      gl.bindAttribLocation(pr, 0, 'p');
+      gl.linkProgram(pr);
+      if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) ok = false;
+      progs[name] = { p: pr, u: {} };
+    });
+    if (!ok) return null;
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+    function texture(w, h, internal, format, type) {
+      var t = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, t);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texImage2D(gl.TEXTURE_2D, 0, internal, w, h, 0, format, type, null);
+      return t;
+    }
+    function target(w, h) {
+      var t = texture(w, h, gl.RGBA16F, gl.RGBA, gl.HALF_FLOAT), f = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, f);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, t, 0);
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      return { tex: t, fbo: f, w: w, h: h };
+    }
+    function pair(w, h) {
+      return { read: target(w, h), write: target(w, h), swap: function () { var x = this.read; this.read = this.write; this.write = x; } };
+    }
+    // Runs a program into `out` (null: the canvas). Uniform values: numbers, [x, y], [x, y, z],
+    // or targets/textures to sample.
+    function run(name, values, out, texel) {
+      var pr = progs[name], unit = 0;
+      gl.useProgram(pr.p);
+      function loc(n) { return n in pr.u ? pr.u[n] : (pr.u[n] = gl.getUniformLocation(pr.p, n)); }
+      gl.uniform2f(loc('texel'), texel[0], texel[1]);
+      Object.keys(values).forEach(function (n) {
+        var v = values[n], l = loc(n);
+        if (v && (v.tex || v instanceof WebGLTexture)) {
+          gl.activeTexture(gl.TEXTURE0 + unit);
+          gl.bindTexture(gl.TEXTURE_2D, v.tex || v);
+          gl.uniform1i(l, unit++);
+        } else if (typeof v === 'number') gl.uniform1f(l, v);
+        else if (v.length === 2) gl.uniform2f(l, v[0], v[1]);
+        else gl.uniform3f(l, v[0], v[1], v[2]);
+      });
+      gl.bindFramebuffer(gl.FRAMEBUFFER, out ? out.fbo : null);
+      gl.viewport(0, 0, out ? out.w : canvas.width, out ? out.h : canvas.height);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    }
+
+    var W = 0, H = 0, sw, sh, dw, dh, vel, dye, prs, div, curl, camTex, maskTex, mask, lastHands = null, prev = {}, lastT = null;
+    function alloc(w, h) {
+      W = w; H = h;
+      sw = Math.max(32, Math.round(w / 4)); sh = Math.max(32, Math.round(h / 4));
+      dw = Math.max(64, Math.round(w / 2)); dh = Math.max(64, Math.round(h / 2));
+      vel = pair(sw, sh); dye = pair(dw, dh); prs = pair(sw, sh); div = target(sw, sh); curl = target(sw, sh);
+      camTex = texture(w, h, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE);
+      maskTex = texture(sw, sh, gl.RGBA16F, gl.RGBA, gl.FLOAT);
+      mask = new Float32Array(sw * sh * 4);
+      canvas.width = w; canvas.height = h;
+      prev = {};
+    }
+
+    // Hand bones as capsules on the velocity grid, rows bottom-up for GL. Each cell gets
+    // x = dye to emit (coverage × the bone's speed, 0.6 frame heights per second → full),
+    // y, z = the bone's velocity in texels per second (y up), w = coverage (for Flow).
+    function raster(hands, details, dt) {
+      mask.fill(0);
+      var bones = (Magi.tracking.connections && Magi.tracking.connections.hand) || [];
+      var cell = W / sw, seen = {};
+      hands.forEach(function (p, hi) {
+        var key = (details[hi] && details[hi].key) || 'hand' + hi, last = prev[key];
+        seen[key] = true;
+        var vk = p.map(function (q, i) {
+          return last && dt > 0 ? [(q.x - last[i].x) / dt / cell, -(q.y - last[i].y) / dt / cell] : [0, 0];
+        });
+        prev[key] = p.map(function (q) { return { x: q.x, y: q.y }; });
+        var palm = Math.hypot(p[MIDDLE_MCP].x - p[WRIST].x, p[MIDDLE_MCP].y - p[WRIST].y);
+        function cap(ia, ib, r, weight) {
+          var a = p[ia], b = p[ib], ax = a.x / cell, ay = sh - a.y / cell, bx = b.x / cell, by = sh - b.y / cell;
+          var va = vk[ia], vb = vk[ib];
+          var i0 = Math.max(0, Math.floor(Math.min(ax, bx) - r - 1)), i1 = Math.min(sw - 1, Math.ceil(Math.max(ax, bx) + r + 1));
+          var j0 = Math.max(0, Math.floor(Math.min(ay, by) - r - 1)), j1 = Math.min(sh - 1, Math.ceil(Math.max(ay, by) + r + 1));
+          var dx = bx - ax, dy = by - ay, L2 = dx * dx + dy * dy || 1e-6;
+          for (var j = j0; j <= j1; j++) for (var i = i0; i <= i1; i++) {
+            var px = i + 0.5 - ax, py = j + 0.5 - ay, t = Math.max(0, Math.min(1, (px * dx + py * dy) / L2));
+            var ex = px - t * dx, ey = py - t * dy, m = Math.min(1, r - Math.sqrt(ex * ex + ey * ey) + 0.5);
+            if (m <= 0) continue;
+            var o = (j * sw + i) * 4;
+            if (m < mask[o + 3]) continue;
+            var vx = va[0] + (vb[0] - va[0]) * t, vy = va[1] + (vb[1] - va[1]) * t;
+            var speed = Math.hypot(vx, vy) * cell / H;
+            mask[o] = m * weight * Math.min(1, speed / 0.6); mask[o + 1] = vx; mask[o + 2] = vy; mask[o + 3] = m;
+          }
+        }
+        bones.forEach(function (c) { cap(c.start, c.end, palm * 0.11 / cell, 1); });
+        PALM.forEach(function (c) { cap(c[0], c[1], palm * 0.2 / cell, 0.4); });
+      });
+      Object.keys(prev).forEach(function (k) { if (!seen[k]) delete prev[k]; });
+    }
+
+    return {
+      animated: true,
+      render: function (frame, out, params) {
+        if (out.width !== frame.width || out.height !== frame.height) { out.width = frame.width; out.height = frame.height; }
+        if (frame.width !== W || frame.height !== H) alloc(frame.width, frame.height);
+        var ctx = out.getContext('2d');
+        frame.draw(ctx, W, H);
+        var tracker = Magi.tracking.hands, hands = tracker.detect(frame), t = frame.time / 1000;
+        var dt = lastT === null ? 1 / 60 : Math.max(1 / 120, Math.min(1 / 30, t - lastT));
+        lastT = t;
+        // The hands' mask changes only with a new camera frame; motion is measured between them.
+        if (hands !== lastHands) {
+          raster(hands, tracker.details(), lastHands && lastHands.t ? t - lastHands.t : 0);
+          lastHands = hands; lastHands.t = t;
+          gl.bindTexture(gl.TEXTURE_2D, maskTex);
+          gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA16F, sw, sh, 0, gl.RGBA, gl.FLOAT, mask);
+        }
+        gl.bindTexture(gl.TEXTURE_2D, camTex);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, out);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+
+        var vt = [1 / sw, 1 / sh], dtx = [1 / dw, 1 / dh];
+        run('force', { vel: vel.read, mask: maskTex, dye: dye.read, size: [sw, sh], flow: params.flow / 100, dt: dt,
+          swirl: params.swirl / 100 * 180, drip: params.drip / 100 * 300, t: t, damp: Math.exp(-dt) }, vel.write, vt);
+        vel.swap();
+        run('curl', { vel: vel.read }, curl, vt);
+        run('vorticity', { vel: vel.read, curl: curl, strength: 8 + params.swirl * 0.3, dt: dt }, vel.write, vt);
+        vel.swap();
+        run('divergence', { vel: vel.read }, div, vt);
+        run('scale', { src: prs.read, k: 0.8 }, prs.write, vt);
+        prs.swap();
+        for (var i = 0; i < 20; i++) { run('pressure', { pr: prs.read, dv: div }, prs.write, vt); prs.swap(); }
+        run('gradient', { vel: vel.read, pr: prs.read }, vel.write, vt);
+        vel.swap();
+        run('advect', { vel: vel.read, src: vel.read, velTexel: vt, dt: dt, keep: 1 }, vel.write, vt);
+        vel.swap();
+        run('emit', { dye: dye.read, mask: maskTex, cam: camTex }, dye.write, dtx);
+        dye.swap();
+        var keep = Math.pow(2, -dt / (0.15 * Math.pow(2, params.trail / 20)));
+        run('advect', { vel: vel.read, src: dye.read, velTexel: vt, dt: dt, keep: keep }, dye.write, dtx);
+        dye.swap();
+
+        if (params.mode === 'smoke') {
+          var ink = Magi.fx.inkColor(params.color);
+          run('smoke', { cam: camTex, dye: dye.read, dyeTexel: dtx, ink: ink, light: [LIGHT[0], -LIGHT[1], LIGHT[2]],
+            halfV: [HALF[0], -HALF[1], HALF[2]], gloss: params.gloss ? 1 : 0 }, null, dtx);
+        } else {
+          var Hpx = params.refract / 100 * 60, kk = (1 - 1 / N_WATER) * Hpx;
+          run('liquid', { cam: camTex, dye: dye.read, dyeTexel: dtx, size: [W, H], shift: kk * Hpx / (2 * W / dw), k: Math.max(1e-3, kk),
+            gloss: params.gloss && Hpx > 0 ? 1 : 0, lo: LEVEL_LO, hi: LEVEL_HI, halfV: [HALF[0], -HALF[1], HALF[2]] }, null, dtx);
+        }
+        ctx.drawImage(canvas, 0, 0);
+
+        if (tracker.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, tracker, 'hand');
+        else if (!hands.length) Magi.tracking.hint(ctx, frame, 'Raise a hand and move it: moving fingers leave wisps.');
+      },
+      reset: function () {
+        if (!W) return;
+        [vel.read, vel.write, dye.read, dye.write, prs.read, prs.write].forEach(function (tg) {
+          gl.bindFramebuffer(gl.FRAMEBUFFER, tg.fbo);
+          gl.clearColor(0, 0, 0, 0);
+          gl.clear(gl.COLOR_BUFFER_BIT);
+        });
+        prev = {}; lastHands = null; lastT = null;
+      }
+    };
+  }
+
+  // The GPU version where WebGL2 can render to half-float textures; otherwise the CPU version.
+  Magi.renderers.wisp = function () { return createGPUWisp() || createWisp(); };
 })();
