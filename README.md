@@ -2,7 +2,7 @@
 
 A minimalist effects tool library. Apply a visual effect to your live camera or an uploaded photo or video, adjust it, capture, and save the result to your device.
 
-The tray opens on **Normal** (the plain camera) and three parent tiles: Halftone, Gesture (Hand Tracking and Face Tracking) and Facade. Tap a parent to see its effects; the back row returns. A parent tile shows which of its effects is on.
+The tray opens on **Normal** (the plain camera) and three parent tiles: Halftone, Gesture (Hand, Face and Body Tracking) and Facade. Tap a parent to see its effects; the back row returns. A parent tile shows which of its effects is on.
 
 **Halftone**: rebuild the image from a grid of marks and let their density carry the shading.
 
@@ -32,6 +32,10 @@ Halftone controls: Scale, Intensity, Saturation (how much of the media's own col
 
 - **Landmarks**: the full mesh with eye, iris, brow, lip and face-oval contours, head yaw/pitch/roll and the strongest expressions.
 - **Token Cry**: your text (any language, emoji) pours from your lower eyelids along your face's own "down", following head movement. Tokens are Verlet-physics bodies: a symbol is a circle, a phrase a rigid stick, so they tumble, bounce a little and pile up like objects in a jar. Controls: Text, Speed, Scale (relative to your eyes, so tokens grow as you come closer), Phrase (whole phrase per tear, or one symbol at a time), Pool (pile up, or fall through), Inverse (tokens invert what's beneath them), Color.
+
+**Body Tracking** (MediaPipe Image Segmenter, selfie model: a mask of where a person is)
+
+- **Glitch**: your whole body breaks up like corrupted video, only inside your outline, and your hand controls it: raise it higher to glitch harder, swipe fast for a burst. The damage re-rolls `Speed` times a second and holds in between, so it stutters. Modes: Split (slices slip sideways, red and blue separate, some slices drop to 1-bit primary colors), Blocks (macroblocks decode as their mean color, copy from the wrong place, or swap channels), Dissolve (pieces of you land in the wrong place and missing pieces decode as random bits). Controls: Amount, Block (damage size), Speed, Hand (off: a steady glitch at Amount).
 
 All landmarks are smoothed with a One Euro filter, which holds points steady at rest without adding lag to fast moves.
 
@@ -90,7 +94,7 @@ These fill gaps the PRD leaves open. They are easy to change.
 | Photo export | Halftone effects save PNG, which keeps hard pixel edges exact. Normal saves JPEG (quality 92). About 1280 px on the long edge. |
 | Video export | MP4 where the browser can record it (Safari, recent Chrome), otherwise WebM. 30 fps, no audio, no length limit. |
 | Saving on phones | Uses the share sheet when available, so the result can go to the camera roll. Desktop downloads the file. |
-| Tracking | Google MediaPipe (Hand Landmarker, Face Landmarker), loaded from jsDelivr and Google's model storage the first time a tracking effect is picked. It needs a connection then; a status line on the frame says when it is loading or failed. |
+| Tracking | Google MediaPipe (Hand Landmarker, Face Landmarker, Image Segmenter), loaded from jsDelivr and Google's model storage the first time a tracking effect is picked. It needs a connection then; a status line on the frame says when it is loading or failed. |
 | Glyph effects | ASCII, Binary and XO are white glyphs on black, snapped to pure black and white. Glyphs are ordered by measured ink coverage and dithered between neighbors. Scale sets the cell size in screen pixels (6–24, default 11), so characters stay readable on a phone where the preview is shrunk. These looks are first interpretations, not from the PRD. |
 | Color | Saturation and Color tint whatever is lit (white pixels or glyphs); the black background stays black. Both default to 0, which is the original pure black and white. |
 | Canvas fit | The whole frame is shown (contained) with black around it. Nothing is cropped or stretched. |

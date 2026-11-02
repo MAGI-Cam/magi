@@ -45,6 +45,7 @@ Magi.effectGroups = [
   { id: 'gesture', name: 'Gesture' },
   { id: 'hand', name: 'Hand Tracking', parent: 'gesture' },
   { id: 'face', name: 'Face Tracking', parent: 'gesture' },
+  { id: 'body', name: 'Body Tracking', parent: 'gesture' },
   { id: 'facade', name: 'Facade' }
 ];
 
@@ -275,6 +276,24 @@ Magi.effectConfig = [
       toggle('pool', 'Pool', true, 'On: tokens pile up at the bottom of the frame. Off: they fall through.'),
       toggle('inverse', 'Inverse', false, 'Tokens invert the colors beneath them.'),
       COLOR
+    ]
+  },
+  {
+    id: 'glitch',
+    name: 'Glitch',
+    group: 'body',
+    ready: true,
+    photoType: 'image/jpeg',
+    modes: [
+      { id: 'split', name: 'Split' },
+      { id: 'blocks', name: 'Blocks' },
+      { id: 'dissolve', name: 'Dissolve' }
+    ],
+    params: [
+      range('amount', 'Amount', 0, 100, 70),
+      range('block', 'Block', 1, 9, 3),
+      range('speed', 'Speed', 0, 100, 40),
+      toggle('hand', 'Hand', true, 'Raise your hand to glitch harder, swipe fast for a burst. Off: a steady glitch at Amount.')
     ]
   },
 

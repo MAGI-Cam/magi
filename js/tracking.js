@@ -1,5 +1,6 @@
-// Hand and face tracking for effects, using Google's MediaPipe Tasks: Hand Landmarker (21 points
-// per hand, handedness) and Face Landmarker (478 points, 52 blendshape scores, head pose).
+// Hand, face and body tracking for effects, using Google's MediaPipe Tasks: Hand Landmarker (21
+// points per hand, handedness), Face Landmarker (478 points, 52 blendshape scores, head pose) and
+// Image Segmenter (a person mask).
 // These are the same models TouchDesigner's MediaPipe plugin runs. Nothing loads until an effect
 // first asks, so effects that don't track cost nothing.
 //
@@ -11,7 +12,8 @@
   var BASE = 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@' + VERSION;
   var MODELS = {
     hands: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
-    face: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task'
+    face: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
+    body: 'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/1/selfie_segmenter.tflite'
   };
   // One Euro settings, in frame pixels: steady at rest (1.5 Hz cutoff), opening up by
   // 0.02 Hz per pixel/second of speed.
@@ -155,8 +157,70 @@
     };
   }
 
+  // Body: MediaPipe Image Segmenter with the selfie segmenter model, a per-pixel probability that
+  // the pixel belongs to a person. It runs on a copy of the frame at most 256 px across (the model's
+  // own input is 256×256), drawn mirrored like the preview, so the mask lines up with the frame.
+  // Masks are eased over time (x ← x + 0.6·(new − x)) so the outline doesn't flicker.
+  function createSegmenter() {
+    var status = 'idle', task = null, lastTs = 0;
+    var small = document.createElement('canvas'), sctx = small.getContext('2d');
+    var result = null;
+
+    function load() {
+      status = 'loading';
+      loadVision().then(function (v) {
+        function create(delegate) {
+          return v.m.ImageSegmenter.createFromOptions(v.files, {
+            baseOptions: { modelAssetPath: MODELS.body, delegate: delegate },
+            runningMode: 'VIDEO',
+            outputConfidenceMasks: true,
+            outputCategoryMask: false
+          });
+        }
+        return create('GPU').catch(function () { return create('CPU'); });
+      }).then(function (t) {
+        task = t;
+        status = 'ready';
+      }).catch(function (err) {
+        console.warn('Magi: body tracking could not load', err);
+        status = 'failed';
+      });
+    }
+
+    return {
+      status: function () { return status; },
+      // Returns { mask: Float32Array (0…1, row by row), width, height }, or null before the
+      // first result. The mask covers the whole frame at reduced size.
+      detect: function (frame) {
+        if (status === 'idle') load();
+        if (!task) return result;
+        var s = Math.min(1, 256 / Math.max(frame.width, frame.height));
+        var w = Math.max(1, Math.round(frame.width * s)), h = Math.max(1, Math.round(frame.height * s));
+        if (small.width !== w || small.height !== h) { small.width = w; small.height = h; result = null; }
+        frame.draw(sctx, w, h);
+        var ts = Math.max(frame.time, lastTs + 1);
+        lastTs = ts;
+        try {
+          task.segmentForVideo(small, ts, function (res) {
+            var masks = res.confidenceMasks || [];
+            if (!masks.length) return;
+            // The person is the last category (the only one for this model).
+            var m = masks[masks.length - 1].getAsFloat32Array();
+            if (!result || result.mask.length !== m.length) { result = { mask: new Float32Array(m), width: w, height: h }; return; }
+            var r = result.mask;
+            for (var i = 0; i < m.length; i++) r[i] += (m[i] - r[i]) * 0.6;
+          });
+        } catch (e) {
+          return result;
+        }
+        return result;
+      }
+    };
+  }
+
   Magi.tracking.hands = createTracker('hands');
   Magi.tracking.face = createTracker('face');
+  Magi.tracking.body = createSegmenter();
 
   // A quiet status line while a tracker loads or after it fails, so the effect never looks broken
   // without saying why. Shown as text over the preview through frame.say.

@@ -332,6 +332,74 @@
   };
 
   // Wraps one renderer per mode, built on first use, and draws with the mode in params.mode.
+  // A full-frame WebGL pass: one fragment shader run on every pixel, for per-pixel work over large
+  // areas that would be too slow in JavaScript. Returns null where WebGL is unavailable.
+  //   pass.texture(name, source)              upload an image, video or canvas
+  //   pass.data(name, w, h, rgbaBytes)        upload a Uint8Array (straight alpha)
+  //   pass.run(w, h, { name: number | [x, y] | [x, y, z] })   draw; the result is pass.canvas
+  // The shader gets `varying vec2 uv` (0,0 at the top left) and one sampler per texture name.
+  // Textures are bilinear and clamped at the edges (any size, no mipmaps).
+  fx.shaderPass = function (frag, textures) {
+    var c = document.createElement('canvas');
+    var gl = c.getContext('webgl', { preserveDrawingBuffer: true, premultipliedAlpha: false, antialias: false });
+    if (!gl) return null;
+    function shader(type, src) {
+      var sh = gl.createShader(type);
+      gl.shaderSource(sh, src);
+      gl.compileShader(sh);
+      if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) console.warn('Magi shader:', gl.getShaderInfoLog(sh));
+      return sh;
+    }
+    var prog = gl.createProgram();
+    gl.attachShader(prog, shader(gl.VERTEX_SHADER,
+      'attribute vec2 p; varying vec2 uv; void main() { uv = vec2(p.x * 0.5 + 0.5, 0.5 - p.y * 0.5); gl_Position = vec4(p, 0.0, 1.0); }'));
+    gl.attachShader(prog, shader(gl.FRAGMENT_SHADER, frag));
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) return null;
+    gl.useProgram(prog);
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+    var loc = gl.getAttribLocation(prog, 'p');
+    gl.enableVertexAttribArray(loc);
+    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    var units = {}, uniforms = {};
+    textures.forEach(function (name, i) {
+      var t = gl.createTexture();
+      gl.activeTexture(gl.TEXTURE0 + i);
+      gl.bindTexture(gl.TEXTURE_2D, t);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.uniform1i(gl.getUniformLocation(prog, name), i);
+      units[name] = i;
+    });
+    return {
+      canvas: c,
+      texture: function (name, source) {
+        gl.activeTexture(gl.TEXTURE0 + units[name]);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source);
+      },
+      data: function (name, w, h, bytes) {
+        gl.activeTexture(gl.TEXTURE0 + units[name]);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, bytes);
+      },
+      run: function (w, h, values) {
+        if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+        gl.viewport(0, 0, w, h);
+        Object.keys(values).forEach(function (name) {
+          if (!(name in uniforms)) uniforms[name] = gl.getUniformLocation(prog, name);
+          var v = values[name], u = uniforms[name];
+          if (typeof v === 'number') gl.uniform1f(u, v);
+          else if (v.length === 2) gl.uniform2f(u, v[0], v[1]);
+          else gl.uniform3f(u, v[0], v[1], v[2]);
+        });
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      }
+    };
+  };
+
   fx.createModeRenderer = function (modes, fallback) {
     var made = {};
     var current = null;

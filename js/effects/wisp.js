@@ -258,7 +258,6 @@
 
     // Liquid runs on the GPU: one fragment shader per pixel reads the height field (bilinear),
     // takes its gradient, refracts the camera, mixes in the trail color and adds the highlights.
-    var VERT = 'attribute vec2 p; varying vec2 uv; void main() { uv = vec2(p.x * 0.5 + 0.5, 0.5 - p.y * 0.5); gl_Position = vec4(p, 0.0, 1.0); }';
     var FRAG = [
       'precision highp float;',
       'uniform sampler2D cam, field, dye;',
@@ -286,54 +285,12 @@
       '  gl_FragColor = vec4(col, 1.0);',
       '}'
     ].join('\n');
-    var glc = null, gl = null, prog = null, uni = {}, tex = {}, fieldBytes = null, dyeBytes = null, noGL = false;
-
-    function setupGL() {
-      glc = canvas(1, 1);
-      gl = glc.getContext('webgl', { preserveDrawingBuffer: true, premultipliedAlpha: false, antialias: false });
-      if (!gl) { noGL = true; return; }
-      function shader(type, src) {
-        var sh = gl.createShader(type);
-        gl.shaderSource(sh, src);
-        gl.compileShader(sh);
-        return sh;
-      }
-      prog = gl.createProgram();
-      gl.attachShader(prog, shader(gl.VERTEX_SHADER, VERT));
-      gl.attachShader(prog, shader(gl.FRAGMENT_SHADER, FRAG));
-      gl.linkProgram(prog);
-      if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { noGL = true; return; }
-      gl.useProgram(prog);
-      var buf = gl.createBuffer();
-      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
-      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
-      var loc = gl.getAttribLocation(prog, 'p');
-      gl.enableVertexAttribArray(loc);
-      gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
-      ['cam', 'field', 'dye', 'fieldScale', 'texel', 'size', 'shift', 'k', 'gloss', 'lo', 'hi', 'halfVec'].forEach(function (n) {
-        uni[n] = gl.getUniformLocation(prog, n);
-      });
-      ['cam', 'field', 'dye'].forEach(function (n, i) {
-        var t = gl.createTexture();
-        gl.activeTexture(gl.TEXTURE0 + i);
-        gl.bindTexture(gl.TEXTURE_2D, t);
-        // Sizes aren't powers of two: no mipmaps, clamp at the edges, bilinear.
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-        gl.uniform1i(uni[n], i);
-        tex[n] = t;
-      });
-      gl.uniform1f(uni.lo, LEVEL_LO);
-      gl.uniform1f(uni.hi, LEVEL_HI);
-      gl.uniform3f(uni.halfVec, HALF[0], HALF[1], HALF[2]);
-    }
+    var pass, fieldBytes = null, dyeBytes = null;
 
     function renderLiquid(ctx, frame, params) {
-      if (!gl && !noGL) setupGL();
+      if (pass === undefined) pass = Magi.fx.shaderPass(FRAG, ['cam', 'field', 'dye']);
       frame.draw(ctx, W, H);
-      if (noGL) return renderSmoke(ctx, params, true);
+      if (!pass) return renderSmoke(ctx, params, true);
       var n = gw * gh;
       if (!fieldBytes || fieldBytes.length !== n * 4) { fieldBytes = new Uint8Array(n * 4); dyeBytes = new Uint8Array(n * 4); }
       var any = false;
@@ -345,28 +302,23 @@
         dyeBytes[o + 2] = Math.min(255, B[k] / dk * 255); dyeBytes[o + 3] = 255;
       }
       if (!any) return;
-      if (glc.width !== W || glc.height !== H) { glc.width = W; glc.height = H; }
-      gl.viewport(0, 0, W, H);
-      gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, tex.cam);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, ctx.canvas);
-      gl.activeTexture(gl.TEXTURE1);
-      gl.bindTexture(gl.TEXTURE_2D, tex.field);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gw, gh, 0, gl.RGBA, gl.UNSIGNED_BYTE, fieldBytes);
-      gl.activeTexture(gl.TEXTURE2);
-      gl.bindTexture(gl.TEXTURE_2D, tex.dye);
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gw, gh, 0, gl.RGBA, gl.UNSIGNED_BYTE, dyeBytes);
+      pass.texture('cam', ctx.canvas);
+      pass.data('field', gw, gh, fieldBytes);
+      pass.data('dye', gw, gh, dyeBytes);
       var Hpx = params.refract / 100 * 60, kk = (1 - 1 / N_WATER) * Hpx;
-      gl.uniform2f(uni.fieldScale, W / (gw * DC), H / (gh * DC));
-      gl.uniform2f(uni.texel, 1 / gw, 1 / gh);
-      gl.uniform2f(uni.size, W, H);
-      // ∇h per pixel is H·Δρ / (2·DC) for the one-cell central difference above.
-      gl.uniform1f(uni.shift, kk * Hpx / (2 * DC));
-      gl.uniform1f(uni.k, Math.max(1e-3, kk));
-      gl.uniform1f(uni.gloss, params.gloss && Hpx > 0 ? 1 : 0);
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-      ctx.drawImage(glc, 0, 0);
+      pass.run(W, H, {
+        fieldScale: [W / (gw * DC), H / (gh * DC)],
+        texel: [1 / gw, 1 / gh],
+        size: [W, H],
+        // ∇h per pixel is H·Δρ / (2·DC) for the one-cell central difference above.
+        shift: kk * Hpx / (2 * DC),
+        k: Math.max(1e-3, kk),
+        gloss: params.gloss && Hpx > 0 ? 1 : 0,
+        lo: LEVEL_LO,
+        hi: LEVEL_HI,
+        halfVec: HALF
+      });
+      ctx.drawImage(pass.canvas, 0, 0);
     }
 
     // The height field alone on black: a soft body, lit from the top left.
