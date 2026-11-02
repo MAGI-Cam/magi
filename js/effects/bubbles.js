@@ -1,16 +1,61 @@
-// Bubbles: moving fingers blow soap bubbles that drift off on the air.
+// Bubbles: soap bubbles from your hands. Wave your fingers to stream small ones; pinch thumb and
+// index into a wand and a bubble grows in it while you hold, and floats off when you let go.
 //
-// Each fingertip releases bubbles in proportion to its speed (Amount), launched with 35% of the
-// finger's velocity. A bubble is light enough to follow the air: its velocity relaxes toward the
-// local air velocity with Stokes drag, dv/dt = (u_air − v)/τ, τ = 0.5 s, plus a slow rise (Float).
-// The air is curl noise (the curl of a stream function ψ, so it is divergence-free and swirls
-// without sources or sinks, Wind), and moving hands drag the air near them. A bubble inflates over
-// its first 0.2 s, lives 2–5 s and pops; with Pop on, touching one with a fingertip pops it.
+// Motion: each fingertip releases bubbles in proportion to its speed (Amount), launched with 35%
+// of the finger's velocity. A bubble is light enough to follow the air: its velocity relaxes toward
+// the local air velocity with Stokes drag, dv/dt = (u_air − v)/τ, τ = 0.5 s, plus a slow rise
+// (Float). The air is curl noise (the curl of a stream function ψ, so it is divergence-free and
+// swirls without sources or sinks, Wind), and moving hands drag the air near them. A bubble
+// inflates over its first 0.2 s, lives 2–5 s and pops; with Pop on, a fingertip pops it.
+//
+// Look: a bubble is a thin soap film, so its color is thin-film interference. Light reflected from
+// the film's front and back surfaces differs in phase by δ = 4π·n·d·cos θt / λ (+π for the front
+// reflection), so the reflected intensity at wavelength λ is ∝ sin²(2π·n·d·cos θt / λ), here for
+// n = 1.33 at 650, 532 and 450 nm (red, green, blue). θt is the angle inside the film:
+// sin θt = sin θ / n, and sin θ is the distance from the bubble's center over its radius when seen
+// head-on. Films drain, so d is thinner at the top (d0 → 0.55·d0). How much light the film
+// reflects at all follows Schlick's Fresnel term, F = F0 + (1 − F0)(1 − cos θ)^5 with
+// F0 = 0.02: almost clear in the middle, bright at the rim. A specular highlight sits at the upper
+// left and a dimmer reflection of it at the lower right. Each bubble is drawn from a cached sprite
+// (12 sizes × 3 film thicknesses), so hundreds stay cheap.
 (function () {
-  var TIPS = [4, 8, 12, 16, 20], WRIST = 0, MIDDLE_MCP = 9, MAX = 700, TAU = 0.5;
+  var TIPS = [4, 8, 12, 16, 20], MAX = 600, TAU = 0.5, N_FILM = 1.33, F0 = 0.02;
+  var LAMBDA = [650, 532, 450], THICK = [380, 470, 560], SIZES = 12;
+
+  var sprites = {};
+  // Sprite for radius bucket `b` and film thickness index `f`, drawn at radius rb pixels.
+  function sprite(b, f) {
+    var key = b + ':' + f;
+    if (sprites[key]) return sprites[key];
+    var rb = Math.round(4 * Math.pow(1.32, b)), size = rb * 2 + 2;
+    var c = document.createElement('canvas');
+    c.width = c.height = size;
+    var g = c.getContext('2d'), img = g.createImageData(size, size), d = img.data, cx = size / 2;
+    for (var y = 0; y < size; y++) {
+      for (var x = 0; x < size; x++) {
+        var dx = (x + 0.5 - cx) / rb, dy = (y + 0.5 - cx) / rb, rho = Math.sqrt(dx * dx + dy * dy);
+        var o = (y * size + x) * 4;
+        if (rho > 1) { d[o + 3] = 0; continue; }
+        var cosI = Math.sqrt(1 - rho * rho), sinT = rho / N_FILM, cosT = Math.sqrt(1 - sinT * sinT);
+        var film = THICK[f] * (0.55 + 0.45 * (dy + 1) / 2); // thinner at the top
+        var F = F0 + (1 - F0) * Math.pow(1 - cosI, 5);
+        var rgb = LAMBDA.map(function (l) { var s = Math.sin(2 * Math.PI * N_FILM * film * cosT / l); return s * s; });
+        // Highlight (upper left) and its dim reflection (lower right).
+        var h1 = Math.exp(-(Math.pow(dx + 0.38, 2) + Math.pow(dy + 0.42, 2)) / 0.018);
+        var h2 = 0.35 * Math.exp(-(Math.pow(dx - 0.45, 2) + Math.pow(dy - 0.4, 2)) / 0.03);
+        var edge = Math.max(0, 1 - (1 - rho) * rb / 1.2); // a crisp rim line, ~1 px
+        var a = Math.min(1, 0.05 + F * 1.4 + h1 + h2 + edge * 0.35);
+        for (var k = 0; k < 3; k++) d[o + k] = Math.min(255, 255 * (0.55 + 0.45 * rgb[k] + h1 + h2) );
+        d[o + 3] = Math.min(255, a * 255 * Math.min(1, (1 - rho) * rb + 0.5)); // antialiased edge
+      }
+    }
+    g.putImageData(img, 0, 0);
+    return (sprites[key] = { c: c, r: rb });
+  }
+  function bucketFor(r) { return Math.max(0, Math.min(SIZES - 1, Math.round(Math.log(Math.max(4, r) / 4) / Math.log(1.32)))); }
 
   function createBubbles() {
-    var bubbles = [], pops = [], prev = {}, lastT = null;
+    var bubbles = [], pops = [], prev = {}, wands = {}, lastT = null, lastFrame = null;
 
     function air(x, y, t, H, wind) {
       // ψ = sin(kx·x + ωt)·cos(ky·y − ω′t); u = (∂ψ/∂y, −∂ψ/∂x).
@@ -18,6 +63,18 @@
       var s1 = Math.sin(k1 * x + t * 0.7), c1 = Math.cos(k1 * x + t * 0.7), s2 = Math.sin(k1 * y - t * 0.5), c2 = Math.cos(k1 * y - t * 0.5);
       var s3 = Math.sin(k2 * x - t * 0.3), c3 = Math.cos(k2 * x - t * 0.3), s4 = Math.sin(k2 * y + t * 0.4), c4 = Math.cos(k2 * y + t * 0.4);
       return [a * (-s1 * s2 - 0.8 * s3 * s4), -a * (c1 * c2 + 0.8 * c3 * c4)];
+    }
+
+    function newBubble(x, y, vx, vy, r) {
+      return { x: x, y: y, vx: vx, vy: vy, r: r, age: 0, life: 2 + Math.random() * 3, phase: Math.random() * 6.28, film: Math.floor(Math.random() * 3), spin: Math.random() * 6.28 };
+    }
+
+    function drawBubble(ctx, x, y, r, film, spin, wob) {
+      if (r < 1.5) return;
+      var sp = sprite(bucketFor(r), film), k = r / sp.r;
+      ctx.setTransform(k * (1 + wob), 0, 0, k * (1 - wob), x, y);
+      ctx.rotate(spin * 0.15);
+      ctx.drawImage(sp.c, -sp.c.width / 2, -sp.c.height / 2);
     }
 
     return {
@@ -30,36 +87,63 @@
         var t = frame.time / 1000;
         var dt = lastT === null ? 1 / 30 : Math.max(1 / 120, Math.min(0.1, t - lastT));
         lastT = t;
-        var tracker = Magi.tracking.hands, hands = tracker.detect(frame), details = tracker.details();
+        var tracker = Magi.tracking.hands, ix = Magi.interaction.read(frame), hands = ix.hands;
+        var newFrame = ix !== lastFrame; // fingertip speeds only change with a new camera frame
+        lastFrame = ix;
         var amount = params.amount / 100, size = (0.4 + params.size / 100 * 1.6) * H / 90;
         var wind = params.wind / 100, rise = params.float / 100 * H * 0.12;
 
-        // Fingertip velocities; moving hands drag the air within a palm length of each tip.
+        // Fingertips stream bubbles; moving hands drag the air near each tip.
         var movers = [], seen = {};
-        hands.forEach(function (p, h) {
-          var key = (details[h] && details[h].key) || 'hand' + h, last = prev[key];
-          seen[key] = true;
-          var palm = Math.hypot(p[MIDDLE_MCP].x - p[WRIST].x, p[MIDDLE_MCP].y - p[WRIST].y) || 1;
-          TIPS.forEach(function (i) {
-            var q = p[i], vx = 0, vy = 0;
-            if (last) { vx = (q.x - last[i].x) / dt; vy = (q.y - last[i].y) / dt; }
-            var cap = H * 4, sp = Math.hypot(vx, vy);
-            if (sp > cap) { vx *= cap / sp; vy *= cap / sp; sp = cap; }
-            movers.push({ x: q.x, y: q.y, vx: vx, vy: vy, r: palm * 0.6 });
-            // Release ∝ speed in frame heights per second.
-            var n = amount * 14 * (sp / H) * dt * 4, k = Math.floor(n) + (Math.random() < n % 1 ? 1 : 0);
+        hands.forEach(function (hd) {
+          // Fingertip velocities are measured between camera frames and reused on screen
+          // refreshes in between; bubbles are released once per camera frame.
+          var p = hd.points, last = prev[hd.id], ft = last ? Math.min(0.1, ix.t - last.t) : 0;
+          seen[hd.id] = true;
+          var vel = newFrame || !last ? TIPS.map(function (i) {
+            if (!last || ft <= 0) return [0, 0];
+            var vx = (p[i].x - last.p[i].x) / ft, vy = (p[i].y - last.p[i].y) / ft, cap = H * 4, sp = Math.hypot(vx, vy);
+            return sp > cap ? [vx * cap / sp, vy * cap / sp] : [vx, vy];
+          }) : last.v;
+          TIPS.forEach(function (i, ti) {
+            var q = p[i], vx = vel[ti][0], vy = vel[ti][1], sp = Math.hypot(vx, vy);
+            movers.push({ x: q.x, y: q.y, vx: vx, vy: vy, r: hd.size * 0.6 });
+            if (!newFrame || (hd.pinched && (i === 4 || i === 8))) return; // the wand fingers don't stream
+            var n = amount * 14 * (sp / H) * ft * 4, k = Math.floor(n) + (Math.random() < n % 1 ? 1 : 0);
             for (var j = 0; j < k && bubbles.length < MAX; j++) {
-              bubbles.push({
-                x: q.x + (Math.random() - 0.5) * palm * 0.2, y: q.y + (Math.random() - 0.5) * palm * 0.2,
-                vx: vx * 0.35 + (Math.random() - 0.5) * H * 0.1, vy: vy * 0.35 + (Math.random() - 0.5) * H * 0.1,
-                r: size * (0.35 + Math.pow(Math.random(), 2) * 1.3), age: 0, life: 2 + Math.random() * 3,
-                phase: Math.random() * 6.28
-              });
+              bubbles.push(newBubble(q.x + (Math.random() - 0.5) * hd.size * 0.2, q.y + (Math.random() - 0.5) * hd.size * 0.2,
+                vx * 0.35 + (Math.random() - 0.5) * H * 0.1, vy * 0.35 + (Math.random() - 0.5) * H * 0.1,
+                size * (0.35 + Math.pow(Math.random(), 2) * 1.3)));
             }
           });
-          prev[key] = p.map(function (q) { return { x: q.x, y: q.y }; });
+          if (newFrame || !last) prev[hd.id] = { t: ix.t, v: vel, p: p.map(function (q) { return { x: q.x, y: q.y }; }) };
+
+          // Wand: the loop of thumb and index (points 2–8) holds a film that grows while pinched,
+          // faster as the hand moves (blowing through it), up to 3.5× the loop's size.
+          if (params.wand) {
+            var w = wands[hd.id];
+            if (hd.pinched) {
+              var cx = 0, cy = 0, loop = [2, 3, 4, 5, 6, 7, 8];
+              loop.forEach(function (i) { cx += p[i].x / loop.length; cy += p[i].y / loop.length; });
+              var ring = 0;
+              loop.forEach(function (i) { ring += Math.hypot(p[i].x - cx, p[i].y - cy) / loop.length; });
+              if (!w) w = wands[hd.id] = { r: ring * 0.6, film: Math.floor(Math.random() * 3), phase: Math.random() * 6 };
+              w.x = cx; w.y = cy; w.ring = ring;
+              w.r = Math.min(ring * 3.5, w.r + dt * ring * (0.5 + 2.5 * Math.min(1, hd.speed / H)));
+              w.vx = hd.velocity.x; w.vy = hd.velocity.y;
+            } else if (w) {
+              // Released: it floats off with half the hand's velocity.
+              if (bubbles.length < MAX && w.r > w.ring * 0.7) {
+                var b = newBubble(w.x, w.y - w.r * 0.3, w.vx * 0.5, w.vy * 0.5 - H * 0.05, w.r);
+                b.film = w.film; b.life = 4 + Math.random() * 3; b.age = 0.2;
+                bubbles.push(b);
+              }
+              delete wands[hd.id];
+            }
+          }
         });
         Object.keys(prev).forEach(function (k) { if (!seen[k]) delete prev[k]; });
+        Object.keys(wands).forEach(function (k) { if (!seen[k]) delete wands[k]; });
 
         var drag = 1 - Math.exp(-dt / TAU), keep = [];
         bubbles.forEach(function (b) {
@@ -83,30 +167,20 @@
         });
         bubbles = keep;
 
-        // Bubbles: a thin rim and a highlight on the upper left; they inflate over 0.2 s.
         ctx.save();
-        ctx.strokeStyle = 'rgba(255,255,255,0.92)';
-        ctx.lineWidth = Math.max(1, 1.2 * u);
-        ctx.beginPath();
         bubbles.forEach(function (b) {
-          var r = b.r * Math.min(1, b.age / 0.2) * (1 + 0.04 * Math.sin(t * 6 + b.phase));
-          if (r < 0.5) return;
-          ctx.moveTo(b.x + r, b.y);
-          ctx.arc(b.x, b.y, r, 0, Math.PI * 2);
+          var r = b.r * Math.min(1, b.age / 0.2);
+          drawBubble(ctx, b.x, b.y, r, b.film, b.spin + t * 0.5, 0.03 * Math.sin(t * 5 + b.phase));
         });
-        ctx.stroke();
-        ctx.strokeStyle = 'rgba(255,255,255,0.6)';
-        ctx.beginPath();
-        bubbles.forEach(function (b) {
-          var r = b.r * Math.min(1, b.age / 0.2) * 0.62;
-          if (r < 2) return;
-          ctx.moveTo(b.x + Math.cos(3.6) * r, b.y + Math.sin(3.6) * r);
-          ctx.arc(b.x, b.y, r, 3.6, 4.5);
+        Object.keys(wands).forEach(function (k) {
+          var w = wands[k];
+          drawBubble(ctx, w.x, w.y, w.r, w.film, w.phase + t, 0.06 * Math.sin(t * 7 + w.phase));
         });
-        ctx.stroke();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
 
         // Pops: a ring of short dashes flying out for 0.15 s.
         ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+        ctx.lineWidth = Math.max(1, 1.2 * u);
         ctx.beginPath();
         pops = pops.filter(function (p) {
           p.age += dt;
@@ -123,7 +197,8 @@
 
         var C = Magi.tracking.connections;
         if (params.skeleton && C) {
-          hands.forEach(function (p) {
+          hands.forEach(function (hd) {
+            var p = hd.points;
             ctx.strokeStyle = 'rgb(80,230,90)';
             ctx.lineWidth = Math.max(1, 2 * u);
             ctx.beginPath();
@@ -136,9 +211,9 @@
         ctx.restore();
 
         if (tracker.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, tracker, 'hand');
-        else if (!hands.length) Magi.tracking.hint(ctx, frame, 'Raise a hand and wave your fingers.');
+        else if (!hands.length) Magi.tracking.hint(ctx, frame, 'Wave your fingers, or pinch thumb and index to blow one.');
       },
-      reset: function () { bubbles = []; pops = []; prev = {}; lastT = null; }
+      reset: function () { bubbles = []; pops = []; prev = {}; wands = {}; lastT = null; lastFrame = null; }
     };
   }
 

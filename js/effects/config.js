@@ -175,6 +175,7 @@ Magi.effectConfig = [
       range('size', 'Size', 0, 100, 50),
       range('float', 'Float', 0, 100, 40),
       range('wind', 'Wind', 0, 100, 35),
+      toggle('wand', 'Wand', true, 'Pinch thumb and index: a bubble grows while you hold and floats off when you let go.'),
       toggle('pop', 'Pop', true, 'Touch a bubble with a fingertip to pop it.'),
       toggle('skeleton', 'Skeleton', true, 'Draw the hand skeleton.')
     ]

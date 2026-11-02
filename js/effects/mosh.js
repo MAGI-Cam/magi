@@ -9,6 +9,8 @@
 //
 // Hand: the zone sits between thumb and index fingertip and grows as they spread apart.
 // Pinch them together and the whole picture snaps clean, like a fresh I-frame.
+// Swipe (Interaction Engine) and the smear streams that way: a push along the swipe is added to
+// every vector and fades with a 0.6 s half-life.
 // Scale multiplies the vectors; Hold sets how long the smear stays before it unwinds, block by
 // block, in the reverse of the order it was moshed.
 (function () {
@@ -26,6 +28,9 @@
     var prevLuma = null, luma = null, key = '', front = 0, lastSeen = 0;
     // Per block: entry order while moshing (−1 = clean), and when it should restore.
     var order = null, restoreAt = null, counter = 0, fresh = true;
+    // Swipe bias: a push in the swipe's direction added to every vector, fading with a 0.6 s
+    // half-life, so the smear streams the way you swiped.
+    var bias = [0, 0], seenEvent = 0, lastT = null;
 
     // Sum of absolute differences between the current 8×8 block at (bx, by) and the previous
     // frame's block offset by (dx, dy), in estimation pixels. Offsets past the edge clamp.
@@ -128,6 +133,16 @@
         }
         if (!any) counter = 0;
         var gain = Math.pow(2, (params.scale - 50) / 25); // Scale: motion vectors × 0.25 to × 4
+        var bdt = lastT === null ? 0 : Math.max(0, Math.min(0.1, now - lastT));
+        lastT = now;
+        var fade = Math.pow(2, -bdt / 0.6);
+        bias[0] *= fade; bias[1] *= fade;
+        Magi.interaction.read(frame).events.forEach(function (e) {
+          if (e.n <= seenEvent || e.type !== 'swipe') return;
+          seenEvent = e.n;
+          var push = B * 0.6;
+          bias = e.dir === 'left' ? [-push, 0] : e.dir === 'right' ? [push, 0] : e.dir === 'up' ? [0, -push] : [0, push];
+        });
 
         // Estimation frame: the current picture at 8 pixels per block, as luma.
         ectx.drawImage(cur, 0, 0, w * scale, h * scale);
@@ -149,8 +164,9 @@
               if (order[j] >= 0) {
                 // P-block: copy from the stale buffer along the motion vector, no correction.
                 var v = vector(ew, eh, x * EST, y * EST);
-                var sx = Math.min(w - B, Math.max(0, X + gain * v[0] / scale));
-                var sy = Math.min(h - B, Math.max(0, Y + gain * v[1] / scale));
+                // Sampling from behind the bias moves the picture along it.
+                var sx = Math.min(w - B, Math.max(0, X + gain * v[0] / scale - bias[0]));
+                var sy = Math.min(h - B, Math.max(0, Y + gain * v[1] / scale - bias[1]));
                 dctx.drawImage(src, sx, sy, B, B, X, Y, B, B);
               } else {
                 // I-block: the real picture.
@@ -166,10 +182,10 @@
         if (tracker.status() !== 'ready') {
           Magi.tracking.drawStatus(octx, frame, tracker, 'hand');
         } else if (frame.time - lastSeen > 1500) {
-          Magi.tracking.hint(octx, frame, 'Raise a hand. Spread to mosh, pinch to clear.');
+          Magi.tracking.hint(octx, frame, 'Raise a hand. Spread to mosh, swipe to stream it, pinch to clear.');
         }
       },
-      reset: function () { key = ''; }
+      reset: function () { key = ''; bias = [0, 0]; lastT = null; }
     };
   }
 

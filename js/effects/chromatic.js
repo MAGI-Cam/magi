@@ -10,9 +10,11 @@
 //   RGB — the cube, red, green and blue on the three axes.
 // Hand: your index fingertip turns the space (left–right spins it, up–down tips it), and the
 // thumb–index spread zooms. The name nearest your fingertip lights up with its hex code.
-// With no hand the space turns slowly on its own.
+// With no hand the space turns slowly on its own. Hold up 1, 2 or 3 fingers, still, for 0.7 s to
+// switch to Lab, HSL or RGB (tapping the tile still cycles them). Pinch to grab the name under
+// your fingertip and pull it out of the space; open to let it go.
 (function () {
-  var THUMB_TIP = 4, INDEX_TIP = 8, WRIST = 0, MIDDLE_MCP = 9, FOCAL = 3;
+  var THUMB_TIP = 4, INDEX_TIP = 8, FOCAL = 3;
 
   function linear(c) { return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
   function f(t) { var d = 6 / 29; return t > d * d * d ? Math.cbrt(t) : t / (3 * d * d) + 4 / 29; }
@@ -63,6 +65,8 @@
 
   function createChromatic() {
     var view = { yaw: 0.6, pitch: 0.25, zoom: 1 }, last = 0;
+    var override = null, cand = null, candSince = 0, grabbed = null, switchedAt = -9;
+    var SPACES = ['lab', 'hsl', 'rgb'], SPACE_NAMES = { lab: 'Lab', hsl: 'HSL', rgb: 'RGB' };
     return {
       animated: true,
       render: function (frame, out, params) {
@@ -77,21 +81,27 @@
         var dt = last ? Math.min(0.05, (frame.time - last) / 1000) : 1 / 60;
         last = frame.time;
 
-        var tracker = Magi.tracking.hands, hands = tracker.detect(frame), tip = null;
-        var e = 1 - Math.exp(-dt / 0.12);
-        if (hands.length) {
-          var p = hands[0];
+        var tracker = Magi.tracking.hands, ix = Magi.interaction.read(frame), hd = ix.hands[0], hands = ix.hands, tip = null;
+        var e = 1 - Math.exp(-dt / 0.12), now = frame.time / 1000;
+        if (hd) {
+          var p = hd.points;
           tip = p[INDEX_TIP];
-          var palm = Math.hypot(p[MIDDLE_MCP].x - p[WRIST].x, p[MIDDLE_MCP].y - p[WRIST].y) || 1;
-          var spread = Math.hypot(p[THUMB_TIP].x - tip.x, p[THUMB_TIP].y - tip.y) / palm;
           view.yaw += ((tip.x / W - 0.5) * Math.PI * 1.6 - view.yaw) * e;
           view.pitch += ((tip.y / H - 0.5) * Math.PI * 0.7 - view.pitch) * e;
-          view.zoom += (Math.min(1.8, Math.max(0.5, 0.55 + spread * 0.7)) - view.zoom) * e;
+          // Zoom holds while pinching, so grabbing a name doesn't zoom out.
+          if (!hd.pinched) view.zoom += (Math.min(1.8, Math.max(0.5, 0.55 + hd.pinchWith.index.distance * 0.7)) - view.zoom) * e;
+          // 1, 2 or 3 fingers held still for 0.7 s: Lab, HSL or RGB.
+          if (hd.count >= 1 && hd.count <= 3 && hd.speed < 0.3 * H && !hd.pinched) {
+            if (cand !== hd.count) { cand = hd.count; candSince = now; }
+            else if (now - candSince > 0.7 && (override || params.mode || 'lab') !== SPACES[cand - 1]) { override = SPACES[cand - 1]; switchedAt = now; }
+          } else cand = null;
+          if (!hd.pinched) grabbed = null;
         } else {
           view.yaw += (params.spin / 100) * 0.6 * dt;
+          grabbed = null;
         }
 
-        var space = params.mode || 'lab';
+        var space = override || params.mode || 'lab';
         // The RGB cube's corners reach √3 from its center, so it is drawn smaller to fit like the others.
         var fit = space === 'rgb' ? 1 / Math.sqrt(3) : 1;
         var R = Math.min(W, H) * 0.36 * fit * (params.size / 100) * view.zoom, cx = W / 2, cy = H / 2;
@@ -135,6 +145,23 @@
           }
         });
         ctx.globalAlpha = 1;
+        if (hd && hd.pinched && !grabbed && near) grabbed = near.c;
+        if (grabbed) {
+          // A grabbed name follows the pinch, tied to its place in the space by a thin line.
+          var gp = hd.points, gx = (gp[THUMB_TIP].x + gp[INDEX_TIP].x) / 2, gy = (gp[THUMB_TIP].y + gp[INDEX_TIP].y) / 2;
+          var home = project(grabbed.pos[space]), gb = Math.round(fs * 2.2), gl = grabbed.name + '  ' + grabbed.hex.toUpperCase();
+          ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+          ctx.beginPath(); ctx.moveTo(home[0], home[1]); ctx.lineTo(gx, gy); ctx.stroke();
+          ctx.font = '400 ' + gb + 'px ' + Magi.fx.MONO;
+          var gw = ctx.measureText(gl).width;
+          ctx.fillStyle = grabbed.css;
+          ctx.fillRect(gx - gb * 0.5, gy - gb * 1.9, gw + gb, gb * 1.5);
+          var luma = parseInt(grabbed.hex.slice(1, 3), 16) * 0.299 + parseInt(grabbed.hex.slice(3, 5), 16) * 0.587 + parseInt(grabbed.hex.slice(5, 7), 16) * 0.114;
+          ctx.fillStyle = luma > 140 ? '#000' : '#fff'; // readable text on the color
+          ctx.fillText(gl, gx, gy - gb * 1.15);
+          near = null;
+        }
+        if (now - switchedAt < 1.2) frame.say(SPACE_NAMES[space]);
         if (near) {
           // The color under your fingertip, named.
           var big = Math.round(fs * 1.7);
@@ -151,9 +178,9 @@
         }
 
         if (tracker.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, tracker, 'hand');
-        else if (!hands.length) Magi.tracking.hint(ctx, frame, 'Point to turn the colors. Spread thumb and index to zoom.');
+        else if (!hands.length) Magi.tracking.hint(ctx, frame, 'Point to turn the colors, spread to zoom, pinch to grab a name, hold up 1–3 fingers to change space.');
       },
-      reset: function () { last = 0; }
+      reset: function () { last = 0; override = null; cand = null; grabbed = null; }
     };
   }
 

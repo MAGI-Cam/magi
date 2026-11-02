@@ -1,35 +1,45 @@
 // Collage: a source box locks onto a feature of your face; while your hand is up, numbered copies
-// of it pile up around your face. Lower the hand and they fly back into the source and vanish.
+// of it fill a sphere around your head. Lower the hand and they fly back into the source and vanish.
 //
 // Face (Face Landmarker): the source box sits on an eye (corners 33/133 or 362/263), the mouth
 // (61/291) or the nose (98/327 around the tip, 1), sized from those landmark distances. Eye mode
 // copies one eye; Features takes eye, eye, mouth, nose in turn, and the box moves with it.
 // Each copy is a still snapshot taken at the moment it spawns (`Rate` per second, up to `Count`).
 //
-// Hand (Hand Landmarker): a wireframe sphere on the palm reads two numbers.
-//   scale    = mean fingertip distance from the palm center ÷ palm length, ÷ 1.45 so an open
-//              hand reads about 1 — it sets how far apart the copies spread;
-//   rotation = angle of wrist → middle knuckle from straight up, in degrees — it turns the whole
-//              arrangement around your face.
-// Copies are placed on a square spiral of slots around the face (slot k on ring ⌈(√k − 1)/2⌉),
-// each with a little jitter, and ease toward their slot: x += (target − x)·(1 − e^(−7·dt)).
-// The camera is turned gray (saturation blend with gray) with film grain, like the reference.
+// Sphere: copy k of N sits at the k-th point of a Fibonacci sphere, the even spread of points
+// given by y = 1 − 2(k + ½)/N, r = √(1 − y²), φ = k·137.5° (the golden angle). The sphere turns
+// about its vertical axis and is drawn in perspective, scale f/(f + z) with f = 3 radii, back to
+// front, far copies smaller and dimmer.
+// Hand (Interaction Engine): pinch sets the sphere's size (thumb–index distance 0.15 → 0.6×,
+// 1.1 palm lengths → 1.7× the head), rolling the hand spins it (1.5 × the roll angle), and finger
+// spread sets the spacing (copies shrink from 1× to 0.55× as the fingers spread). A wireframe
+// sphere on the palm shows the readings. Everything eases: x += (target − x)·(1 − e^(−7·dt)).
+// The camera is turned gray with film grain, like the reference (a WebGL pass; canvas fallback).
 (function () {
-  var WRIST = 0, MIDDLE_MCP = 9, TIPS = [4, 8, 12, 16, 20], PALM = [0, 5, 9, 13, 17];
   var GREEN = 'rgb(80,255,90)';
 
-  // Square spiral: (0,0), (1,0), (1,1), (0,1), (−1,1), (−1,0), (−1,−1), …
-  var SPIRAL = (function () {
-    var out = [[0, 0]], x = 0, y = 0, dirs = [[1, 0], [0, 1], [-1, 0], [0, -1]], leg = 1, d = 0;
-    while (out.length < 400) {
-      for (var r = 0; r < 2; r++) {
-        for (var s = 0; s < leg && out.length < 400; s++) { x += dirs[d][0]; y += dirs[d][1]; out.push([x, y]); }
-        d = (d + 1) % 4;
-      }
-      leg++;
-    }
-    return out;
-  })();
+  var GOLDEN = Math.PI * (3 - Math.sqrt(5)), FOCAL = 3, TILT = 0.28;
+
+  // Point k of an N-point Fibonacci sphere, unit radius.
+  function fib(k, n) {
+    var y = 1 - 2 * (k + 0.5) / n, r = Math.sqrt(Math.max(0, 1 - y * y)), phi = k * GOLDEN;
+    return [r * Math.cos(phi), y, r * Math.sin(phi)];
+  }
+
+  // Gray and grain in one GPU pass: Rec. 709 luma plus ±9% of per-pixel noise that changes every
+  // frame, like film grain. (The canvas fallback blends with gray, then overlays a noise tile.)
+  var MONO_FRAG = [
+    'precision highp float;',
+    'uniform sampler2D cam;',
+    'uniform float seed;',
+    'varying vec2 uv;',
+    'float hash(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }',
+    'void main() {',
+    '  float l = dot(texture2D(cam, uv).rgb, vec3(0.2126, 0.7152, 0.0722));',
+    '  l += (hash(gl_FragCoord.xy + seed) - 0.5) * 0.18;',
+    '  gl_FragColor = vec4(vec3(clamp(l, 0.0, 1.0)), 1.0);',
+    '}'
+  ].join('\n');
 
   function noiseCanvas() {
     var c = document.createElement('canvas');
@@ -64,6 +74,8 @@
 
   function createCollage() {
     var tiles = [], count = 0, lastSpawn = 0, lastT = null, featureIndex = 0, grain = null, collapsing = false;
+    var size = 1, spin = 0, gap = 1; // eased hand readings
+    var monoPass;
 
     function sphere(ctx, c, R, yaw, roll, u) {
       var cr = Math.cos(roll), sr = Math.sin(roll), cy = Math.cos(yaw), sy = Math.sin(yaw);
@@ -108,7 +120,12 @@
         var dt = lastT === null ? 1 / 30 : Math.max(1 / 120, Math.min(0.1, t - lastT));
         lastT = t;
 
-        if (params.mono) {
+        if (params.mono && monoPass === undefined) monoPass = Magi.fx.shaderPass(MONO_FRAG, ['cam']);
+        if (params.mono && monoPass) {
+          monoPass.texture('cam', out);
+          monoPass.run(W, H, { seed: Math.random() * 1000 });
+          ctx.drawImage(monoPass.canvas, 0, 0);
+        } else if (params.mono) {
           ctx.save();
           ctx.globalCompositeOperation = 'saturation'; // keep luminosity, take gray's zero saturation
           ctx.fillStyle = '#808080';
@@ -124,8 +141,8 @@
         }
 
         var faceT = Magi.tracking.face, handT = Magi.tracking.hands;
-        var faces = faceT.detect(frame), hands = handT.detect(frame);
-        var face = faces[0], hand = hands[0];
+        var faces = faceT.detect(frame), ix = Magi.interaction.read(frame);
+        var face = faces[0], sig = ix.hands[0], hand = sig && sig.points;
         var fs = Math.max(8, Math.round(8 * u)), pad = Math.max(1, Math.round(1.5 * u));
         ctx.font = fs + 'px ' + Magi.fx.MONO;
         ctx.textBaseline = 'top';
@@ -135,19 +152,17 @@
           var feats = features(face);
           src = feats[params.mode === 'features' ? featureIndex % 4 : 0];
           unitW = feats[0].w;
-          center = { x: (feats[0].c.x + feats[1].c.x + feats[2].c.x) / 3, y: (feats[0].c.y + feats[1].c.y + feats[2].c.y) / 3 - unitW * 0.4 };
+          center = { x: (feats[0].c.x + feats[1].c.x + feats[2].c.x) / 3, y: (feats[0].c.y + feats[1].c.y + feats[2].c.y) / 3 };
         }
 
-        // Hand readings.
-        var scale = 1, rotation = 0, palmC = null, palm = 0;
-        if (hand) {
-          palm = dist(hand[WRIST], hand[MIDDLE_MCP]) || 1;
-          palmC = { x: 0, y: 0 };
-          PALM.forEach(function (i) { palmC.x += hand[i].x / 5; palmC.y += hand[i].y / 5; });
-          var open = 0;
-          TIPS.forEach(function (i) { open += dist(hand[i], palmC) / 5; });
-          scale = open / palm / 1.45;
-          rotation = Math.atan2(hand[MIDDLE_MCP].x - hand[WRIST].x, -(hand[MIDDLE_MCP].y - hand[WRIST].y)) * 180 / Math.PI;
+        // Hand readings, eased.
+        var ease = 1 - Math.exp(-dt * 7), rotation = 0, palmC = null, palm = 0;
+        if (sig) {
+          palm = sig.size; palmC = sig.center; rotation = sig.rotation;
+          var pd = sig.pinchWith.index.distance;
+          size += (0.6 + 1.1 * Math.min(1, Math.max(0, (pd - 0.15) / 0.95)) - size) * ease;
+          spin += (rotation * Math.PI / 180 * 1.5 - spin) * ease;
+          gap += (1 - 0.45 * sig.spread - gap) * ease;
         }
 
         // Spawn while a face and a hand are in view; otherwise everything returns to the source.
@@ -159,39 +174,52 @@
           var snap = document.createElement('canvas');
           snap.width = tw; snap.height = th;
           snap.getContext('2d').drawImage(out, src.c.x - sw / 2, src.c.y - sh / 2, sw, sh, 0, 0, tw, th);
-          tiles.push({ img: snap, w: tw, h: th, x: src.c.x, y: src.c.y, slot: count, n: count, jx: (Math.random() - 0.5) * 0.35, jy: (Math.random() - 0.5) * 0.35 });
+          tiles.push({ img: snap, w: tw, h: th, x: src.c.x, y: src.c.y, s: 0.3, z: 0, alpha: 1, slot: count, n: count });
           count++;
           featureIndex++;
         }
 
-        var ease = 1 - Math.exp(-dt * 7), rot = rotation * Math.PI / 180, cr = Math.cos(rot), sr = Math.sin(rot);
+        // Targets on the sphere: turn about the vertical axis by `spin`, tip back by TILT, project.
+        var R = unitW * 1.25 * size, cy = Math.cos(spin), sy = Math.sin(spin), ct = Math.cos(TILT), st = Math.sin(TILT);
         tiles = tiles.filter(function (tl) {
-          var tx, ty;
+          var tx, ty, ts = 1, tz = 0;
           if (collapsing || !center) {
             var home = src ? src.c : { x: tl.x, y: tl.y };
-            tx = home.x; ty = home.y;
+            tx = home.x; ty = home.y; ts = 0.3;
             if (Math.hypot(tx - tl.x, ty - tl.y) < Math.max(4, tl.w * 0.15)) return false;
           } else {
-            var s = SPIRAL[tl.slot % SPIRAL.length], gx = (s[0] + tl.jx) * tl.w * 1.05 * scale, gy = (s[1] + tl.jy) * tl.h * 1.15 * scale;
-            tx = center.x + gx * cr - gy * sr; ty = center.y + gx * sr + gy * cr;
+            var q = fib(tl.slot % params.count, params.count);
+            var x1 = q[0] * cy + q[2] * sy, z1 = -q[0] * sy + q[2] * cy;
+            var y2 = q[1] * ct - z1 * st, z2 = q[1] * st + z1 * ct;
+            var k = FOCAL / (FOCAL + z2);
+            tx = center.x + x1 * R * k; ty = center.y + y2 * R * k; ts = k * gap; tz = z2;
           }
           tl.x += (tx - tl.x) * ease;
           tl.y += (ty - tl.y) * ease;
+          tl.s += (ts - tl.s) * ease;
+          tl.z = tz;
           return true;
         });
         if (!tiles.length) count = 0;
+        var scale = size;
 
         ctx.save();
         ctx.lineWidth = Math.max(1, u);
-        tiles.forEach(function (tl) {
-          var x = Math.round(tl.x - tl.w / 2), y = Math.round(tl.y - tl.h / 2);
-          ctx.drawImage(tl.img, x, y);
+        // Back to front; far copies dimmer.
+        tiles.slice().sort(function (a, b) { return b.z - a.z; }).forEach(function (tl) {
+          var w = Math.max(2, Math.round(tl.w * tl.s)), h = Math.max(2, Math.round(tl.h * tl.s));
+          var x = Math.round(tl.x - w / 2), y = Math.round(tl.y - h / 2);
+          ctx.globalAlpha = Math.max(0.35, Math.min(1, 0.7 - tl.z * 0.35));
+          ctx.drawImage(tl.img, x, y, w, h);
           ctx.strokeStyle = GREEN;
-          ctx.strokeRect(x + 0.5, y + 0.5, tl.w - 1, tl.h - 1);
-          ctx.fillStyle = GREEN;
-          ctx.textAlign = 'right';
-          ctx.fillText(String(tl.n).padStart(2, '0'), x + tl.w - pad * 2, y + pad * 2);
+          ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+          if (w > fs * 2.5) {
+            ctx.fillStyle = GREEN;
+            ctx.textAlign = 'right';
+            ctx.fillText(String(tl.n).padStart(2, '0'), x + w - pad * 2, y + pad * 2);
+          }
         });
+        ctx.globalAlpha = 1;
         ctx.textAlign = 'left';
         if (src) {
           var bw = src.w, bh = bw * 0.62, bx = src.c.x - bw / 2, by = src.c.y - bh / 2;
@@ -200,12 +228,12 @@
           label(ctx, 'source:', bx, by - fs - pad * 1.4, fs, pad);
         }
         if (hand) {
-          var R = palm * 0.75;
-          sphere(ctx, palmC, R, t * 0.8, rot, u);
+          var rot = rotation * Math.PI / 180, PR = palm * 0.75;
+          sphere(ctx, palmC, PR, spin + t * 0.3, rot, u);
           // Readouts beside the sphere, on whichever side has room.
           var t1 = 'scale: ' + scale.toFixed(2), t2 = 'rotation: ' + rotation.toFixed(1);
-          var lw = ctx.measureText(t2).width + pad * 2, right = palmC.x + R + 6 * u + lw < W;
-          var lx = right ? palmC.x + R + 6 * u : palmC.x - R - 6 * u - lw, ly = palmC.y - R * 0.3;
+          var lw = ctx.measureText(t2).width + pad * 2, right = palmC.x + PR + 6 * u + lw < W;
+          var lx = right ? palmC.x + PR + 6 * u : palmC.x - PR - 6 * u - lw, ly = palmC.y - PR * 0.3;
           label(ctx, t1, lx, ly, fs, pad);
           label(ctx, t2, lx, ly + fs + pad * 4, fs, pad);
         }
@@ -216,7 +244,7 @@
         else if (!face) frame.say('Face the camera.');
         else if (!hand) frame.say('Raise a hand to start copying.');
       },
-      reset: function () { tiles = []; count = 0; lastSpawn = 0; lastT = null; featureIndex = 0; }
+      reset: function () { tiles = []; count = 0; lastSpawn = 0; lastT = null; featureIndex = 0; size = 1; spin = 0; gap = 1; }
     };
   }
 

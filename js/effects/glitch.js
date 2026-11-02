@@ -1,15 +1,20 @@
 // Glitch: your whole body breaks up like corrupted video, and your hand controls how much.
 //
 // The body is MediaPipe's person mask (Magi.tracking.body); the glitch happens only inside it.
-// The hand is the controller: the higher your highest fingertip, the stronger the glitch, and a
-// fast swipe (wrist speed over half a frame height per second) fires a burst that fades with a
-// 0.25 s half-life. With Hand off, the glitch holds steady at Amount.
+// The hand is the controller (Interaction Engine): in Blocks and Dissolve, the higher your highest
+// fingertip, the stronger the glitch; in Split, your hand's left–right position sets how far the
+// color copies slide apart. A swipe fires a burst that fades with a 0.25 s half-life (in Split it
+// also turns the split to the swipe's direction), and a fist freezes the picture until you open
+// it. With Hand off, the glitch holds steady at Amount.
 //
 // The corruption is redrawn from a new random seed `Speed` times a second (2–30 Hz) and holds in
 // between, so it stutters like a broken stream instead of shimmering. Each mode is a real failure:
-//   Split    — horizontal slices shift sideways (lost line sync), the red and blue channels
-//              separate (chroma misregistration), and some slices drop to 1 bit per channel,
-//              which leaves only the 8 RGB primaries.
+//   Split    — the body comes apart into its color channels: three silhouettes, red, green and
+//              blue, each a flat fill of its own channel (two tones, by brightness), slid apart
+//              along the split direction (chroma misregistration at the scale of the whole body).
+//              Channels add like light, so where two copies overlap they make yellow, cyan or
+//              magenta, and white where all three meet. Some columns are smeared downward (sample
+//              and hold: each run of the column repeats its top pixel), like a stalled scanline.
 //   Blocks   — 8×8-style macroblock damage: blocks that lose their AC coefficients decode as their
 //              DC term alone (the block's mean color), blocks with a wrong motion vector copy
 //              pixels from the wrong place, and some decode with the channels in the wrong order.
@@ -18,7 +23,7 @@
 //              the body's color on average.
 // It runs as a WebGL fragment shader: every pixel is decided independently from the seed.
 (function () {
-  var INDEX_TIP = 8, WRIST = 0;
+  var INDEX_TIP = 8;
   var MODES = { split: 0, blocks: 1, dissolve: 2 };
 
   var FRAG = [
@@ -26,6 +31,7 @@
     'uniform sampler2D cam, mask;',
     'uniform vec2 size;',
     'uniform float amount, block, seed, mode;',
+    'uniform vec2 offset;',
     'varying vec2 uv;',
     // Dave Hoskins' hash without sine: a uniform pseudo-random number in [0, 1) per input.
     'float hash(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }',
@@ -38,17 +44,21 @@
     '  vec3 col = base;',
     '  float s = seed * 0.6180339;',
     '  if (mode < 0.5) {',
-    '    float band = floor(px.y / (block * 2.0));',
-    '    float on = step(hash(vec2(band, s)), amount * 0.85);',
-    '    float dx = (hash(vec2(band, s + 7.0)) - 0.5) * 2.0 * amount * size.x * 0.12 * on;',
-    '    float split = amount * size.x * 0.012 * (1.0 + 2.0 * on);',
-    '    vec2 src = px - vec2(dx, 0.0);',
-    '    float m = body(src);',
-    '    if (m > 0.0) {',
-    '      vec3 c = vec3(cam1(src + vec2(split, 0.0)).r, cam1(src).g, cam1(src - vec2(split, 0.0)).b);',
-    '      if (on > 0.5 && hash(vec2(band, s + 13.0)) < amount * 0.7) c = crush(c);',
-    '      col = mix(base, c, m);',
+    // Column smear: in some columns, sample from the top of each run of 8 blocks.
+    '    float colm = floor(px.x / (block * 1.5));',
+    '    vec2 q = px;',
+    '    if (hash(vec2(colm, s + 3.0)) < amount * 0.35) q.y = floor(px.y / (block * 8.0)) * block * 8.0;',
+    '    vec3 sil = vec3(0.0);',
+    '    float inside = 0.0;',
+    '    for (int c = 0; c < 3; c++) {',
+    '      vec2 at = q - offset * (float(c) - 1.0);',
+    '      float m = body(at);',
+    '      float l = dot(cam1(at), vec3(0.299, 0.587, 0.114));',
+    '      float v = m * (l > 0.35 ? 1.0 : 0.55);',
+    '      if (c == 0) sil.r = v; else if (c == 1) sil.g = v; else sil.b = v;',
+    '      inside = max(inside, m);',
     '    }',
+    '    col = mix(base, sil, inside * min(1.0, amount * 1.4));',
     '  } else if (mode < 1.5) {',
     '    vec2 cell = floor(px / block), center = (cell + 0.5) * block;',
     '    if (body(center) > 0.5 && hash(cell + s) < amount) {',
@@ -85,25 +95,8 @@
   ].join('\n');
 
   function createGlitch() {
-    var pass, maskBytes = null, prevWrist = {}, burst = 0, lastT = null;
-
-    // Hand control: height of the highest fingertip, plus bursts from fast swipes.
-    function handLevel(frame, hands, dt) {
-      var H = frame.height, high = 0, fast = 0, seen = {};
-      hands.forEach(function (p, i) {
-        high = Math.max(high, 1 - p[INDEX_TIP].y / H);
-        var w = p[WRIST], q = prevWrist[i];
-        if (q) fast = Math.max(fast, Math.hypot(w.x - q.x, w.y - q.y) / dt / H);
-        prevWrist[i] = { x: w.x, y: w.y };
-        seen[i] = true;
-      });
-      Object.keys(prevWrist).forEach(function (k) { if (!seen[k]) delete prevWrist[k]; });
-      burst *= Math.pow(2, -dt / 0.25);
-      burst = Math.max(burst, Math.min(1, (fast - 0.5) / 1.5));
-      var x = Math.min(1, Math.max(0, (high - 0.1) / 0.8));
-      return x * x * (3 - 2 * x);
-    }
-
+    var pass, maskBytes = null, burst = 0, lastT = null, seenEvent = 0;
+    var dir = [1, 0], push = 0.5, frozen = null, holding = false;
     return {
       animated: true,
       render: function (frame, out, params) {
@@ -118,12 +111,34 @@
         var dt = lastT === null ? 1 / 30 : Math.max(1 / 120, Math.min(0.1, t - lastT));
         lastT = t;
         var body = Magi.tracking.body, seg = body.detect(frame);
-        var hands = [], hand = Magi.tracking.hands, level = 1;
+        var hands = [], hand = Magi.tracking.hands, level = 1, split = params.mode === 'split' || !params.mode;
+        burst *= Math.pow(2, -dt / 0.25);
+        holding = false;
         if (params.hand) {
-          hands = hand.detect(frame);
-          level = hands.length ? handLevel(frame, hands, dt) : 0.3;
+          var ix = Magi.interaction.read(frame);
+          hands = ix.hands;
+          ix.events.forEach(function (e) {
+            if (e.n <= seenEvent || e.type !== 'swipe') return;
+            seenEvent = e.n;
+            burst = 1;
+            dir = e.dir === 'left' ? [-1, 0] : e.dir === 'right' ? [1, 0] : e.dir === 'up' ? [0, -1] : [0, 1];
+          });
+          holding = hands.some(function (h) { return h.fist; });
+          if (!hands.length) level = 0.3;
+          else if (split) {
+            // Hand x (−1 left … 1 right) slides the channels apart; never fully closed.
+            var hx = hands[0].center.x / W * 2 - 1;
+            push += ((0.2 + 0.8 * Math.abs(hx)) * (hx < 0 ? -1 : 1) - push) * (1 - Math.exp(-dt * 8));
+          } else {
+            var high = Math.max.apply(null, hands.map(function (h) { return 1 - h.points[INDEX_TIP].y / H; }));
+            var x = Math.min(1, Math.max(0, (high - 0.1) / 0.8));
+            level = x * x * (3 - 2 * x);
+          }
         }
         var amount = Math.min(1, params.amount / 100 * level + burst);
+
+        // A fist holds the last picture.
+        if (holding && frozen) { ctx.drawImage(frozen, 0, 0); frame.say('Open your hand to let it run.'); return; }
 
         if (seg) {
           var n = seg.width * seg.height, m = seg.mask, present = 0;
@@ -143,20 +158,25 @@
               amount: amount,
               block: Math.round((4 + params.block * 4) * Math.max(W, H) / 1280),
               seed: Math.floor(t * rate) % 4096,
-              mode: MODES[params.mode] || 0
+              mode: MODES[params.mode] || 0,
+              offset: [dir[0] * push * amount * W * 0.16, dir[1] * push * amount * W * 0.16]
             });
             ctx.drawImage(pass.canvas, 0, 0);
           }
+          if (!frozen || frozen.width !== W || frozen.height !== H) {
+            frozen = document.createElement('canvas'); frozen.width = W; frozen.height = H;
+          }
+          frozen.getContext('2d').drawImage(out, 0, 0);
           if (present / n <= 0.01) return frame.say('Step into view.');
         }
 
         if (body.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, body, 'body');
         else if (params.hand && hand.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, hand, 'hand');
-        else if (params.hand && !hands.length) frame.say('Raise a hand: higher glitches harder, a fast swipe bursts.');
+        else if (params.hand && !hands.length) frame.say(split ? 'Raise a hand: move it sideways to split, swipe to turn, fist to freeze.' : 'Raise a hand: higher glitches harder, swipe bursts, fist freezes.');
       },
       reset: function () {
-        prevWrist = {};
         burst = 0;
+        dir = [1, 0]; push = 0.5; frozen = null; seenEvent = 0;
         lastT = null;
       }
     };
