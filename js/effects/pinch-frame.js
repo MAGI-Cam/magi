@@ -20,6 +20,12 @@
 //             yellow is printed slightly off register (Shift).
 //             Back: Bright Red (#F15060) amplitude-modulated halftone; a dot's area is the
 //             cell's darkness, so its radius is r = c·√(darkness/π) for a cell of size c (Dots).
+//   Code    — pinch with both hands: the two pinch points (midpoint of thumb and index tips) are
+//             opposite corners of a box, read out as a 1-bit code. The box is divided into cells
+//             (Cells sets their size); each cell's mean luma is thresholded at the median of all
+//             cells, so half the cells are always white. A thin box reads as barcode bars, a tall
+//             one as a coarse 1-bit image. Guide lines run across the frame through both
+//             corners, which carry their normalized coordinates.
 (function () {
   var THUMB_TIP = 4, INDEX_TIP = 8;
   var THERMAL = [[0, 0, 4], [40, 11, 84], [101, 21, 110], [159, 42, 99], [212, 72, 66], [245, 125, 21], [250, 193, 39], [252, 255, 164]];
@@ -175,8 +181,79 @@
     };
   }
 
+  function createCode() {
+    var small = document.createElement('canvas'), sctx = small.getContext('2d', { willReadFrequently: true });
+    var bits = document.createElement('canvas'), bctx = bits.getContext('2d'), img = null, lum = null;
+
+    return function (frame, ctx, hands, params) {
+      var W = frame.width, H = frame.height, u = frame.pxPerCss;
+      var corners = hands.slice(0, 2).map(function (p) {
+        return { x: (p[THUMB_TIP].x + p[INDEX_TIP].x) / 2, y: (p[THUMB_TIP].y + p[INDEX_TIP].y) / 2 };
+      });
+      var x0 = Math.max(0, Math.min(corners[0].x, corners[1].x)), x1 = Math.min(W, Math.max(corners[0].x, corners[1].x));
+      var y0 = Math.max(0, Math.min(corners[0].y, corners[1].y)), y1 = Math.min(H, Math.max(corners[0].y, corners[1].y));
+      var bw = x1 - x0, bh = y1 - y0;
+      var line = Math.max(1, u);
+
+      // Guides across the whole frame through both corners.
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+      ctx.lineWidth = line;
+      ctx.beginPath();
+      corners.forEach(function (c) {
+        ctx.moveTo(0, c.y); ctx.lineTo(W, c.y);
+        ctx.moveTo(c.x, 0); ctx.lineTo(c.x, H);
+      });
+      ctx.stroke();
+
+      if (bw >= 2 && bh >= 2) {
+        var cell = (3 + params.cells * 2.5) * u;
+        var cols = Math.max(1, Math.round(bw / cell)), rows = Math.max(1, Math.round(bh / cell)), n = cols * rows;
+        if (small.width !== cols || small.height !== rows) {
+          small.width = bits.width = cols; small.height = bits.height = rows;
+          img = bctx.createImageData(cols, rows); lum = new Float32Array(n);
+        }
+        // Each cell's mean: the box drawn down to one pixel per cell, smoothed.
+        sctx.imageSmoothingEnabled = true;
+        sctx.imageSmoothingQuality = 'high';
+        sctx.setTransform(cols / bw, 0, 0, rows / bh, -x0 * cols / bw, -y0 * rows / bh);
+        frame.draw(sctx, W, H);
+        sctx.setTransform(1, 0, 0, 1, 0, 0);
+        var d = sctx.getImageData(0, 0, cols, rows).data, i;
+        for (i = 0; i < n; i++) lum[i] = 0.2126 * d[i * 4] + 0.7152 * d[i * 4 + 1] + 0.0722 * d[i * 4 + 2];
+        var sorted = Array.prototype.slice.call(lum).sort(function (a, b) { return a - b; });
+        var median = sorted[n >> 1], o = img.data;
+        for (i = 0; i < n; i++) {
+          var v = lum[i] > median || (n === 1 && lum[i] > 127) ? 255 : 0;
+          o[i * 4] = o[i * 4 + 1] = o[i * 4 + 2] = v; o[i * 4 + 3] = 255;
+        }
+        bctx.putImageData(img, 0, 0);
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(bits, x0, y0, bw, bh);
+        ctx.imageSmoothingEnabled = true;
+        ctx.strokeStyle = '#fff';
+        ctx.strokeRect(x0 + line / 2, y0 + line / 2, bw - line, bh - line);
+      }
+
+      // Corner markers and their normalized coordinates, full precision.
+      var fs = Math.round(8 * u), sq = 5 * u;
+      ctx.fillStyle = '#fff';
+      ctx.font = fs + 'px ' + Magi.fx.MONO;
+      ctx.textBaseline = 'top';
+      corners.forEach(function (c) {
+        ctx.fillRect(c.x - sq / 2, c.y - sq / 2, sq, sq);
+        var left = c.x > W * 0.7, above = c.y > H * 0.85;
+        ctx.textAlign = left ? 'right' : 'left';
+        var tx = c.x + (left ? -sq : sq), ty = c.y + (above ? -fs * 2.6 : sq);
+        ctx.fillText(String(c.x / W), tx, ty);
+        ctx.fillText(String(c.y / H), tx, ty + fs * 1.2);
+      });
+      ctx.restore();
+    };
+  }
+
   function createPinchFrame() {
-    var drawPrint = null;
+    var drawPrint = null, drawCode = null;
     var work = document.createElement('canvas'), wctx = work.getContext('2d', { willReadFrequently: true });
     var tint = document.createElement('canvas'), tctx = tint.getContext('2d');
     var lut = new Uint8ClampedArray(256 * 3);
@@ -207,7 +284,9 @@
         frame.draw(ctx, W, H);
         var tracker = Magi.tracking.hands, hands = tracker.detect(frame);
 
-        if (hands.length >= 2 && params.mode === 'print') {
+        if (hands.length >= 2 && params.mode === 'code') {
+          (drawCode || (drawCode = createCode()))(frame, ctx, hands, params);
+        } else if (hands.length >= 2 && params.mode === 'print') {
           (drawPrint || (drawPrint = createPrint()))(frame, ctx, hands, params);
         } else if (hands.length >= 2) {
           var pts = [hands[0][THUMB_TIP], hands[0][INDEX_TIP], hands[1][INDEX_TIP], hands[1][THUMB_TIP]];
@@ -262,6 +341,7 @@
         else if (hands.length < 2) {
           Magi.tracking.hint(ctx, frame, params.mode === 'print'
             ? 'Hold a sheet: index fingers at its top corners, thumbs at the bottom.'
+            : params.mode === 'code' ? 'Pinch with both hands to draw a box.'
             : 'Make an L with thumb and index finger on both hands.');
         }
       },

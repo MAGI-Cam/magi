@@ -129,7 +129,8 @@ Magi.effectConfig = [
       { id: 'acid', name: 'Acid' },
       { id: 'thermal', name: 'Thermal' },
       { id: 'invert', name: 'Invert' },
-      { id: 'print', name: 'Print' }
+      { id: 'print', name: 'Print' },
+      { id: 'code', name: 'Code' }
     ],
     // `modes` on a parameter shows it only in those modes.
     params: [
@@ -138,6 +139,7 @@ Magi.effectConfig = [
       { id: 'dots', label: 'Dots', min: 1, max: 9, step: 1, default: 4, modes: ['print'] },
       { id: 'grain', label: 'Grain', min: 0, max: 100, step: 1, default: 60, modes: ['print'] },
       { id: 'shift', label: 'Shift', min: 0, max: 100, step: 1, default: 35, modes: ['print'] },
+      { id: 'cells', label: 'Cells', min: 1, max: 9, step: 1, default: 3, modes: ['code'] },
       toggle('skeleton', 'Skeleton', true, 'Draw the hand skeleton.')
     ]
   },
@@ -162,6 +164,21 @@ Magi.effectConfig = [
     ]
   },
   {
+    id: 'bubbles',
+    name: 'Bubbles',
+    group: 'hand',
+    ready: true,
+    photoType: 'image/jpeg',
+    params: [
+      range('amount', 'Amount', 0, 100, 60),
+      range('size', 'Size', 0, 100, 50),
+      range('float', 'Float', 0, 100, 40),
+      range('wind', 'Wind', 0, 100, 35),
+      toggle('pop', 'Pop', true, 'Touch a bubble with a fingertip to pop it.'),
+      toggle('skeleton', 'Skeleton', true, 'Draw the hand skeleton.')
+    ]
+  },
+  {
     id: 'claw',
     name: 'Claw',
     group: 'hand',
@@ -169,6 +186,7 @@ Magi.effectConfig = [
     photoType: 'image/jpeg',
     params: [
       range('claw', 'Claw', 0, 100, 35),
+      range('glow', 'Glow', 0, 100, 60),
       toggle('glyphs', 'Glyphs', true, 'Show the drifting HUD brackets around the hand.'),
       { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 35, track: 'hue' }
     ]
@@ -276,6 +294,23 @@ Magi.effectConfig = [
       toggle('pool', 'Pool', true, 'On: tokens pile up at the bottom of the frame. Off: they fall through.'),
       toggle('inverse', 'Inverse', false, 'Tokens invert the colors beneath them.'),
       COLOR
+    ]
+  },
+  {
+    id: 'collage',
+    name: 'Collage',
+    group: 'face',
+    ready: true,
+    photoType: 'image/jpeg',
+    modes: [
+      { id: 'eye', name: 'Eye' },
+      { id: 'features', name: 'Features' }
+    ],
+    params: [
+      range('rate', 'Rate', 0, 100, 50),
+      range('count', 'Count', 8, 80, 45),
+      range('size', 'Size', 0, 100, 40),
+      toggle('mono', 'Mono', true, 'Gray camera with film grain.')
     ]
   },
   {

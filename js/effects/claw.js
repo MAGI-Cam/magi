@@ -1,45 +1,82 @@
-// Claw: your hand as a 3D rig. Every bone of MediaPipe's 21-point hand is drawn as an
-// octahedral bone, the diamond-shaped bone of 3D animation tools: from the joint it widens to a
-// ring of four points 18% along its length, then tapers to the next joint. The ring is turned a
-// little out of the image plane so each bone reads as a solid in wireframe. The last bone of
-// each finger extends past the fingertip along the same direction into a claw, `claw` × its own
-// length. Fingertips carry wireframe cylinders on the finger axis, the wrist a target ring,
-// the knuckles crosshairs, and small HUD brackets drift with the hand in its own coordinates.
+// Claw: your hand as a 3D rig, built like an armature in a 3D animation tool.
+//
+// Every chain starts at one root in the palm (0.4 of the way from the knuckles' mean to the wrist)
+// and runs root → knuckle → joint → joint → fingertip (the thumb: root → base → … → tip). Each
+// link is an octahedral bone, the diamond-shaped bone of Blender and Maya: from its head it widens
+// to a ring of four points 25% along, then tapers to its tail. Bones are built in 3D from
+// MediaPipe's landmark depth (z, in the same units as x, so ×frame width for pixels): the ring
+// lies in the plane perpendicular to the bone, turned by the palm's normal n = (p5 − p0) × (p17 − p0),
+// and is projected orthographically, so bones turn with the hand.
+//
+// Each fingertip carries a wireframe cylinder on the last bone's 3D axis â. A circle of radius r
+// perpendicular to â projects to an ellipse with radii r and r·|â_z|, so a finger pointing at the
+// camera shows its cylinder as overlapping circles. Past each fingertip a talon continues the last
+// bone (`claw` × its length), with a crosshair at its point. Lines glow: each path is stroked
+// wide and faint, then narrower, then crisp, a cheap stand-in for a Gaussian bloom.
 (function () {
   var FINGERS = [[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12], [13, 14, 15, 16], [17, 18, 19, 20]];
   var WRIST = 0, MIDDLE_MCP = 9;
-  var GLYPHS_PER_HAND = 10;
+  var GLYPHS_PER_HAND = 9;
 
-  // Octahedral bone from a to b, half-width w·|ab|.
-  function bone(ctx, a, b, wk) {
-    var dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy);
-    if (len < 1) return;
-    var ux = dx / len, uy = dy / len, nx = -uy, ny = ux, w = len * wk;
-    var hx = a.x + dx * 0.18, hy = a.y + dy * 0.18, ring = [];
+  function sub(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
+  function crossv(a, b) { return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]]; }
+  function len3(a) { return Math.hypot(a[0], a[1], a[2]); }
+  function unit(a) { var l = len3(a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; }
+
+  // Octahedral bone from 3D point a to b, ring radius wk·|ab|, ring turned by the palm normal.
+  function bone(ctx, a, b, wk, normal) {
+    var d = sub(b, a), L = len3(d);
+    if (L < 1) return;
+    var ax = unit(d), v = crossv(normal, ax);
+    if (len3(v) < 1e-3) v = crossv([0, 0, 1], ax);
+    v = unit(v);
+    var w = crossv(ax, v), r = L * wk, c = [a[0] + d[0] * 0.25, a[1] + d[1] * 0.25, a[2] + d[2] * 0.25];
+    var ring = [];
     for (var k = 0; k < 4; k++) {
-      var ang = k * Math.PI / 2 + 0.55, off = Math.cos(ang) * w, dep = Math.sin(ang) * w * 0.45;
-      ring.push([hx + nx * off + ux * dep, hy + ny * off + uy * dep]);
+      var t = Math.PI / 4 + k * Math.PI / 2, cs = Math.cos(t) * r, sn = Math.sin(t) * r;
+      ring.push([c[0] + v[0] * cs + w[0] * sn, c[1] + v[1] * cs + w[1] * sn]);
     }
     for (var i = 0; i < 4; i++) {
-      var r = ring[i], s = ring[(i + 1) % 4];
-      ctx.moveTo(a.x, a.y); ctx.lineTo(r[0], r[1]);
-      ctx.lineTo(b.x, b.y);
-      ctx.moveTo(r[0], r[1]); ctx.lineTo(s[0], s[1]);
+      var p = ring[i], q = ring[(i + 1) % 4];
+      ctx.moveTo(a[0], a[1]); ctx.lineTo(p[0], p[1]); ctx.lineTo(b[0], b[1]);
+      ctx.moveTo(p[0], p[1]); ctx.lineTo(q[0], q[1]);
     }
   }
 
-  // Wireframe cylinder centered at c along unit axis (ux, uy): two end caps, a middle ring and
-  // the two silhouette lines. Caps are ellipses foreshortened along the axis.
-  function cylinder(ctx, c, ux, uy, length, radius) {
-    var ang = Math.atan2(uy, ux);
-    [-0.5, 0, 0.5].forEach(function (t) {
-      ctx.moveTo(c.x + ux * length * t + Math.cos(ang) * radius * 0.35, c.y + uy * length * t + Math.sin(ang) * radius * 0.35);
-      ctx.ellipse(c.x + ux * length * t, c.y + uy * length * t, radius * 0.35, radius, ang, 0, Math.PI * 2);
+  // Cylinder centered at c (3D) along unit axis ax, length L, radius r: two caps, a middle ring,
+  // the silhouette lines and a small inner ring on the front cap.
+  function cylinder(ctx, c, ax, L, r) {
+    var pl = Math.hypot(ax[0], ax[1]), minor = Math.max(0.12, Math.abs(ax[2])); // cap ellipse ratio
+    var ux = pl > 1e-3 ? ax[0] / pl : 1, uy = pl > 1e-3 ? ax[1] / pl : 0;
+    var ang = Math.atan2(uy, ux), half = L * pl / 2;
+    [-1, 0, 1].forEach(function (s) {
+      var x = c[0] + ux * half * s, y = c[1] + uy * half * s;
+      ctx.moveTo(x + Math.cos(ang) * r * minor, y + Math.sin(ang) * r * minor);
+      ctx.ellipse(x, y, r * minor, r, ang, 0, Math.PI * 2);
     });
     [-1, 1].forEach(function (s) {
-      ctx.moveTo(c.x - ux * length / 2 - uy * radius * s, c.y - uy * length / 2 + ux * radius * s);
-      ctx.lineTo(c.x + ux * length / 2 - uy * radius * s, c.y + uy * length / 2 + ux * radius * s);
+      ctx.moveTo(c[0] - ux * half - uy * r * s, c[1] - uy * half + ux * r * s);
+      ctx.lineTo(c[0] + ux * half - uy * r * s, c[1] + uy * half + ux * r * s);
     });
+    var fx = c[0] + ux * half, fy = c[1] + uy * half;
+    ctx.moveTo(fx + Math.cos(ang) * r * minor * 0.35, fy + Math.sin(ang) * r * minor * 0.35);
+    ctx.ellipse(fx, fy, r * minor * 0.35, r * 0.35, ang, 0, Math.PI * 2);
+  }
+
+  // Strokes the current path with a glow: 7× and 3.5× the line width at low alpha, then the line.
+  function glowStroke(ctx, rgb, width, glow) {
+    var c = rgb.join(',');
+    if (glow > 0) {
+      ctx.strokeStyle = 'rgba(' + c + ',' + (0.07 * glow) + ')';
+      ctx.lineWidth = width * 7;
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(' + c + ',' + (0.18 * glow) + ')';
+      ctx.lineWidth = width * 3.5;
+      ctx.stroke();
+    }
+    ctx.strokeStyle = 'rgba(' + c + ',0.96)';
+    ctx.lineWidth = width;
+    ctx.stroke();
   }
 
   function cross(ctx, x, y, r) {
@@ -47,20 +84,20 @@
     ctx.moveTo(x, y - r); ctx.lineTo(x, y + r);
   }
 
-  // A HUD bracket: shapes 0–3 are [, ], ⌐ and ⊓.
+  // A HUD mark: shapes 0–4 are [, ], ⌐, ⊓ and a pair of ticks.
   function bracket(ctx, x, y, s, shape) {
     var h = s, w = s * 0.45;
     if (shape === 0) { ctx.moveTo(x + w, y - h); ctx.lineTo(x, y - h); ctx.lineTo(x, y + h); ctx.lineTo(x + w, y + h); }
     else if (shape === 1) { ctx.moveTo(x - w, y - h); ctx.lineTo(x, y - h); ctx.lineTo(x, y + h); ctx.lineTo(x - w, y + h); }
     else if (shape === 2) { ctx.moveTo(x, y + h); ctx.lineTo(x, y - h); ctx.lineTo(x + w * 1.6, y - h); }
-    else { ctx.moveTo(x - w, y + h); ctx.lineTo(x - w, y - h); ctx.lineTo(x + w, y - h); ctx.lineTo(x + w, y + h); }
+    else if (shape === 3) { ctx.moveTo(x - w, y + h); ctx.lineTo(x - w, y - h); ctx.lineTo(x + w, y - h); ctx.lineTo(x + w, y + h); }
+    else { ctx.moveTo(x - w * 0.5, y - h); ctx.lineTo(x - w * 0.5, y - h * 0.3); ctx.moveTo(x + w * 0.5, y - h); ctx.lineTo(x + w * 0.5, y - h * 0.3); }
   }
 
   function createClaw() {
-    // Glyph offsets in hand coordinates: along the wrist → middle-knuckle axis, and across it.
     var glyphs = [];
     for (var i = 0; i < GLYPHS_PER_HAND * 2; i++) {
-      glyphs.push({ a: -0.2 + Math.random() * 2.6, b: (Math.random() - 0.5) * 3, shape: i % 4, phase: Math.random() * 10, rate: 0.6 + Math.random() * 1.4 });
+      glyphs.push({ a: -0.6 + Math.random() * 3.2, b: (Math.random() - 0.5) * 4.4, shape: i % 5, phase: Math.random() * 10, rate: 0.5 + Math.random() * 1.2 });
     }
 
     return {
@@ -72,58 +109,55 @@
         frame.draw(ctx, W, H);
         var tracker = Magi.tracking.hands, hands = tracker.detect(frame);
         var ink = Magi.fx.inkColor(params.color);
-        var accent = 'rgb(' + ink.map(function (v) { return Math.round(v * 255); }).join(',') + ')';
-        var reach = (params.claw / 100) * 4;
+        var accent = ink.map(function (v) { return Math.round(v * 255); }), white = [255, 255, 255];
+        var reach = (params.claw / 100) * 4, glow = params.glow / 100;
 
         hands.forEach(function (p, h) {
+          var P = p.map(function (q) { return [q.x, q.y, (q.z || 0) * W]; });
           var palm = Math.hypot(p[MIDDLE_MCP].x - p[WRIST].x, p[MIDDLE_MCP].y - p[WRIST].y) || 1;
+          var normal = unit(crossv(sub(P[5], P[0]), sub(P[17], P[0])));
+          var knuckles = [0, 1, 2].map(function (k) { return (P[5][k] + P[9][k] + P[13][k] + P[17][k]) / 4; });
+          var root = [0, 1, 2].map(function (k) { return knuckles[k] + (P[WRIST][k] - knuckles[k]) * 0.4; });
+          var tips = [];
+
           ctx.save();
           ctx.lineJoin = 'round';
+          ctx.lineCap = 'round';
 
-          // Bones: wrist to each finger base, then along each finger, then the claw.
-          ctx.strokeStyle = 'rgba(255,255,255,0.95)';
-          ctx.lineWidth = Math.max(1, 1.2 * u);
+          // Bones, white with a glow.
           ctx.beginPath();
           FINGERS.forEach(function (f) {
-            bone(ctx, p[WRIST], p[f[0]], 0.09);
-            for (var k = 0; k < 3; k++) bone(ctx, p[f[k]], p[f[k + 1]], 0.2);
-            if (reach > 0) {
-              var a = p[f[2]], b = p[f[3]];
-              bone(ctx, b, { x: b.x + (b.x - a.x) * reach, y: b.y + (b.y - a.y) * reach }, 0.09);
-            }
+            bone(ctx, root, P[f[0]], 0.12, normal);
+            for (var k = 0; k < 3; k++) bone(ctx, P[f[k]], P[f[k + 1]], 0.26, normal);
+            var a = P[f[2]], b = P[f[3]], d = sub(b, a);
+            var end = [b[0] + d[0] * reach, b[1] + d[1] * reach, b[2] + d[2] * reach];
+            if (reach > 0) bone(ctx, b, end, 0.11, normal);
+            tips.push({ a: a, b: b, d: d, end: end });
           });
-          ctx.stroke();
+          glowStroke(ctx, white, Math.max(1, 1.3 * u), glow);
 
-          // Accents: fingertip cylinders, wrist target, knuckle crosshairs.
-          ctx.strokeStyle = accent;
-          ctx.lineWidth = Math.max(1, 1.5 * u);
+          // Fingertip cylinders and talon crosshairs in the accent color.
           ctx.beginPath();
-          FINGERS.forEach(function (f) {
-            var a = p[f[2]], b = p[f[3]], len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
-            cylinder(ctx, b, (b.x - a.x) / len, (b.y - a.y) / len, len * 0.9, Math.max(len * 0.42, palm * 0.07));
+          tips.forEach(function (tp) {
+            var L = len3(tp.d) || 1, ax = unit(tp.d);
+            var c = [tp.b[0] - tp.d[0] * 0.15, tp.b[1] - tp.d[1] * 0.15, tp.b[2] - tp.d[2] * 0.15];
+            cylinder(ctx, c, ax, L * 0.75, Math.max(L * 0.42, palm * 0.09));
+            if (reach > 0) cross(ctx, tp.end[0], tp.end[1], palm * 0.13);
           });
-          var wr = palm * 0.22;
-          ctx.moveTo(p[WRIST].x + wr, p[WRIST].y);
-          ctx.arc(p[WRIST].x, p[WRIST].y, wr, 0, Math.PI * 2);
-          ctx.moveTo(p[WRIST].x + wr * 0.45, p[WRIST].y);
-          ctx.ellipse(p[WRIST].x, p[WRIST].y, wr * 0.45, wr * 0.8, 0.3, 0, Math.PI * 2);
-          [2, 5, 9, 13, 17].forEach(function (j) { cross(ctx, p[j].x, p[j].y, palm * 0.08); }); // knuckles
-          ctx.stroke();
+          glowStroke(ctx, accent, Math.max(1, 1.4 * u), glow * 0.8);
 
           if (params.glyphs) {
-            // Hand frame: axis from wrist to middle knuckle, and its perpendicular.
-            var ax = (p[MIDDLE_MCP].x - p[WRIST].x), ay = (p[MIDDLE_MCP].y - p[WRIST].y);
-            ctx.strokeStyle = 'rgba(255,255,255,0.85)';
-            ctx.lineWidth = Math.max(1, 1.1 * u);
+            // HUD marks in hand coordinates: along wrist → middle knuckle, and across it.
+            var ax0 = p[MIDDLE_MCP].x - p[WRIST].x, ay0 = p[MIDDLE_MCP].y - p[WRIST].y;
             ctx.beginPath();
             glyphs.slice(h * GLYPHS_PER_HAND, (h + 1) * GLYPHS_PER_HAND).forEach(function (g) {
-              if (Math.sin(t * g.rate + g.phase) < -0.55) return; // flicker
-              var drift = Math.sin(t * 0.7 + g.phase) * 0.08;
-              var gx = p[WRIST].x + ax * (g.a + drift) - ay * g.b * 0.5;
-              var gy = p[WRIST].y + ay * (g.a + drift) + ax * g.b * 0.5;
-              bracket(ctx, gx, gy, palm * 0.07, g.shape);
+              if (Math.sin(t * g.rate + g.phase) < -0.5) return; // flicker
+              var drift = Math.sin(t * 0.6 + g.phase) * 0.1;
+              var gx = p[WRIST].x + ax0 * (g.a + drift) - ay0 * g.b * 0.5;
+              var gy = p[WRIST].y + ay0 * (g.a + drift) + ax0 * g.b * 0.5;
+              bracket(ctx, gx, gy, palm * 0.06, g.shape);
             });
-            ctx.stroke();
+            glowStroke(ctx, white, Math.max(1, 1.2 * u), glow * 0.6);
           }
           ctx.restore();
         });
