@@ -7,16 +7,17 @@
 // panels shrink toward the middle by 1 − w·k^0.8 (k = 0 at the hand, 1 at the inner end), and
 // that waist w deepens the farther apart you pull. Each panel is drawn in oblique projection: vertical sides,
 // with its depth slanting up and back at 30°, so the stack reads as 3D without a separate scene.
+//
+// Hands (Interaction Engine): the color gradient starts at your left hand, whichever side of the
+// screen it is on. When one hand is clearly closer to the camera (its palm looks at least 20%
+// bigger, switching back below 10%), the bellows stretches in depth toward it: panels scale in
+// perspective from the far hand's relative palm size up to full size at the near hand, turn to
+// face the camera, and are drawn far to near. Rolling your palms (their mean rotation) tilts the
+// panels by 0.6 × that angle.
 (function () {
-  var PALM = [0, 5, 9, 13, 17], WRIST = 0, MIDDLE_TIP = 12;
+  var WRIST = 0, MIDDLE_TIP = 12;
   var DEPTH = [Math.cos(Math.PI / 6), -Math.sin(Math.PI / 6)];
   var STACK = 0.36; // share of the span each stack of panels covers
-
-  function palmCenter(p) {
-    var x = 0, y = 0;
-    PALM.forEach(function (i) { x += p[i].x; y += p[i].y; });
-    return { x: x / PALM.length, y: y / PALM.length };
-  }
 
   function smoothstep(a, b, x) {
     var t = Math.min(1, Math.max(0, (x - a) / (b - a)));
@@ -38,17 +39,25 @@
         frame.draw(ctx, W, H);
         var dt = last ? Math.min(0.05, (frame.time - last) / 1000) : 1 / 60;
         last = frame.time;
-        var tracker = Magi.tracking.hands, hands = tracker.detect(frame);
+        var tracker = Magi.tracking.hands, ix = Magi.interaction.read(frame), pair = ix.pair, hands = ix.hands;
 
-        if (hands.length >= 2) {
-          var A = palmCenter(hands[0]), B = palmCenter(hands[1]);
-          var size = (Math.hypot(hands[0][MIDDLE_TIP].x - hands[0][WRIST].x, hands[0][MIDDLE_TIP].y - hands[0][WRIST].y) +
-            Math.hypot(hands[1][MIDDLE_TIP].x - hands[1][WRIST].x, hands[1][MIDDLE_TIP].y - hands[1][WRIST].y)) / 2;
-          if (A.x > B.x) { var t0 = A; A = B; B = t0; }
-          var want = { ax: A.x, ay: A.y, bx: B.x, by: B.y, size: size };
+        if (pair) {
+          // The gradient starts at your left hand (handedness, not screen side). The closer hand
+          // (palm at least 20% bigger, Interaction Engine) pulls the bellows into depth toward it.
+          var A = pair.left, B = pair.right, near = pair.closer;
+          var size = (Math.hypot(A.points[MIDDLE_TIP].x - A.points[WRIST].x, A.points[MIDDLE_TIP].y - A.points[WRIST].y) +
+            Math.hypot(B.points[MIDDLE_TIP].x - B.points[WRIST].x, B.points[MIDDLE_TIP].y - B.points[WRIST].y)) / 2;
+          var ratio = Math.min(A.size, B.size) / Math.max(A.size, B.size);
+          var roll = (A.rotation + B.rotation) / 2 * Math.PI / 180;
+          var want = {
+            ax: A.center.x, ay: A.center.y, bx: B.center.x, by: B.center.y, size: size, roll: roll,
+            depth: near ? 1 : 0, nearB: near === B ? 1 : 0, ratio: near ? ratio : 1
+          };
           if (!state) state = want;
-          var e = 1 - Math.exp(-dt / 0.07);
-          Object.keys(want).forEach(function (k) { state[k] += (want[k] - state[k]) * e; });
+          var e = 1 - Math.exp(-dt / 0.07), ed = 1 - Math.exp(-dt / 0.25);
+          Object.keys(want).forEach(function (k) {
+            state[k] += (want[k] - state[k]) * (k === 'depth' || k === 'nearB' || k === 'ratio' ? ed : e);
+          });
         } else {
           state = null;
         }
@@ -70,10 +79,14 @@
               var k = perSide > 1 ? i / (perSide - 1) : 0;             // 0 at the hand, 1 at the inner end
               var t = side === 0 ? k * STACK : 1 - k * STACK;
               var s = 1 - waist * Math.pow(k, 0.8);
-              panels.push({ x: state.ax + dx * t, y: state.ay + dy * t, h: hBase * s, t: t });
+              // Depth: perspective scale from the far hand (its palm's relative size) to the near one.
+              var toNear = state.nearB * t + (1 - state.nearB) * (1 - t);
+              var persp = 1 + (state.ratio + (1 - state.ratio) * toNear - 1) * state.depth;
+              panels.push({ x: state.ax + dx * t, y: state.ay + dy * t, h: hBase * s * persp, t: t, near: toNear });
             }
           }
-          panels.sort(function (a, b) { return a.t - b.t; }); // draw left to right
+          // Left to right; in depth, far to near so nearer panels cover farther ones.
+          panels.sort(function (a, b) { return state.depth > 0.5 ? a.near - b.near : a.t - b.t; });
           var innerL = panels[perSide - 1], innerR = panels[perSide];
 
           ctx.save();
@@ -99,7 +112,13 @@
           ctx.strokeStyle = '#000';
           ctx.lineWidth = Math.max(1, 1.1 * u);
           panels.forEach(function (pn) {
-            var w = pn.h * 0.72, hx = DEPTH[0] * w / 2, hy = DEPTH[1] * w / 2;
+            // In depth the panels turn toward the camera (wider, less slant); roll tilts them.
+            var w = pn.h * (0.72 + 0.35 * state.depth), slant = 1 - 0.6 * state.depth;
+            var hx = DEPTH[0] * w / 2, hy = DEPTH[1] * w / 2 * slant;
+            ctx.save();
+            ctx.translate(pn.x, pn.y);
+            ctx.rotate(state.roll * 0.6);
+            ctx.translate(-pn.x, -pn.y);
             var hue = (hue0 + pn.t * params.spread * 3.6) % 360;
             var light = sat ? 48 + 10 * Math.sin(pn.t * Math.PI * 3) : 92 - 30 * pn.t;
             ctx.fillStyle = 'hsl(' + hue.toFixed(1) + ',' + sat + '%,' + light.toFixed(1) + '%)';
@@ -111,6 +130,7 @@
             ctx.closePath();
             ctx.fill();
             if (params.outline) ctx.stroke();
+            ctx.restore();
           });
           ctx.globalAlpha = 1;
 
@@ -138,7 +158,7 @@
         }
 
         if (tracker.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, tracker, 'hand');
-        else if (hands.length < 2) Magi.tracking.hint(ctx, frame, 'Hold up both hands, palms to the camera. Pull apart to open.');
+        else if (hands.length < 2) Magi.tracking.hint(ctx, frame, 'Hold up both hands, palms to the camera. Pull apart to open; bring one hand closer to stretch it in depth.');
       },
       reset: function () { state = null; last = 0; }
     };

@@ -20,6 +20,11 @@
 //             yellow is printed slightly off register (Shift).
 //             Back: Bright Red (#F15060) amplitude-modulated halftone; a dot's area is the
 //             cell's darkness, so its radius is r = c·√(darkness/π) for a cell of size c (Dots).
+//   Layers  — the multi-finger print: three sheets, one per thumb–finger pair (index, middle, ring)
+//             across both hands, sharing the thumb corners so they fan out. Each is one RISO ink
+//             (Blue for shadows, Fluorescent Pink #FF48B0 for midtones, Yellow for all but the
+//             highlights), screened against grain on opaque paper; inks multiply where sheets
+//             overlap, so they overprint like a real riso.
 //   Code    — pinch with both hands: the two pinch points (midpoint of thumb and index tips) are
 //             opposite corners of a box, read out as a 1-bit code. The box is divided into cells
 //             (Cells sets their size); each cell's mean luma is thresholded at the median of all
@@ -184,6 +189,83 @@
     };
   }
 
+  // Layers: three sheets, one per thumb–finger pair (index, middle, ring) across both hands, each
+  // printed in one RISO ink. Corners: left finger tip, right finger tip, right thumb tip, left thumb
+  // tip, so the sheets fan out from the shared thumbs. Paper is drawn first for every sheet (opaque),
+  // then each ink is multiplied on top, so where sheets overlap the inks overprint like riso.
+  var PINK = [255, 72, 176];
+  var LAYERS = [
+    { tip: 8, ink: BLUE, lo: 0.2, hi: 0.62 },       // index: shadows
+    { tip: 12, ink: PINK, lo: 0.3, hi: 0.75, mid: true }, // middle: midtones
+    { tip: 16, ink: YELLOW, lo: 0.4, hi: 0.88 }     // ring: everything but highlights
+  ];
+  function createLayers() {
+    var TEXW = 300;
+    var src = document.createElement('canvas'), sctx = src.getContext('2d', { willReadFrequently: true });
+    var tex = LAYERS.map(function () { var c = document.createElement('canvas'); return { c: c, g: c.getContext('2d') }; });
+
+    // One ink plate: coverage from luma (shadows, a midtone band, or most tones), screened against
+    // static grain; transparent where there's no ink.
+    function plate(t, layer, tw, th, grain) {
+      var d = sctx.getImageData(0, 0, tw, th).data, img = t.g.createImageData(tw, th), o = img.data;
+      var lo = 1, hi = 0, i, L;
+      for (i = 0; i < tw * th; i++) { L = (0.2126 * d[i * 4] + 0.7152 * d[i * 4 + 1] + 0.0722 * d[i * 4 + 2]) / 255; if (L < lo) lo = L; if (L > hi) hi = L; }
+      var span = Math.max(0.15, hi - lo), margin = Math.round(tw * 0.03);
+      for (var y = 0; y < th; y++) {
+        for (var x = 0; x < tw; x++) {
+          i = y * tw + x;
+          L = ((0.2126 * d[i * 4] + 0.7152 * d[i * 4 + 1] + 0.0722 * d[i * 4 + 2]) / 255 - lo) / span;
+          var cov = layer.mid ? 1 - Math.abs(L - (layer.lo + layer.hi) / 2) / ((layer.hi - layer.lo) / 2) : smoothstep(layer.hi, layer.lo, L);
+          var inside = x >= margin && x < tw - margin && y >= margin && y < th - margin;
+          var on = inside && cov > 0.5 + (grainAt(x + layer.tip * 131, y) - 0.5) * grain;
+          o[i * 4] = layer.ink[0]; o[i * 4 + 1] = layer.ink[1]; o[i * 4 + 2] = layer.ink[2]; o[i * 4 + 3] = on ? 255 : 0;
+        }
+      }
+      t.g.putImageData(img, 0, 0);
+    }
+
+    return function (frame, ctx, ix, params) {
+      var pair = ix.pair;
+      if (!pair) return false;
+      var Lh = pair.left.points, Rh = pair.right.points, W = frame.width, H = frame.height;
+      var sheets = LAYERS.map(function (layer, k) {
+        var pts = [Lh[layer.tip], Rh[layer.tip], Rh[THUMB_TIP], Lh[THUMB_TIP]];
+        var x0 = Math.max(0, Math.floor(Math.min.apply(null, pts.map(function (p) { return p.x; }))));
+        var y0 = Math.max(0, Math.floor(Math.min.apply(null, pts.map(function (p) { return p.y; }))));
+        var x1 = Math.min(W, Math.ceil(Math.max.apply(null, pts.map(function (p) { return p.x; }))));
+        var y1 = Math.min(H, Math.ceil(Math.max.apply(null, pts.map(function (p) { return p.y; }))));
+        return { layer: layer, t: tex[k], pts: pts, x0: x0, y0: y0, bw: x1 - x0, bh: y1 - y0 };
+      }).filter(function (sh) { return sh.bw > 4 && sh.bh > 4; });
+      var grain = params.grain / 100;
+      sheets.forEach(function (sh) {
+        var tw = TEXW, th = Math.max(16, Math.min(TEXW * 2, Math.round(TEXW * sh.bh / sh.bw)));
+        if (src.width !== tw || src.height !== th) { src.width = tw; src.height = th; }
+        if (sh.t.c.width !== tw || sh.t.c.height !== th) { sh.t.c.width = tw; sh.t.c.height = th; }
+        sctx.setTransform(tw / sh.bw, 0, 0, th / sh.bh, -sh.x0 * tw / sh.bw, -sh.y0 * th / sh.bh);
+        frame.draw(sctx, W, H);
+        sctx.setTransform(1, 0, 0, 1, 0, 0);
+        plate(sh.t, sh.layer, tw, th, grain);
+        sh.tw = tw; sh.th = th;
+      });
+      function quad(sh, img) {
+        var T = [[0, 0], [sh.tw, 0], [sh.tw, sh.th], [0, sh.th]], p = sh.pts;
+        [[0, 1, 2], [0, 2, 3]].forEach(function (tri) { drawTriangle(ctx, img, T[tri[0]], T[tri[1]], T[tri[2]], p[tri[0]], p[tri[1]], p[tri[2]]); });
+      }
+      ctx.save();
+      ctx.fillStyle = 'rgb(' + PAPER.join(',') + ')';
+      sheets.forEach(function (sh) {
+        ctx.beginPath();
+        sh.pts.forEach(function (q, i) { i ? ctx.lineTo(q.x, q.y) : ctx.moveTo(q.x, q.y); });
+        ctx.closePath();
+        ctx.fill();
+      });
+      ctx.globalCompositeOperation = 'multiply';
+      sheets.forEach(function (sh) { quad(sh, sh.t.c); });
+      ctx.restore();
+      return true;
+    };
+  }
+
   function createCode() {
     var small = document.createElement('canvas'), sctx = small.getContext('2d', { willReadFrequently: true });
     var bits = document.createElement('canvas'), bctx = bits.getContext('2d'), img = null, lum = null;
@@ -286,7 +368,7 @@
   }
 
   function createPinchFrame() {
-    var drawPrint = null, drawCode = null;
+    var drawPrint = null, drawCode = null, drawLayers = null;
     var work = document.createElement('canvas'), wctx = work.getContext('2d', { willReadFrequently: true });
     var tint = document.createElement('canvas'), tctx = tint.getContext('2d');
     var lut = new Uint8ClampedArray(256 * 3);
@@ -318,7 +400,9 @@
         var tracker = Magi.tracking.hands, hands = tracker.detect(frame);
 
         var drewCode = false;
-        if (params.mode === 'code') {
+        if (params.mode === 'layers') {
+          drewCode = (drawLayers || (drawLayers = createLayers()))(frame, ctx, Magi.interaction.read(frame), params) !== false;
+        } else if (params.mode === 'code') {
           drewCode = (drawCode || (drawCode = createCode()))(frame, ctx, Magi.interaction.read(frame), params) !== false;
         } else if (hands.length >= 2 && params.mode === 'print') {
           (drawPrint || (drawPrint = createPrint()))(frame, ctx, hands, params);
@@ -372,9 +456,10 @@
         }
 
         if (tracker.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, tracker, 'hand');
-        else if (params.mode === 'code' ? !drewCode : hands.length < 2) {
+        else if (params.mode === 'code' || params.mode === 'layers' ? !drewCode : hands.length < 2) {
           Magi.tracking.hint(ctx, frame, params.mode === 'print'
             ? 'Hold a sheet: index fingers at its top corners, thumbs at the bottom.'
+            : params.mode === 'layers' ? 'Both hands: thumbs at the bottom, index, middle and ring fingers each hold a sheet.'
             : params.mode === 'code' ? 'Pinch with both hands to draw a box.'
             : 'Make an L with thumb and index finger on both hands.');
         }

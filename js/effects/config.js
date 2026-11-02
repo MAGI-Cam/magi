@@ -131,6 +131,7 @@ Magi.effectConfig = [
       { id: 'thermal', name: 'Thermal' },
       { id: 'invert', name: 'Invert' },
       { id: 'print', name: 'Print' },
+      { id: 'layers', name: 'Layers' },
       { id: 'code', name: 'Code' }
     ],
     // `modes` on a parameter shows it only in those modes.
@@ -138,7 +139,7 @@ Magi.effectConfig = [
       { id: 'bands', label: 'Bands', min: 1, max: 12, step: 1, default: 3, modes: ['acid', 'thermal'] },
       { id: 'speed', label: 'Speed', min: 0, max: 100, step: 1, default: 30, modes: ['acid', 'thermal'] },
       { id: 'dots', label: 'Dots', min: 1, max: 9, step: 1, default: 4, modes: ['print'] },
-      { id: 'grain', label: 'Grain', min: 0, max: 100, step: 1, default: 60, modes: ['print'] },
+      { id: 'grain', label: 'Grain', min: 0, max: 100, step: 1, default: 60, modes: ['print', 'layers'] },
       { id: 'shift', label: 'Shift', min: 0, max: 100, step: 1, default: 35, modes: ['print'] },
       { id: 'cells', label: 'Cells', min: 1, max: 9, step: 1, default: 3, modes: ['code'] },
       toggle('skeleton', 'Skeleton', true, 'Draw the hand skeleton.')
@@ -202,13 +203,14 @@ Magi.effectConfig = [
     photoType: 'image/jpeg',
     params: [
       range('size', 'Size', 30, 200, 100),
-      range('particles', 'Particles', 200, 1500, 700),
+      range('particles', 'Particles', 500, 3000, 1200),
       range('gravity', 'Gravity', 0, 100, 60),
       range('viscosity', 'Viscosity', 0, 100, 20),
       range('spin', 'Spin', 0, 100, 15),
       { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 9, track: 'hue' },
       toggle('outline', 'Cube', true, 'Draw the cube’s edges.'),
-      toggle('glow', 'Glow', true, 'Particles add light where they overlap.')
+      toggle('glow', 'Glow', true, 'Particles add light where they overlap.'),
+      toggle('readouts', 'Readouts', true, 'Show the simulation’s numbers and the hand’s position and rotation.')
     ]
   },
   {
@@ -238,7 +240,9 @@ Magi.effectConfig = [
     photoType: 'image/jpeg',
     modes: [
       { id: 'scatter', name: 'Scatter' },
-      { id: 'behind', name: 'Behind' }
+      { id: 'behind', name: 'Behind' },
+      { id: 'strips', name: 'Strips' },
+      { id: 'rubik', name: 'Rubik’s' }
     ],
     params: [
       range('tiles', 'Tiles', 100, 1500, 600),
