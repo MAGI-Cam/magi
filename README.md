@@ -2,7 +2,7 @@
 
 A minimalist effects tool library. Apply a visual effect to your live camera or an uploaded photo or video, adjust it, capture, and save the result to your device.
 
-The tray opens on **Normal** (the plain camera) and four parent tiles. Tap a parent to see its effects; the back row returns. A parent tile shows which of its effects is on.
+The tray opens on **Normal** (the plain camera) and three parent tiles: Halftone, Gesture (Hand Tracking and Face Tracking) and Facade. Tap a parent to see its effects; the back row returns. A parent tile shows which of its effects is on.
 
 **Halftone**: rebuild the image from a grid of marks and let their density carry the shading.
 
@@ -13,15 +13,19 @@ The tray opens on **Normal** (the plain camera) and four parent tiles. Tap a par
 
 Halftone controls: Scale, Intensity, Saturation (how much of the media's own color shows) and Color (ink: white at the far left, then the hue wheel). Glyphs are written straight into one pixel buffer per frame, so the smallest scales keep up with live video.
 
+**Gesture**: effects driven by your body, in two groups.
+
 **Hand Tracking** (MediaPipe Hand Landmarker, the same model TouchDesigner's MediaPipe plugin uses)
 
 - **Landmarks**: the 21-point skeleton per hand. Switches: Readouts (handedness, score, rotation), Pinch (thumb–index distance over palm length), Distance (between two hands).
-- **Pinch Frame**: make an L with thumb and index finger on both hands; the four fingertips span a window where the camera shows in false color. Modes: Acid (brightness becomes hue bands that cycle), Thermal (heat ramp), Invert. Controls: Bands, Speed, Skeleton.
+- **Pinch Frame**: make an L with thumb and index finger on both hands; the four fingertips span a window where the camera shows in false color. Modes: Acid (brightness becomes hue bands that cycle), Thermal (heat ramp), Invert, Print. Controls: Bands, Speed, Skeleton.
+  - *Print*: hold a printed sheet by its corners (index fingers top, thumbs bottom). It is two triangles hinged on the diagonal; twist your hands and it folds, and a triangle that turns over shows the back. Front: two-color risograph, Blue for shadows and Yellow for midtones, overprinting to green. Back: Bright Red halftone dots. Controls: Dots (halftone size), Grain (riso screen), Shift (misregistration).
 - **Claw**: the hand as a 3D rig: octahedral wireframe bones, fingertip bones extended into claws, cylinders on the fingertips, a wrist target, knuckle crosshairs and drifting HUD brackets. Controls: Claw (length), Glyphs, Color (accent).
 - **Fluid Cube**: a wireframe cube full of particle fluid (Clavet et al. 2005 double density relaxation). Two hands hold it between the index fingertips (distance sets size, the line between them sets tilt); one hand scales it with thumb–index spread and tilts it with hand rotation. Gravity stays screen-down, so tilting pours the fluid, and fast moves make it slosh. Controls: Size, Particles, Gravity, Viscosity, Spin, Color, Cube, Glow.
 - **Accordion**: a bellows of colored panels between your palms that unfolds as you pull apart (more panels, a deeper waist) and folds to two as you come together. Controls: Panels, Waist, Size, Color, Spread (hue range), Opacity, Wires, Outline, Line.
 - **Tutting**: a volume of image tiles in the box between your palms; side by side it's a slab, one above the other a column. Tiles fan like book pages (edge-on at the center) and are cut from your own camera: Scatter (pieces of the room) or Behind (what's behind each tile, shifted by depth). Controls: Tiles, Size, Fan, Depth, Drift, Dim, Edges.
 - **Chromatic**: the 949 names of the xkcd color survey (public domain), each placed at its color in Lab (perceptual), HSL or RGB space. Point to turn the space, spread thumb and index to zoom; the name nearest your fingertip lights up with its hex. Controls: Size, Labels, Text, Spin, Dim, Squares, Axes.
+- **Wisp**: your hands turn to liquid. A real 2D fluid (Stam's Stable Fluids): hands pour dye into it, their motion drags it, and the trails curl, drip and fade, beading into drops at the edge. Modes: Liquid (the camera refracted through the liquid, Snell's law with water's n = 1.33, trails in your hand's color) and Smoke (the liquid alone, lit, on black). Controls: Trail (how long it lasts), Flow (how much your motion drags it), Swirl, Drip, Refract, Gloss, Color (Smoke).
 - **Mosh**: real datamoshing. Block motion vectors are measured with three-step search and applied, uncorrected, to a picture that never refreshes, inside the zone between thumb and index finger. Pinch to snap clean. Controls: Scale (vector strength), Block (macroblock size), Hold (how long the smear lasts before it unwinds block by block, newest first), Reach (zone size).
 
 **Face Tracking** (MediaPipe Face Landmarker: 478 points, 52 blendshapes, head pose)

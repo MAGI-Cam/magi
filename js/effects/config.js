@@ -41,8 +41,10 @@ Magi.effectGroups = [
   // Halftone: effects that rebuild the image from a grid of marks (pixels, characters, symbols)
   // and fake every shade of gray with how densely those marks sit.
   { id: 'halftone', name: 'Halftone' },
-  { id: 'hand', name: 'Hand Tracking' },
-  { id: 'face', name: 'Face Tracking' },
+  // Gesture: effects driven by tracking your body. Hand and face tracking nest inside it.
+  { id: 'gesture', name: 'Gesture' },
+  { id: 'hand', name: 'Hand Tracking', parent: 'gesture' },
+  { id: 'face', name: 'Face Tracking', parent: 'gesture' },
   { id: 'facade', name: 'Facade' }
 ];
 
@@ -125,12 +127,37 @@ Magi.effectConfig = [
     modes: [
       { id: 'acid', name: 'Acid' },
       { id: 'thermal', name: 'Thermal' },
-      { id: 'invert', name: 'Invert' }
+      { id: 'invert', name: 'Invert' },
+      { id: 'print', name: 'Print' }
+    ],
+    // `modes` on a parameter shows it only in those modes.
+    params: [
+      { id: 'bands', label: 'Bands', min: 1, max: 12, step: 1, default: 3, modes: ['acid', 'thermal'] },
+      { id: 'speed', label: 'Speed', min: 0, max: 100, step: 1, default: 30, modes: ['acid', 'thermal'] },
+      { id: 'dots', label: 'Dots', min: 1, max: 9, step: 1, default: 4, modes: ['print'] },
+      { id: 'grain', label: 'Grain', min: 0, max: 100, step: 1, default: 60, modes: ['print'] },
+      { id: 'shift', label: 'Shift', min: 0, max: 100, step: 1, default: 35, modes: ['print'] },
+      toggle('skeleton', 'Skeleton', true, 'Draw the hand skeleton.')
+    ]
+  },
+  {
+    id: 'wisp',
+    name: 'Wisp',
+    group: 'hand',
+    ready: true,
+    photoType: 'image/jpeg',
+    modes: [
+      { id: 'liquid', name: 'Liquid' },
+      { id: 'smoke', name: 'Smoke' }
     ],
     params: [
-      range('bands', 'Bands', 1, 12, 3),
-      range('speed', 'Speed', 0, 100, 30),
-      toggle('skeleton', 'Skeleton', true, 'Draw the hand skeleton.')
+      range('trail', 'Trail', 0, 100, 50),
+      range('flow', 'Flow', 0, 100, 60),
+      range('swirl', 'Swirl', 0, 100, 35),
+      range('drip', 'Drip', 0, 100, 40),
+      { id: 'refract', label: 'Refract', min: 0, max: 100, step: 1, default: 50, modes: ['liquid'] },
+      toggle('gloss', 'Gloss', true, 'Light the surface: highlights and a bright rim.'),
+      { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue', modes: ['smoke'] }
     ]
   },
   {

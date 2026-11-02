@@ -384,6 +384,7 @@
     state.params[fx.id].mode = fx.modes[(modeOf(fx) + 1) % fx.modes.length].id;
     resetRenderers();
     syncTiles();
+    buildControls(); // some parameters belong to one mode only
   }
 
   // Marks the active effect, shows each effect's current mode, and on parent tiles names the
@@ -463,7 +464,9 @@
     });
     controls.appendChild(head);
 
+    var mode = fx.modes ? fx.modes[modeOf(fx)].id : null;
     fx.params.forEach(function (p) {
+      if (p.modes && p.modes.indexOf(mode) < 0) return;
       if (p.type === 'toggle') return controls.appendChild(toggleControl(fx, p));
       if (p.type === 'text') return controls.appendChild(textControl(fx, p));
       var id = 'param-' + fx.id + '-' + p.id;
