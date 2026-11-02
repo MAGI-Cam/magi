@@ -1,5 +1,6 @@
 // Claw: your hand as a 3D rig, built like an armature in a 3D animation tool.
 //
+// X and Y offset the whole rig from the hand, in palm lengths.
 // Every chain starts at one root low in the palm (0.75 of the way from the knuckles' mean to the wrist)
 // and runs root → knuckle → joint → joint → fingertip (the thumb: root → base → … → tip). Each
 // link is an octahedral bone, the diamond-shaped bone of Blender and Maya: from its head it widens
@@ -114,8 +115,12 @@
         var reach = (params.claw / 100) * 4, glow = params.glow / 100;
 
         hands.forEach(function (p, h) {
-          var P = p.map(function (q) { return [q.x, q.y, (q.z || 0) * W]; });
           var palm = Math.hypot(p[MIDDLE_MCP].x - p[WRIST].x, p[MIDDLE_MCP].y - p[WRIST].y) || 1;
+          // Offset: the whole rig moves away from the hand by X and Y, in palm lengths (±2), so
+          // it can float beside the hand instead of on it.
+          var ox = params.offsetX / 50 * palm, oy = params.offsetY / 50 * palm;
+          var P = p.map(function (q) { return [q.x + ox, q.y + oy, (q.z || 0) * W]; });
+          p = p.map(function (q) { return { x: q.x + ox, y: q.y + oy, z: q.z }; });
           var normal = unit(crossv(sub(P[5], P[0]), sub(P[17], P[0])));
           var knuckles = [0, 1, 2].map(function (k) { return (P[5][k] + P[9][k] + P[13][k] + P[17][k]) / 4; });
           // Root three quarters of the way to the wrist, so the first bones lie along the

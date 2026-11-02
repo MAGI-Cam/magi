@@ -10,15 +10,29 @@
 // given by y = 1 − 2(k + ½)/N, r = √(1 − y²), φ = k·137.5° (the golden angle). The sphere turns
 // about its vertical axis and is drawn in perspective, scale f/(f + z) with f = 3 radii, back to
 // front, far copies smaller and dimmer.
-// Hand (Interaction Engine): pinch sets the sphere's size (thumb–index distance 0.15 → 0.6×,
-// 1.1 palm lengths → 1.7× the head), rolling the hand spins it (1.5 × the roll angle), and finger
-// spread sets the spacing (copies shrink from 1× to 0.55× as the fingers spread). A wireframe
-// sphere on the palm shows the readings. Everything eases: x += (target − x)·(1 − e^(−7·dt)).
+// Hand (Interaction Engine): pinch sets the sphere's size (thumb–index distance 0.15 → 1.1 palm
+// lengths moves the Radius slider 10 → 100), finger spread sets Spacing (copies shrink to 0.55×),
+// and rolling the hand spins it: a damped spring (1.2 Hz, damping ratio 0.6) toward 1.5 × the roll
+// angle, plus a slow drift, so it glides. X and Y move the sphere; Sphere off lays the copies flat
+// on a square spiral. Everything else eases: x += (target − x)·(1 − e^(−7·dt)).
 // The camera is turned gray with film grain, like the reference (a WebGL pass; canvas fallback).
 (function () {
   var GREEN = 'rgb(80,255,90)';
 
   var GOLDEN = Math.PI * (3 - Math.sqrt(5)), FOCAL = 3, TILT = 0.28;
+
+  // Square spiral for the flat layout: (0,0), (1,0), (1,1), (0,1), (−1,1), (−1,0), (−1,−1), …
+  var SPIRAL = (function () {
+    var out = [[0, 0]], x = 0, y = 0, dirs = [[1, 0], [0, 1], [-1, 0], [0, -1]], leg = 1, d = 0;
+    while (out.length < 400) {
+      for (var r = 0; r < 2; r++) {
+        for (var k = 0; k < leg && out.length < 400; k++) { x += dirs[d][0]; y += dirs[d][1]; out.push([x, y]); }
+        d = (d + 1) % 4;
+      }
+      leg++;
+    }
+    return out;
+  })();
 
   // Point k of an N-point Fibonacci sphere, unit radius.
   function fib(k, n) {
@@ -74,7 +88,7 @@
 
   function createCollage() {
     var tiles = [], count = 0, lastSpawn = 0, lastT = null, featureIndex = 0, grain = null, collapsing = false;
-    var size = 1, spin = 0, gap = 1; // eased hand readings
+    var size = 1, spin = 0, spinV = 0, target = 0, drift = 0, gap = 1; // eased hand readings
     var monoPass;
 
     function sphere(ctx, c, R, yaw, roll, u) {
@@ -152,18 +166,26 @@
           var feats = features(face);
           src = feats[params.mode === 'features' ? featureIndex % 4 : 0];
           unitW = feats[0].w;
-          center = { x: (feats[0].c.x + feats[1].c.x + feats[2].c.x) / 3, y: (feats[0].c.y + feats[1].c.y + feats[2].c.y) / 3 };
+          center = { x: (feats[0].c.x + feats[1].c.x + feats[2].c.x) / 3 + params.posX / 100 * W * 0.5, y: (feats[0].c.y + feats[1].c.y + feats[2].c.y) / 3 + params.posY / 100 * H * 0.5 };
         }
 
-        // Hand readings, eased.
+        // Hand readings. Pinch sets the Sphere slider and spread the Spacing slider; the picture
+        // eases toward the sliders, so a slider move works the same as a gesture.
         var ease = 1 - Math.exp(-dt * 7), rotation = 0, palmC = null, palm = 0;
         if (sig) {
           palm = sig.size; palmC = sig.center; rotation = sig.rotation;
-          var pd = sig.pinchWith.index.distance;
-          size += (0.6 + 1.1 * Math.min(1, Math.max(0, (pd - 0.15) / 0.95)) - size) * ease;
-          spin += (rotation * Math.PI / 180 * 1.5 - spin) * ease;
-          gap += (1 - 0.45 * sig.spread - gap) * ease;
+          frame.setParam('radius', 10 + 90 * Math.min(1, Math.max(0, (sig.pinchWith.index.distance - 0.15) / 0.95)));
+          frame.setParam('spacing', sig.spread * 100);
+          // Spin: a damped spring (1.2 Hz, damping ratio 0.6) toward 1.5 × the hand's roll, on top
+          // of a slow 0.25 rad/s drift, so it glides and settles instead of snapping.
+          target = rotation * Math.PI / 180 * 1.5;
         }
+        drift += dt * 0.25;
+        var wn = 2 * Math.PI * 1.2;
+        spinV += (wn * wn * (target + drift - spin) - 2 * 0.6 * wn * spinV) * dt;
+        spin += spinV * dt;
+        size += (0.4 + params.radius / 100 * 1.4 - size) * ease;
+        gap += (1 - 0.45 * params.spacing / 100 - gap) * ease;
 
         // Spawn while a face and a hand are in view; otherwise everything returns to the source.
         collapsing = !(face && hand);
@@ -180,13 +202,17 @@
         }
 
         // Targets on the sphere: turn about the vertical axis by `spin`, tip back by TILT, project.
-        var R = unitW * 1.25 * size, cy = Math.cos(spin), sy = Math.sin(spin), ct = Math.cos(TILT), st = Math.sin(TILT);
+        var R = unitW * 0.8 * size, cy = Math.cos(spin), sy = Math.sin(spin), ct = Math.cos(TILT), st = Math.sin(TILT);
         tiles = tiles.filter(function (tl) {
           var tx, ty, ts = 1, tz = 0;
           if (collapsing || !center) {
             var home = src ? src.c : { x: tl.x, y: tl.y };
             tx = home.x; ty = home.y; ts = 0.3;
             if (Math.hypot(tx - tl.x, ty - tl.y) < Math.max(4, tl.w * 0.15)) return false;
+          } else if (!params.sphere) {
+            // Flat: a square spiral of slots around the face, turned by the spin.
+            var sp = SPIRAL[tl.slot % SPIRAL.length], fx = sp[0] * tl.w * 1.05 * size * gap, fy = sp[1] * tl.h * 1.15 * size * gap;
+            tx = center.x + fx * Math.cos(spin * 0.3) - fy * Math.sin(spin * 0.3); ty = center.y + fx * Math.sin(spin * 0.3) + fy * Math.cos(spin * 0.3); ts = 1; tz = 0;
           } else {
             var q = fib(tl.slot % params.count, params.count);
             var x1 = q[0] * cy + q[2] * sy, z1 = -q[0] * sy + q[2] * cy;
@@ -244,7 +270,7 @@
         else if (!face) frame.say('Face the camera.');
         else if (!hand) frame.say('Raise a hand to start copying.');
       },
-      reset: function () { tiles = []; count = 0; lastSpawn = 0; lastT = null; featureIndex = 0; size = 1; spin = 0; gap = 1; }
+      reset: function () { tiles = []; count = 0; lastSpawn = 0; lastT = null; featureIndex = 0; size = 1; spin = 0; spinV = 0; target = 0; gap = 1; }
     };
   }
 

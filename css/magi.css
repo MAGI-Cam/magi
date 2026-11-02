@@ -460,6 +460,35 @@ svg {
 
 .control { display: grid; gap: 8px; }
 
+/* Advanced: how the effect's gestures and parameters work, folded away under the controls. */
+.advanced { border-top: 1px solid var(--line); padding-top: 14px; }
+.advanced summary {
+  list-style: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+.advanced summary::-webkit-details-marker { display: none; }
+.advanced summary::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-right: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 0.2s var(--ease);
+}
+.advanced[open] summary::after { transform: translateY(2px) rotate(-135deg); }
+.advanced summary:focus-visible { outline: 1px solid var(--paper); outline-offset: 4px; }
+.advanced-body { display: grid; gap: 8px; padding-top: 12px; }
+.advanced-body p { margin: 0; font-size: 12px; line-height: 1.5; color: var(--dim); }
+.advanced-term { color: var(--paper); }
+
 .control-row {
   display: flex;
   justify-content: space-between;

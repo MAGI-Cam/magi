@@ -20,20 +20,22 @@
 //             yellow is printed slightly off register (Shift).
 //             Back: Bright Red (#F15060) amplitude-modulated halftone; a dot's area is the
 //             cell's darkness, so its radius is r = c·√(darkness/π) for a cell of size c (Dots).
-//   Layers  — the multi-finger print: three sheets, one per thumb–finger pair (index, middle, ring)
-//             across both hands, sharing the thumb corners so they fan out. Each is one RISO ink
-//             (Blue for shadows, Fluorescent Pink #FF48B0 for midtones, Yellow for all but the
-//             highlights), screened against grain on opaque paper; inks multiply where sheets
-//             overlap, so they overprint like a real riso.
+//             Sheets 2–4: the multi-finger print instead, one sheet per thumb–finger pair (index,
+//             middle, ring, pinky) across both hands, sharing the thumb corners so they fan out.
+//             Each is one RISO ink (Blue for shadows, Fluorescent Pink #FF48B0 for midtones,
+//             Yellow for all but the highlights, Orange #FF6C2F for light midtones), screened
+//             against grain on opaque paper; inks multiply where sheets overlap, like real riso.
 //   Code    — pinch with both hands: the two pinch points (midpoint of thumb and index tips) are
 //             opposite corners of a box, read out as a 1-bit code. The box is divided into cells
 //             (Cells sets their size); each cell's mean luma is thresholded at the median of all
 //             cells, so half the cells are always white. A thin box reads as barcode bars, a tall
 //             one as a coarse 1-bit image. Guide lines run across the frame through both
-//             corners, which carry their normalized coordinates. Each corner belongs to a hand
-//             while it pinches and stays where it is when that hand opens (pinch on/off with
-//             hysteresis, from the Interaction Engine); with both hands open the box and its code
-//             hold still. An open hand's finger spread sets the cell size.
+//             corners, which carry their normalized coordinates. Lock on: each corner belongs to
+//             a hand while it pinches and stays where it is when that hand opens; with both
+//             hands open the box and its code hold still; a fist frees that hand's corner to
+//             follow it until the next pinch. Lock off: corners follow the pinches live. Outside
+//             codes everything but the box. An open hand's finger spread sets Cells; Color tints
+//             the set bits.
 (function () {
   var THUMB_TIP = 4, INDEX_TIP = 8;
   var THERMAL = [[0, 0, 4], [40, 11, 84], [101, 21, 110], [159, 42, 99], [212, 72, 66], [245, 125, 21], [250, 193, 39], [252, 255, 164]];
@@ -189,7 +191,7 @@
     };
   }
 
-  // Layers: three sheets, one per thumb–finger pair (index, middle, ring) across both hands, each
+  // Layers (Print, Sheets 2–4): one sheet per thumb–finger pair (index, middle, ring, pinky), each
   // printed in one RISO ink. Corners: left finger tip, right finger tip, right thumb tip, left thumb
   // tip, so the sheets fan out from the shared thumbs. Paper is drawn first for every sheet (opaque),
   // then each ink is multiplied on top, so where sheets overlap the inks overprint like riso.
@@ -197,7 +199,8 @@
   var LAYERS = [
     { tip: 8, ink: BLUE, lo: 0.2, hi: 0.62 },       // index: shadows
     { tip: 12, ink: PINK, lo: 0.3, hi: 0.75, mid: true }, // middle: midtones
-    { tip: 16, ink: YELLOW, lo: 0.4, hi: 0.88 }     // ring: everything but highlights
+    { tip: 16, ink: YELLOW, lo: 0.4, hi: 0.88 },    // ring: everything but highlights
+    { tip: 20, ink: [255, 108, 47], lo: 0.45, hi: 0.85, mid: true } // pinky: RISO Orange #FF6C2F, light midtones
   ];
   function createLayers() {
     var TEXW = 300;
@@ -228,7 +231,7 @@
       var pair = ix.pair;
       if (!pair) return false;
       var Lh = pair.left.points, Rh = pair.right.points, W = frame.width, H = frame.height;
-      var sheets = LAYERS.map(function (layer, k) {
+      var sheets = LAYERS.slice(0, Math.max(2, Math.min(4, params.sheets || 4))).map(function (layer, k) {
         var pts = [Lh[layer.tip], Rh[layer.tip], Rh[THUMB_TIP], Lh[THUMB_TIP]];
         var x0 = Math.max(0, Math.floor(Math.min.apply(null, pts.map(function (p) { return p.x; }))));
         var y0 = Math.max(0, Math.floor(Math.min.apply(null, pts.map(function (p) { return p.y; }))));
@@ -269,42 +272,95 @@
   function createCode() {
     var small = document.createElement('canvas'), sctx = small.getContext('2d', { willReadFrequently: true });
     var bits = document.createElement('canvas'), bctx = bits.getContext('2d'), img = null, lum = null;
+    // Corners: one per hand. With Lock on, a pinch holds a corner and it stays where you let go; a
+    // fist frees that hand's corner, which then follows the hand until a pinch locks it again.
+    // With Lock off both corners follow the pinch points live.
+    var slots = [], frozen = false;
 
-    // Corners: each is held by a hand while it pinches and stays put when it lets go.
-    var slots = [], cells = null, frozen = false;
+    function mid(h) { var p = h.points; return { x: (p[THUMB_TIP].x + p[INDEX_TIP].x) / 2, y: (p[THUMB_TIP].y + p[INDEX_TIP].y) / 2 }; }
+
+    // The 1-bit code of a region: each cell's mean luma against the median of all cells, set bits
+    // in the ink color. Leaves the result in `bits`.
+    function encode(frame, rx, ry, rw, rh, cell, ink) {
+      var cols = Math.max(1, Math.round(rw / cell)), rows = Math.max(1, Math.round(rh / cell)), n = cols * rows;
+      if (small.width !== cols || small.height !== rows) {
+        small.width = bits.width = cols; small.height = bits.height = rows;
+        img = bctx.createImageData(cols, rows); lum = new Float32Array(n);
+      }
+      sctx.imageSmoothingEnabled = true;
+      sctx.imageSmoothingQuality = 'high';
+      sctx.setTransform(cols / rw, 0, 0, rows / rh, -rx * cols / rw, -ry * rows / rh);
+      frame.draw(sctx, frame.width, frame.height);
+      sctx.setTransform(1, 0, 0, 1, 0, 0);
+      var d = sctx.getImageData(0, 0, cols, rows).data, i;
+      for (i = 0; i < n; i++) lum[i] = 0.2126 * d[i * 4] + 0.7152 * d[i * 4 + 1] + 0.0722 * d[i * 4 + 2];
+      var sorted = Array.prototype.slice.call(lum).sort(function (a, b) { return a - b; });
+      var median = sorted[n >> 1], o = img.data;
+      for (i = 0; i < n; i++) {
+        var on = lum[i] > median || (n === 1 && lum[i] > 127);
+        o[i * 4] = on ? ink[0] : 0; o[i * 4 + 1] = on ? ink[1] : 0; o[i * 4 + 2] = on ? ink[2] : 0; o[i * 4 + 3] = 255;
+      }
+      bctx.putImageData(img, 0, 0);
+    }
 
     return function (frame, ctx, ix, params) {
       var W = frame.width, H = frame.height, u = frame.pxPerCss, hands = ix.hands;
-      function mid(h) { var p = h.points; return { x: (p[THUMB_TIP].x + p[INDEX_TIP].x) / 2, y: (p[THUMB_TIP].y + p[INDEX_TIP].y) / 2 }; }
-      var ids = hands.map(function (h) { return h.id; }), claimed = {};
-      hands.forEach(function (h) {
-        if (!h.pinched) return;
-        var m = mid(h), slot = null;
-        slots.forEach(function (sl) { if (sl.id === h.id) slot = sl; });
-        if (!slot && slots.length < 2) { slot = { id: h.id }; slots.push(slot); }
-        if (!slot) {
-          // Take over a corner whose hand is gone, else the nearest one not held this frame.
-          slots.forEach(function (sl) { if (!slot && ids.indexOf(sl.id) < 0) slot = sl; });
-          slots.forEach(function (sl) { if (!claimed[sl.id] && (!slot || Math.hypot(sl.x - m.x, sl.y - m.y) < Math.hypot(slot.x - m.x, slot.y - m.y))) slot = sl; });
-          slot.id = h.id;
-        }
-        slot.x = m.x; slot.y = m.y; claimed[slot.id] = true;
-      });
+      function slotOf(h) { var r = null; slots.forEach(function (sl) { if (sl.id === h.id) r = sl; }); return r; }
+      if (!params.lock) {
+        if (hands.length >= 2) slots = hands.slice(0, 2).map(function (h) { var m = mid(h); return { id: h.id, x: m.x, y: m.y, free: true }; });
+      } else {
+        var ids = hands.map(function (h) { return h.id; }), claimed = {};
+        hands.forEach(function (h) {
+          var m = mid(h), slot = slotOf(h);
+          if (h.pinched) {
+            if (!slot && slots.length < 2) { slot = { id: h.id }; slots.push(slot); }
+            if (!slot) {
+              // Take over a corner whose hand is gone, else the nearest one not held this frame.
+              slots.forEach(function (sl) { if (!slot && ids.indexOf(sl.id) < 0) slot = sl; });
+              slots.forEach(function (sl) { if (!claimed[sl.id] && (!slot || Math.hypot(sl.x - m.x, sl.y - m.y) < Math.hypot(slot.x - m.x, slot.y - m.y))) slot = sl; });
+              slot.id = h.id;
+            }
+            slot.x = m.x; slot.y = m.y; slot.free = false; claimed[slot.id] = true;
+          } else if (slot) {
+            if (h.fist) slot.free = true;           // a fist unlocks this hand's corner
+            if (slot.free) { slot.x = m.x; slot.y = m.y; }
+          }
+        });
+      }
       var corners = slots.length === 2 ? slots : hands.length >= 2 ? hands.slice(0, 2).map(mid) : null;
       if (!corners) return false;
-      // Nothing pinched: the box and its code hold still. An open hand's spread sets the cell size.
+      var live = !params.lock || slots.length < 2 || hands.some(function (h) { return h.pinched; }) || slots.some(function (sl) { return sl.free; });
       var wasFrozen = frozen;
-      frozen = slots.length === 2 && !hands.some(function (h) { return h.pinched; });
-      var open = hands.filter(function (h) { return !h.pinched; })[0];
-      var target = open ? 1 + open.spread * 8 : params.cells;
-      cells = cells === null ? target : cells + (target - cells) * 0.25;
+      frozen = !live;
+      // An open hand (not pinching, not a fist) sets the cell size with its finger spread.
+      var open = hands.filter(function (h) { return !h.pinched && !h.fist; })[0];
+      if (open && params.lock) frame.setParam('cells', 1 + open.spread * 8);
+
       var x0 = Math.max(0, Math.min(corners[0].x, corners[1].x)), x1 = Math.min(W, Math.max(corners[0].x, corners[1].x));
       var y0 = Math.max(0, Math.min(corners[0].y, corners[1].y)), y1 = Math.min(H, Math.max(corners[0].y, corners[1].y));
-      var bw = x1 - x0, bh = y1 - y0;
-      var line = Math.max(1, u);
+      var bw = x1 - x0, bh = y1 - y0, line = Math.max(1, u);
+      var ink = Magi.fx.inkColor(params.color).map(function (c) { return Math.round(c * 255); });
+
+      ctx.save();
+      if (bw >= 2 && bh >= 2) {
+        // Inside: the box is the code. Outside: everything but the box is, and the box stays live.
+        var rx = params.outside ? 0 : x0, ry = params.outside ? 0 : y0, rw = params.outside ? W : bw, rh = params.outside ? H : bh;
+        if (!(frozen && wasFrozen && bits.width > 0)) encode(frame, rx, ry, rw, rh, (3 + params.cells * 2.5) * u, ink);
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(bits, rx, ry, rw, rh);
+        ctx.imageSmoothingEnabled = true;
+        if (params.outside) {
+          ctx.save();
+          ctx.beginPath(); ctx.rect(x0, y0, bw, bh); ctx.clip();
+          frame.draw(ctx, W, H);
+          ctx.restore();
+        }
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = line;
+        ctx.strokeRect(x0 + line / 2, y0 + line / 2, bw - line, bh - line);
+      }
 
       // Guides across the whole frame through both corners.
-      ctx.save();
       ctx.strokeStyle = 'rgba(255,255,255,0.7)';
       ctx.lineWidth = line;
       ctx.beginPath();
@@ -314,56 +370,24 @@
       });
       ctx.stroke();
 
-      if (bw >= 2 && bh >= 2 && frozen && wasFrozen && bits.width > 0) {
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(bits, x0, y0, bw, bh);
-        ctx.imageSmoothingEnabled = true;
-        ctx.strokeStyle = '#fff';
-        ctx.strokeRect(x0 + line / 2, y0 + line / 2, bw - line, bh - line);
-      } else if (bw >= 2 && bh >= 2) {
-        var cell = (3 + cells * 2.5) * u;
-        var cols = Math.max(1, Math.round(bw / cell)), rows = Math.max(1, Math.round(bh / cell)), n = cols * rows;
-        if (small.width !== cols || small.height !== rows) {
-          small.width = bits.width = cols; small.height = bits.height = rows;
-          img = bctx.createImageData(cols, rows); lum = new Float32Array(n);
-        }
-        // Each cell's mean: the box drawn down to one pixel per cell, smoothed.
-        sctx.imageSmoothingEnabled = true;
-        sctx.imageSmoothingQuality = 'high';
-        sctx.setTransform(cols / bw, 0, 0, rows / bh, -x0 * cols / bw, -y0 * rows / bh);
-        frame.draw(sctx, W, H);
-        sctx.setTransform(1, 0, 0, 1, 0, 0);
-        var d = sctx.getImageData(0, 0, cols, rows).data, i;
-        for (i = 0; i < n; i++) lum[i] = 0.2126 * d[i * 4] + 0.7152 * d[i * 4 + 1] + 0.0722 * d[i * 4 + 2];
-        var sorted = Array.prototype.slice.call(lum).sort(function (a, b) { return a - b; });
-        var median = sorted[n >> 1], o = img.data;
-        for (i = 0; i < n; i++) {
-          var v = lum[i] > median || (n === 1 && lum[i] > 127) ? 255 : 0;
-          o[i * 4] = o[i * 4 + 1] = o[i * 4 + 2] = v; o[i * 4 + 3] = 255;
-        }
-        bctx.putImageData(img, 0, 0);
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(bits, x0, y0, bw, bh);
-        ctx.imageSmoothingEnabled = true;
-        ctx.strokeStyle = '#fff';
-        ctx.strokeRect(x0 + line / 2, y0 + line / 2, bw - line, bh - line);
-      }
-
-      // Corner markers and their normalized coordinates, full precision.
+      // Corner markers (hollow when free) and their normalized coordinates, full precision.
       var fs = Math.round(8 * u), sq = 5 * u;
       ctx.fillStyle = '#fff';
+      ctx.strokeStyle = '#fff';
       ctx.font = fs + 'px ' + Magi.fx.MONO;
       ctx.textBaseline = 'top';
       corners.forEach(function (c) {
-        ctx.fillRect(c.x - sq / 2, c.y - sq / 2, sq, sq);
+        if (c.free && params.lock) ctx.strokeRect(c.x - sq / 2, c.y - sq / 2, sq, sq);
+        else ctx.fillRect(c.x - sq / 2, c.y - sq / 2, sq, sq);
         var left = c.x > W * 0.7, above = c.y > H * 0.85;
         ctx.textAlign = left ? 'right' : 'left';
         var tx = c.x + (left ? -sq : sq), ty = c.y + (above ? -fs * 2.6 : sq);
         ctx.fillText(String(c.x / W), tx, ty);
         ctx.fillText(String(c.y / H), tx, ty + fs * 1.2);
       });
-      if (frozen) { ctx.textAlign = 'left'; ctx.fillText('held', x0, Math.max(0, y0 - fs * 1.4)); }
+      if (frozen) { ctx.textAlign = 'left'; ctx.fillText('locked', x0, Math.max(0, y0 - fs * 1.4)); }
       ctx.restore();
+      return true;
     };
   }
 
@@ -400,7 +424,7 @@
         var tracker = Magi.tracking.hands, hands = tracker.detect(frame);
 
         var drewCode = false;
-        if (params.mode === 'layers') {
+        if (params.mode === 'print' && params.sheets >= 2) {
           drewCode = (drawLayers || (drawLayers = createLayers()))(frame, ctx, Magi.interaction.read(frame), params) !== false;
         } else if (params.mode === 'code') {
           drewCode = (drawCode || (drawCode = createCode()))(frame, ctx, Magi.interaction.read(frame), params) !== false;
@@ -456,10 +480,10 @@
         }
 
         if (tracker.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, tracker, 'hand');
-        else if (params.mode === 'code' || params.mode === 'layers' ? !drewCode : hands.length < 2) {
-          Magi.tracking.hint(ctx, frame, params.mode === 'print'
-            ? 'Hold a sheet: index fingers at its top corners, thumbs at the bottom.'
-            : params.mode === 'layers' ? 'Both hands: thumbs at the bottom, index, middle and ring fingers each hold a sheet.'
+        else if (params.mode === 'code' || (params.mode === 'print' && params.sheets >= 2) ? !drewCode : hands.length < 2) {
+          Magi.tracking.hint(ctx, frame, params.mode === 'print' && params.sheets >= 2
+            ? 'Both hands: thumbs at the bottom; index, middle, ring and pinky each hold a sheet.'
+            : params.mode === 'print' ? 'Hold a sheet: index fingers at its top corners, thumbs at the bottom.'
             : params.mode === 'code' ? 'Pinch with both hands to draw a box.'
             : 'Make an L with thumb and index finger on both hands.');
         }

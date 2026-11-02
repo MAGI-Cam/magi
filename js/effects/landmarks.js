@@ -2,13 +2,15 @@
 // Hands: MediaPipe's 21-point skeleton per hand (green bones, red joints), handedness and score,
 // pinch (thumb tip to index tip, divided by palm length so it doesn't change with distance),
 // rotation (wrist → middle knuckle, 0° = pointing up) and the distance between two hands.
+// Fingers: the gap between each pair of neighboring fingertips, in palm lengths. Pairs: lines
+// between matching fingertips of the left and right hands, as a share of the frame width.
 // Signals: what the Interaction Engine (js/interaction.js) reads from each hand: finger count and
 // which fingers are extended, curl, spread, pointing or fist, pinches to each finger, size,
 // speed and the latest swipe, flick or shake.
 // Face: the 478-point mesh, MediaPipe's eye, iris, brow, lip and oval contours, head pose
 // (yaw, pitch, roll from the face transform) and the strongest of the 52 blendshapes.
 (function () {
-  var WRIST = 0, THUMB_TIP = 4, INDEX_TIP = 8, MIDDLE_MCP = 9, PALM = [0, 5, 9, 13, 17];
+  var WRIST = 0, THUMB_TIP = 4, INDEX_TIP = 8, MIDDLE_MCP = 9, PALM = [0, 5, 9, 13, 17], TIPS = [4, 8, 12, 16, 20];
 
   function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
 
@@ -105,6 +107,40 @@
           }
           if (lines.length) label(ctx, frame, lines, p[WRIST].x + 14 * u, p[WRIST].y + 10 * u);
         });
+
+        // Fingers: the gaps between neighboring fingertips on each hand, in palm lengths.
+        // Pairs: matching fingertips of the left and right hands, as a share of the frame width.
+        if (params.fingers || (params.pairs && hands.length === 2)) {
+          ctx.save();
+          ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+          ctx.lineWidth = Math.max(1, u);
+          ctx.setLineDash([3 * u, 3 * u]);
+          var marks = [];
+          if (params.fingers) hands.forEach(function (p) {
+            var palm = dist(p[WRIST], p[MIDDLE_MCP]) || 1;
+            for (var k = 0; k < TIPS.length - 1; k++) marks.push([p[TIPS[k]], p[TIPS[k + 1]], (dist(p[TIPS[k]], p[TIPS[k + 1]]) / palm).toFixed(2)]);
+          });
+          if (params.pairs && hands.length === 2) {
+            var sides = ix.pair ? [ix.pair.left.points, ix.pair.right.points] : hands;
+            TIPS.forEach(function (t) { marks.push([sides[0][t], sides[1][t], (dist(sides[0][t], sides[1][t]) / w).toFixed(2)]); });
+          }
+          ctx.beginPath();
+          marks.forEach(function (m) { ctx.moveTo(m[0].x, m[0].y); ctx.lineTo(m[1].x, m[1].y); });
+          ctx.stroke();
+          ctx.setLineDash([]);
+          var fsz = Math.round(9 * u);
+          ctx.font = '400 ' + fsz + 'px ' + Magi.fx.MONO;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          marks.forEach(function (m) {
+            var mx = (m[0].x + m[1].x) / 2, my = (m[0].y + m[1].y) / 2, tw = ctx.measureText(m[2]).width + fsz * 0.6;
+            ctx.fillStyle = 'rgba(0,0,0,0.62)';
+            ctx.fillRect(mx - tw / 2, my - fsz * 0.7, tw, fsz * 1.4);
+            ctx.fillStyle = '#fff';
+            ctx.fillText(m[2], mx, my);
+          });
+          ctx.restore();
+        }
 
         if (params.distance && hands.length === 2) {
           var a = palmCenter(hands[0]), b = palmCenter(hands[1]);

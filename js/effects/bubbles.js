@@ -1,5 +1,8 @@
 // Bubbles: soap bubbles from your hands. Wave your fingers to stream small ones; pinch thumb and
-// index into a wand and a bubble grows in it while you hold, and floats off when you let go.
+// index and a bubble grows at your fingertips while you hold, and floats off when you let go.
+// Inverse mode: each bubble inverts the video under it instead.
+// A bubble pops when its life runs out (2–5 s; 4–7 s for one you blew), or, with Pop on, when a
+// fingertip touches it after its first 0.4 s.
 //
 // Motion: each fingertip releases bubbles in proportion to its speed (Amount), launched with 35%
 // of the finger's velocity. A bubble is light enough to follow the air: its velocity relaxes toward
@@ -123,13 +126,13 @@
           if (params.wand) {
             var w = wands[hd.id];
             if (hd.pinched) {
-              var cx = 0, cy = 0, loop = [2, 3, 4, 5, 6, 7, 8];
-              loop.forEach(function (i) { cx += p[i].x / loop.length; cy += p[i].y / loop.length; });
-              var ring = 0;
-              loop.forEach(function (i) { ring += Math.hypot(p[i].x - cx, p[i].y - cy) / loop.length; });
-              if (!w) w = wands[hd.id] = { r: ring * 0.6, film: Math.floor(Math.random() * 3), phase: Math.random() * 6 };
-              w.x = cx; w.y = cy; w.ring = ring;
+              // The bubble sits on the pinched fingertips, just beyond them, away from the palm.
+              var tx = (p[4].x + p[8].x) / 2, ty = (p[4].y + p[8].y) / 2;
+              var ox = tx - hd.center.x, oy = ty - hd.center.y, ol = Math.hypot(ox, oy) || 1;
+              var ring = hd.size * 0.35;
+              if (!w) w = wands[hd.id] = { r: ring * 0.4, film: Math.floor(Math.random() * 3), phase: Math.random() * 6 };
               w.r = Math.min(ring * 3.5, w.r + dt * ring * (0.5 + 2.5 * Math.min(1, hd.speed / H)));
+              w.x = tx + ox / ol * w.r; w.y = ty + oy / ol * w.r; w.ring = ring;
               w.vx = hd.velocity.x; w.vy = hd.velocity.y;
             } else if (w) {
               // Released: it floats off with half the hand's velocity.
@@ -168,15 +171,26 @@
         bubbles = keep;
 
         ctx.save();
-        bubbles.forEach(function (b) {
-          var r = b.r * Math.min(1, b.age / 0.2);
-          drawBubble(ctx, b.x, b.y, r, b.film, b.spin + t * 0.5, 0.03 * Math.sin(t * 5 + b.phase));
-        });
-        Object.keys(wands).forEach(function (k) {
-          var w = wands[k];
-          drawBubble(ctx, w.x, w.y, w.r, w.film, w.phase + t, 0.06 * Math.sin(t * 7 + w.phase));
-        });
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        var all = bubbles.map(function (b) { return { x: b.x, y: b.y, r: b.r * Math.min(1, b.age / 0.2) * (1 + 0.03 * Math.sin(t * 5 + b.phase)), film: b.film, spin: b.spin + t * 0.5, wob: 0.03 * Math.sin(t * 5 + b.phase) }; });
+        Object.keys(wands).forEach(function (k) { var w = wands[k]; all.push({ x: w.x, y: w.y, r: w.r, film: w.film, spin: w.phase + t, wob: 0.06 * Math.sin(t * 7 + w.phase) }); });
+        if (params.mode === 'inverse') {
+          // Inverse: each bubble inverts the video beneath it (difference with white: c → 1 − c),
+          // edged with a crisp 1 px rim.
+          ctx.globalCompositeOperation = 'difference';
+          ctx.fillStyle = '#fff';
+          ctx.beginPath();
+          all.forEach(function (b) { if (b.r >= 1) { ctx.moveTo(b.x + b.r, b.y); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); } });
+          ctx.fill();
+          ctx.globalCompositeOperation = 'source-over';
+          ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+          ctx.lineWidth = Math.max(1, u);
+          ctx.beginPath();
+          all.forEach(function (b) { if (b.r >= 2) { ctx.moveTo(b.x + b.r, b.y); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); } });
+          ctx.stroke();
+        } else {
+          all.forEach(function (b) { drawBubble(ctx, b.x, b.y, b.r, b.film, b.spin, b.wob); });
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+        }
 
         // Pops: a ring of short dashes flying out for 0.15 s.
         ctx.strokeStyle = 'rgba(255,255,255,0.85)';

@@ -181,6 +181,9 @@
       // A one-line instruction or status for the viewer, shown as text over the preview (sharp at
       // any size, and never part of a saved photo). Only lasts for the frame that says it.
       say: function (text) { said = text; },
+      // A gesture changing one of the effect's own parameters: the value is stored like a slider
+      // move (rounded to the slider's step) and the control shows it.
+      setParam: function (id, value) { setParam(state.effectId, id, value); },
       draw: function (c, dw, dh) {
         c.save();
         if (src.mirror) { c.translate(dw, 0); c.scale(-1, 1); }
@@ -285,9 +288,8 @@
     tray.dataset.open = String(open);
     caret.setAttribute('aria-expanded', String(open));
     caret.setAttribute('aria-label', open ? 'Hide effects' : 'Show effects');
-    // Always open at the top level, so every parent tile is visible; the active effect's parent
-    // is outlined and names it, and its controls stay below.
-    if (open) showLevel(null);
+    // Reopen where you left it: the last level of the tray you were looking at.
+    if (open) showLevel(level);
   }
 
   function groupById(id) {
@@ -497,6 +499,60 @@
       });
       controls.appendChild(wrap);
     });
+    var guide = fx.guide || (Magi.effectGuides || {})[fx.id];
+    if (guide && guide.length) controls.appendChild(advancedPanel(fx, guide));
+  }
+
+  // Sets a parameter from an effect (a gesture) and updates its control if it's on screen.
+  function setParam(effectId, id, value) {
+    var fx = effectById(effectId), params = state.params[effectId];
+    if (!fx || !params) return;
+    if (id === 'mode') {
+      if (params.mode === value) return;
+      params.mode = value;
+      syncTiles();
+      if (effectId === state.effectId) buildControls();
+      return;
+    }
+    var p = null;
+    fx.params.forEach(function (q) { if (q.id === id) p = q; });
+    if (!p) return;
+    if (p.type !== 'toggle' && p.type !== 'text') {
+      var step = p.step || 1;
+      value = Math.min(p.max, Math.max(p.min, Math.round(value / step) * step));
+    }
+    if (params[id] === value) return;
+    params[id] = value;
+    var el = document.getElementById('param-' + effectId + '-' + id);
+    if (!el) return;
+    if (p.type === 'toggle') { el.setAttribute('aria-checked', String(!!value)); return; }
+    if (document.activeElement === el) return; // you're dragging it; your hand on the slider wins
+    el.value = value;
+    showValue(p, el, el.parentElement.querySelector('output'));
+    setFill(el);
+  }
+
+  // The Advanced panel under an effect's controls: how its gestures and parameters work.
+  function advancedPanel(fx, guide) {
+    var d = document.createElement('details');
+    d.className = 'advanced';
+    d.open = !!state.advancedOpen;
+    d.innerHTML = '<summary>Advanced</summary><div class="advanced-body"></div>';
+    var body = d.lastChild;
+    guide.forEach(function (line) {
+      var para = document.createElement('p');
+      var i = line.indexOf(': ');
+      if (i > 0 && i < 24) {
+        var term = document.createElement('span');
+        term.className = 'advanced-term';
+        term.textContent = line.slice(0, i);
+        para.appendChild(term);
+        para.appendChild(document.createTextNode(line.slice(i + 1)));
+      } else para.textContent = line;
+      body.appendChild(para);
+    });
+    d.addEventListener('toggle', function () { state.advancedOpen = d.open; });
+    return d;
   }
 
   // On/off switch. The label says what "on" does; the switch shows the state.

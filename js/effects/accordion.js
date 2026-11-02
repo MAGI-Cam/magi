@@ -1,7 +1,7 @@
 // Accordion: a bellows of colored panels stretched between your hands.
 //
 // The panels stand upright on the line between your two palms (the mean of the wrist and four
-// knuckles), in two stacks, one at each hand, with the middle left open for a tangle of wires.
+// knuckles), in two stacks, one at each hand, with the middle left open.
 // The panel count grows with the distance between your hands, so the bellows unfolds as you
 // pull apart and folds down to two panels as you bring your hands together. Within a stack,
 // panels shrink toward the middle by 1 − w·k^0.8 (k = 0 at the hand, 1 at the inner end), and
@@ -13,7 +13,7 @@
 // bigger, switching back below 10%), the bellows stretches in depth toward it: panels scale in
 // perspective from the far hand's relative palm size up to full size at the near hand, turn to
 // face the camera, and are drawn far to near. Rolling your palms (their mean rotation) tilts the
-// panels by 0.6 × that angle.
+// panels by 0.6 × that angle. Pinch and hold to drift the color around the hue wheel.
 (function () {
   var WRIST = 0, MIDDLE_TIP = 12;
   var DEPTH = [Math.cos(Math.PI / 6), -Math.sin(Math.PI / 6)];
@@ -25,21 +25,29 @@
   }
 
   function createAccordion() {
-    var state = null, last = 0;
-    // Wire shapes in the open middle: fixed random phases, animated by time.
-    var wires = [];
-    for (var i = 0; i < 7; i++) wires.push({ a: Math.random() * 6.28, b: Math.random() * 6.28, k: 0.6 + Math.random() * 0.9, y0: Math.random() - 0.5, y1: Math.random() - 0.5 });
-
+    var state = null, last = 0, hueAcc = 0;
     return {
       animated: true,
       render: function (frame, out, params) {
-        var W = frame.width, H = frame.height, u = frame.pxPerCss, time = frame.time / 1000;
+        var W = frame.width, H = frame.height, u = frame.pxPerCss;
         if (out.width !== W || out.height !== H) { out.width = W; out.height = H; }
         var ctx = out.getContext('2d');
         frame.draw(ctx, W, H);
         var dt = last ? Math.min(0.05, (frame.time - last) / 1000) : 1 / 60;
         last = frame.time;
         var tracker = Magi.tracking.hands, ix = Magi.interaction.read(frame), pair = ix.pair, hands = ix.hands;
+
+        // Pinch and hold (either hand): the color drifts around the hue wheel, 12% of the wheel
+        // per second, and the Color slider follows. From white, it starts at red.
+        if (hands.some(function (h) { return h.pinched; })) {
+          hueAcc += dt * 12;
+          var step = Math.floor(hueAcc);
+          if (step >= 1) {
+            hueAcc -= step;
+            var c = params.color > 0 ? params.color : 0;
+            frame.setParam('color', c + step > 100 ? 1 + (c + step - 101) % 100 : c + step);
+          }
+        } else hueAcc = 0;
 
         if (pair) {
           // The gradient starts at your left hand (handedness, not screen side). The closer hand
@@ -72,7 +80,7 @@
           var sat = params.color > 0 ? 72 : 0;
 
           // Two stacks, one at each hand, each covering STACK of the span and shrinking toward the
-          // open middle; the gap between them is where the wires tangle.
+          // open middle.
           var perSide = Math.max(1, Math.round(count / 2)), panels = [];
           for (var side = 0; side < 2; side++) {
             for (var i = 0; i < perSide; i++) {
@@ -87,30 +95,14 @@
           }
           // Left to right; in depth, far to near so nearer panels cover farther ones.
           panels.sort(function (a, b) { return state.depth > 0.5 ? a.near - b.near : a.t - b.t; });
-          var innerL = panels[perSide - 1], innerR = panels[perSide];
 
           ctx.save();
           ctx.lineJoin = 'round';
-          if (params.wires && perSide > 1) {
-            // Thin wires tangled through the open middle, between the two innermost panels.
-            var L = innerL, R = innerR;
-            var amp = Math.max(L.h, R.h) * 0.6;
-            ctx.strokeStyle = 'rgba(0,0,0,0.9)';
-            ctx.lineWidth = Math.max(1, 1.3 * u);
-            ctx.beginPath();
-            wires.forEach(function (wv) {
-              var y0 = L.y + wv.y0 * L.h * 0.5, y1 = R.y + wv.y1 * R.h * 0.5;
-              ctx.moveTo(L.x, y0);
-              ctx.bezierCurveTo(
-                L.x + (R.x - L.x) * 0.33, y0 + Math.sin(time * wv.k + wv.a) * amp,
-                L.x + (R.x - L.x) * 0.66, y1 + Math.cos(time * wv.k + wv.b) * amp,
-                R.x, y1);
-            });
-            ctx.stroke();
-          }
-          ctx.globalAlpha = params.opacity / 100;
+          // Fill at the chosen opacity; the outline stays at full strength, a crisp black line
+          // with mitred corners, so panels read cleanly even when see-through.
           ctx.strokeStyle = '#000';
-          ctx.lineWidth = Math.max(1, 1.1 * u);
+          ctx.lineJoin = 'miter';
+          ctx.lineWidth = Math.max(1, 1.25 * u);
           panels.forEach(function (pn) {
             // In depth the panels turn toward the camera (wider, less slant); roll tilts them.
             var w = pn.h * (0.72 + 0.35 * state.depth), slant = 1 - 0.6 * state.depth;
@@ -128,11 +120,12 @@
             ctx.lineTo(pn.x + hx, pn.y + pn.h / 2 + hy);
             ctx.lineTo(pn.x - hx, pn.y + pn.h / 2 - hy);
             ctx.closePath();
+            ctx.globalAlpha = params.opacity / 100;
             ctx.fill();
+            ctx.globalAlpha = 1;
             if (params.outline) ctx.stroke();
             ctx.restore();
           });
-          ctx.globalAlpha = 1;
 
           if (params.line) {
             // The measurement itself: a hairline between the palms with the normalized distance.
