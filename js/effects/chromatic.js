@@ -8,10 +8,11 @@
 //         f(t) = t^(1/3) above (6/29)³, else t/(3·(6/29)²) + 4/29. Lightness is height.
 //   HSL — a cylinder: hue is the angle, saturation the radius, lightness the height.
 //   RGB — the cube, red, green and blue on the three axes.
-// Hand: pinch and drag to turn the space like a trackball (it coasts when you let go); point with
-// your index finger alone to light up the name under its tip with its hex code; move your hand
-// closer to the camera to zoom (the Size slider follows). Tap the tile to change space.
-// With no hand the space turns slowly on its own (Spin).
+// Hand: your index fingertip turns the space (left–right spins it, up–down tips it), and the
+// thumb–index spread zooms. The name nearest your fingertip lights up with its hex code.
+// With no hand the space turns slowly on its own. Hold up 1, 2 or 3 fingers, still, for 0.7 s to
+// switch to Lab, HSL or RGB (tapping the tile still cycles them). Pinch to grab the name under
+// your fingertip and pull it out of the space; open to let it go.
 (function () {
   var THUMB_TIP = 4, INDEX_TIP = 8, FOCAL = 3;
 
@@ -64,7 +65,8 @@
 
   function createChromatic() {
     var view = { yaw: 0.6, pitch: 0.25, zoom: 1 }, last = 0;
-    var grab = null, spin = { yaw: 0, pitch: 0 };
+    var override = null, cand = null, candSince = 0, grabbed = null, switchedAt = -9;
+    var SPACES = ['lab', 'hsl', 'rgb'], SPACE_NAMES = { lab: 'Lab', hsl: 'HSL', rgb: 'RGB' };
     return {
       animated: true,
       render: function (frame, out, params) {
@@ -80,35 +82,29 @@
         last = frame.time;
 
         var tracker = Magi.tracking.hands, ix = Magi.interaction.read(frame), hd = ix.hands[0], hands = ix.hands, tip = null;
+        var e = 1 - Math.exp(-dt / 0.12), now = frame.time / 1000;
         if (hd) {
           var p = hd.points;
-          // Grab and turn: while pinched, the space follows the pinch like a trackball (moving
-          // across the frame turns it 2π), and when you let go it coasts, its spin halving every
-          // 0.6 s.
-          var gx = (p[THUMB_TIP].x + p[INDEX_TIP].x) / 2, gy = (p[THUMB_TIP].y + p[INDEX_TIP].y) / 2;
-          if (hd.pinched && grab) {
-            var dyaw = (gx - grab.x) / W * Math.PI * 2, dpitch = (gy - grab.y) / H * Math.PI;
-            view.yaw += dyaw; view.pitch = Math.max(-1.4, Math.min(1.4, view.pitch + dpitch));
-            spin = dt > 0 ? { yaw: dyaw / dt, pitch: dpitch / dt } : spin;
-          }
-          grab = hd.pinched ? { x: gx, y: gy } : null;
-          // Point (index finger only) to read the name under your fingertip.
-          if (hd.pointing) tip = p[INDEX_TIP];
-          // Zoom: bring your hand closer to the camera to enlarge the space (palm 8% → 25% of the
-          // frame height maps to Size 50 → 180), and the Size slider follows.
-          if (!hd.pinched) frame.setParam('size', 50 + 130 * Math.min(1, Math.max(0, (hd.size / H - 0.08) / 0.17)));
-        } else grab = null;
-        if (!grab) {
-          var decay = Math.pow(0.5, dt / 0.6);
-          spin.yaw *= decay; spin.pitch *= decay;
-          view.yaw += spin.yaw * dt + (hd ? 0 : (params.spin / 100) * 0.6 * dt);
-          view.pitch = Math.max(-1.4, Math.min(1.4, view.pitch + spin.pitch * dt));
+          tip = p[INDEX_TIP];
+          view.yaw += ((tip.x / W - 0.5) * Math.PI * 1.6 - view.yaw) * e;
+          view.pitch += ((tip.y / H - 0.5) * Math.PI * 0.7 - view.pitch) * e;
+          // Zoom holds while pinching, so grabbing a name doesn't zoom out.
+          if (!hd.pinched) view.zoom += (Math.min(1.8, Math.max(0.5, 0.55 + hd.pinchWith.index.distance * 0.7)) - view.zoom) * e;
+          // 1, 2 or 3 fingers held still for 0.7 s: Lab, HSL or RGB.
+          if (hd.count >= 1 && hd.count <= 3 && hd.speed < 0.3 * H && !hd.pinched) {
+            if (cand !== hd.count) { cand = hd.count; candSince = now; }
+            else if (now - candSince > 0.7 && (override || params.mode || 'lab') !== SPACES[cand - 1]) { override = SPACES[cand - 1]; switchedAt = now; }
+          } else cand = null;
+          if (!hd.pinched) grabbed = null;
+        } else {
+          view.yaw += (params.spin / 100) * 0.6 * dt;
+          grabbed = null;
         }
 
-        var space = params.mode || 'lab';
+        var space = override || params.mode || 'lab';
         // The RGB cube's corners reach √3 from its center, so it is drawn smaller to fit like the others.
         var fit = space === 'rgb' ? 1 / Math.sqrt(3) : 1;
-        var R = Math.min(W, H) * 0.36 * fit * (params.size / 100), cx = W / 2, cy = H / 2;
+        var R = Math.min(W, H) * 0.36 * fit * (params.size / 100) * view.zoom, cx = W / 2, cy = H / 2;
         var cyw = Math.cos(view.yaw), syw = Math.sin(view.yaw), cp = Math.cos(view.pitch), sp = Math.sin(view.pitch);
         function project(v) {
           var x1 = v[0] * cyw + v[2] * syw, z1 = -v[0] * syw + v[2] * cyw;
@@ -133,41 +129,59 @@
         pts.sort(function (a, b) { return b.z - a.z; }); // far to near
         var fs = Math.max(6, (params.text / 100) * 16 * u), show = params.labels / 100;
         var box = Math.max(3, 5 * u), near = null, nearD = 28 * u;
-        ctx.font = '400 ' + Math.round(fs) + 'px ' + Magi.fx.MONO;
-        ctx.textBaseline = 'middle';
+        // Names are text, so they go on the HUD layer, sharp at the screen's resolution.
+        var hud = frame.hud;
+        hud.font = '400 ' + Math.round(fs) + 'px ' + Magi.fx.MONO;
+        hud.textBaseline = 'middle';
         ctx.lineWidth = Math.max(1, u);
         pts.forEach(function (q) {
           var s = box * q.k;
           ctx.strokeStyle = q.c.css;
-          ctx.fillStyle = q.c.css;
-          ctx.globalAlpha = 0.45 + 0.55 * Math.min(1, q.k);
+          ctx.globalAlpha = hud.globalAlpha = 0.45 + 0.55 * Math.min(1, q.k);
           if (params.squares) ctx.strokeRect(q.x - s, q.y - s, s * 2, s * 2);
-          if (q.c.rank < show) ctx.fillText(q.c.name, q.x + s * 1.6, q.y);
+          if (q.c.rank < show) { hud.fillStyle = q.c.css; hud.fillText(q.c.name, q.x + s * 1.6, q.y); }
           if (tip) {
             var d = Math.hypot(q.x - tip.x, q.y - tip.y);
             if (d < nearD) { nearD = d; near = q; }
           }
         });
-        ctx.globalAlpha = 1;
+        ctx.globalAlpha = hud.globalAlpha = 1;
+        if (hd && hd.pinched && !grabbed && near) grabbed = near.c;
+        if (grabbed) {
+          // A grabbed name follows the pinch, tied to its place in the space by a thin line.
+          var gp = hd.points, gx = (gp[THUMB_TIP].x + gp[INDEX_TIP].x) / 2, gy = (gp[THUMB_TIP].y + gp[INDEX_TIP].y) / 2;
+          var home = project(grabbed.pos[space]), gb = Math.round(fs * 2.2), gl = grabbed.name + '  ' + grabbed.hex.toUpperCase();
+          ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+          ctx.beginPath(); ctx.moveTo(home[0], home[1]); ctx.lineTo(gx, gy); ctx.stroke();
+          hud.font = '400 ' + gb + 'px ' + Magi.fx.MONO;
+          var gw = hud.measureText(gl).width;
+          hud.fillStyle = grabbed.css;
+          hud.fillRect(gx - gb * 0.5, gy - gb * 1.9, gw + gb, gb * 1.5);
+          var luma = parseInt(grabbed.hex.slice(1, 3), 16) * 0.299 + parseInt(grabbed.hex.slice(3, 5), 16) * 0.587 + parseInt(grabbed.hex.slice(5, 7), 16) * 0.114;
+          hud.fillStyle = luma > 140 ? '#000' : '#fff'; // readable text on the color
+          hud.fillText(gl, gx, gy - gb * 1.15);
+          near = null;
+        }
+        if (now - switchedAt < 1.2) frame.say(SPACE_NAMES[space]);
         if (near) {
           // The color under your fingertip, named.
           var big = Math.round(fs * 1.7);
           var label = near.c.name + '  ' + near.c.hex.toUpperCase();
-          ctx.font = '400 ' + big + 'px ' + Magi.fx.MONO;
-          var lw = ctx.measureText(label).width, lx = near.x + box * 3, ly = near.y - big;
-          ctx.fillStyle = 'rgba(0,0,0,0.8)';
-          ctx.fillRect(lx - big * 0.4, ly - big * 0.75, lw + big * 0.8, big * 1.5);
+          hud.font = '400 ' + big + 'px ' + Magi.fx.MONO;
+          var lw = hud.measureText(label).width, lx = near.x + box * 3, ly = near.y - big;
+          hud.fillStyle = 'rgba(0,0,0,0.8)';
+          hud.fillRect(lx - big * 0.4, ly - big * 0.75, lw + big * 0.8, big * 1.5);
           ctx.strokeStyle = '#fff';
           ctx.strokeRect(near.x - box * 2, near.y - box * 2, box * 4, box * 4);
-          ctx.fillStyle = near.c.css;
-          ctx.fillRect(lx - big * 0.4, ly - big * 0.75, big * 0.25, big * 1.5); // the color itself, as a bar
-          ctx.fillText(label, lx, ly);
+          hud.fillStyle = near.c.css;
+          hud.fillRect(lx - big * 0.4, ly - big * 0.75, big * 0.25, big * 1.5); // the color itself, as a bar
+          hud.fillText(label, lx, ly);
         }
 
         if (tracker.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, tracker, 'hand');
-        else if (!hands.length) Magi.tracking.hint(ctx, frame, 'Pinch and drag to turn the colors, point to read a name, move your hand closer to zoom.');
+        else if (!hands.length) Magi.tracking.hint(ctx, frame, 'Point to turn the colors, spread to zoom, pinch to grab a name, hold up 1–3 fingers to change space.');
       },
-      reset: function () { last = 0; grab = null; spin = { yaw: 0, pitch: 0 }; }
+      reset: function () { last = 0; override = null; cand = null; grabbed = null; }
     };
   }
 

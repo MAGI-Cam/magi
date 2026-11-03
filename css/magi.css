@@ -73,6 +73,9 @@ svg {
 
 .view.is-reduced { image-rendering: auto; }
 
+/* Text drawn by effects, at the screen's own resolution, exactly over the preview. */
+.hud { position: absolute; left: 0; top: 0; pointer-events: none; }
+
 .review-video {
   position: absolute;
   inset: 0;

@@ -8,7 +8,7 @@
 // refreshed, but only inside the zone around your hand.
 //
 // Hand: the zone sits between thumb and index fingertip and grows as they spread apart.
-// Pinch them together and the whole picture snaps clean, like a fresh I-frame.
+// Clap your hands and the whole picture snaps clean, like a fresh I-frame.
 // Scale multiplies the vectors; Hold sets how long the smear stays before it unwinds, block by
 // block, in the reverse of the order it was moshed.
 (function () {
@@ -25,7 +25,7 @@
     var est = document.createElement('canvas'), ectx = est.getContext('2d', { willReadFrequently: true });
     var prevLuma = null, luma = null, key = '', front = 0, lastSeen = 0;
     // Per block: entry order while moshing (−1 = clean), and when it should restore.
-    var order = null, restoreAt = null, counter = 0, fresh = true;
+    var order = null, restoreAt = null, counter = 0, fresh = true, seenClap = 0;
 
     // Sum of absolute differences between the current 8×8 block at (bx, by) and the previous
     // frame's block offset by (dx, dy), in estimation pixels. Offsets past the edge clamp.
@@ -96,8 +96,11 @@
         hands.forEach(function (p) {
           var a = p[THUMB_TIP], b = p[INDEX_TIP];
           var spread = Math.hypot(a.x - b.x, a.y - b.y);
-          if (spread < 0.035 * w) pinched = true;
           zones.push({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, r: spread * reach + B });
+        });
+        // A clap (Interaction Engine) snaps the picture clean.
+        Magi.interaction.read(frame).events.forEach(function (e) {
+          if (e.type === 'clap' && e.n > seenClap) { seenClap = e.n; pinched = true; }
         });
         if (hands.length) lastSeen = frame.time;
 
@@ -166,7 +169,7 @@
         if (tracker.status() !== 'ready') {
           Magi.tracking.drawStatus(octx, frame, tracker, 'hand');
         } else if (frame.time - lastSeen > 1500) {
-          Magi.tracking.hint(octx, frame, 'Raise a hand. Spread to mosh, pinch to clear.');
+          Magi.tracking.hint(octx, frame, 'Raise a hand. Spread to mosh, clap to clear.');
         }
       },
       reset: function () { key = ''; }

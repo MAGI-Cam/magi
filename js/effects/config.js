@@ -132,12 +132,15 @@ Magi.effectConfig = [
       { id: 'acid', name: 'Acid' },
       { id: 'thermal', name: 'Thermal' },
       { id: 'invert', name: 'Invert' },
+      { id: 'blur', name: 'Blur' },
       { id: 'print', name: 'Print' },
       { id: 'code', name: 'Code' }
     ],
     // `modes` on a parameter shows it only in those modes.
     params: [
-      { id: 'bands', label: 'Bands', min: 1, max: 12, step: 1, default: 3, modes: ['acid', 'thermal'] },
+      { id: 'bands', label: 'Bands', min: 1, max: 12, step: 1, default: 1, modes: ['acid', 'thermal'] },
+      { id: 'blur', label: 'Blur', min: 0, max: 100, step: 1, default: 40, modes: ['blur'] },
+      { id: 'frost', label: 'Frosted', type: 'toggle', default: false, modes: ['blur'], hint: 'Frosted glass: scattered, hazy and grainy.' },
       { id: 'speed', label: 'Speed', min: 0, max: 100, step: 1, default: 30, modes: ['acid', 'thermal'] },
       { id: 'sheets', label: 'Sheets', min: 1, max: 4, step: 1, default: 1, modes: ['print'] },
       { id: 'dots', label: 'Dots', min: 1, max: 9, step: 1, default: 4, modes: ['print'] },
@@ -147,6 +150,7 @@ Magi.effectConfig = [
       { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue', modes: ['code'] },
       { id: 'lock', label: 'Lock', type: 'toggle', default: true, modes: ['code'], hint: 'On: corners stay where you let go of them; a fist frees that hand’s corner. Off: the box follows your pinches.' },
       { id: 'outside', label: 'Outside', type: 'toggle', default: false, modes: ['code'], hint: 'Code everything outside the box; the box stays live.' },
+      { id: 'solid', label: 'Solid', type: 'toggle', default: false, modes: ['code'], hint: 'Fill the area with one flat color (Color) instead of code.' },
       toggle('skeleton', 'Skeleton', false, 'Draw the hand skeleton.')
     ]
   },
@@ -164,6 +168,20 @@ Magi.effectConfig = [
     ]
   },
   {
+    id: 'web',
+    name: 'Web',
+    group: 'hand',
+    ready: true,
+    photoType: 'image/jpeg',
+    params: [
+      range('rings', 'Rings', 0, 5, 3),
+      range('sag', 'Sag', 0, 100, 35),
+      range('particles', 'Particles', 0, 100, 50),
+      range('glow', 'Glow', 0, 100, 60),
+      { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' }
+    ]
+  },
+  {
     id: 'bubbles',
     name: 'Bubbles',
     group: 'hand',
@@ -171,7 +189,8 @@ Magi.effectConfig = [
     photoType: 'image/jpeg',
     modes: [
       { id: 'soap', name: 'Soap' },
-      { id: 'inverse', name: 'Inverse' }
+      { id: 'inverse', name: 'Inverse' },
+      { id: 'electro', name: 'Electrokinetic' }
     ],
     params: [
       range('amount', 'Amount', 0, 100, 60),
@@ -190,10 +209,11 @@ Magi.effectConfig = [
     ready: true,
     photoType: 'image/jpeg',
     params: [
-      range('claw', 'Claw', 0, 100, 35),
+      range('claw', 'Talons', 0, 100, 35),
+      range('size', 'Size', 0, 100, 50),
       range('offsetX', 'X', -100, 100, 0),
-      range('offsetY', 'Y', -100, 100, 0),
-      range('glow', 'Glow', 0, 100, 60),
+      range('offsetY', 'Y', -100, 100, -7),
+      range('glow', 'Glow', 0, 100, 80),
       toggle('glyphs', 'Glyphs', true, 'Show the drifting HUD brackets around the hand.'),
       { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 35, track: 'hue' }
     ]
@@ -210,6 +230,7 @@ Magi.effectConfig = [
       range('particles', 'Particles', 500, 3000, 1200),
       range('gravity', 'Gravity', 0, 100, 60),
       range('viscosity', 'Viscosity', 0, 100, 20),
+      range('orbit', 'Orbit', 0, 100, 0),
       range('spin', 'Spin', 0, 100, 15),
       { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 9, track: 'hue' },
       toggle('outline', 'Cube', true, 'Draw the cube’s edges.'),
@@ -299,7 +320,6 @@ Magi.effectConfig = [
       range('scale', 'Scale', 1, 100, 30),
       toggle('phrase', 'Phrase', false, 'On: each tear is the whole phrase. Off: one symbol at a time.'),
       toggle('pool', 'Pool', true, 'On: tokens pile up at the bottom of the frame. Off: they fall through.'),
-      toggle('inverse', 'Inverse', false, 'Tokens invert the colors beneath them.'),
       COLOR
     ]
   },
@@ -309,19 +329,13 @@ Magi.effectConfig = [
     group: 'face',
     ready: true,
     photoType: 'image/jpeg',
-    modes: [
-      { id: 'eye', name: 'Eye' },
-      { id: 'features', name: 'Features' }
-    ],
     params: [
       range('rate', 'Rate', 0, 100, 50),
       range('count', 'Count', 3, 100, 12),
       range('size', 'Size', 0, 100, 40),
-      range('radius', 'Radius', 10, 100, 45),
-      range('spacing', 'Spacing', 0, 100, 0),
       range('posX', 'X', -100, 100, 0),
       range('posY', 'Y', -100, 100, 0),
-      toggle('sphere', 'Sphere', true, 'On: copies on a sphere around your head. Off: a flat spiral.'),
+      toggle('sphere', 'Sphere', true, 'Show the wireframe sphere on your palm.'),
       toggle('mono', 'Mono', true, 'Gray camera with film grain.')
     ]
   },
@@ -341,8 +355,9 @@ Magi.effectConfig = [
       range('block', 'Block', 1, 9, 3),
       range('speed', 'Speed', 0, 100, 40),
       { id: 'spread', label: 'Spread', min: 0, max: 100, step: 1, default: 40, modes: ['dissolve'] },
-      { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue', modes: ['blocks', 'dissolve'] },
-      { id: 'depth', label: 'Depth', type: 'toggle', default: false, modes: ['blocks', 'dissolve'], hint: 'Bigger blocks where you are closer to the camera.' },
+      range('profile', 'Profile', 0, 5, 0),
+      { id: 'depth', label: 'Depth', type: 'toggle', default: false, modes: ['blocks', 'dissolve'], hint: 'Bigger blocks the closer you are to the camera.' },
+      { id: 'neon', label: 'Overexposed', type: 'toggle', default: true, modes: ['blocks'], hint: 'Include blown-out blocks decoded at 1 bit per channel.' },
       toggle('hand', 'Hand', true, 'Your hand controls the glitch; a fist stops it. Off: a steady glitch at Amount.')
     ]
   },
@@ -411,21 +426,23 @@ Magi.effectGuides = {
   ],
   mosh: [
     'Spread thumb and index: the zone between them moshes; spreading wider makes it bigger.',
-    'Pinch: snaps the picture clean, like a fresh keyframe.',
+    'Clap your hands: snaps the picture clean, like a fresh keyframe.',
     'Scale: how far motion vectors push. Block: macroblock size. Hold: how long the smear lasts before it unwinds. Reach: zone size.'
   ],
   'pinch-frame': [
-    'Acid, Thermal, Invert: make an L with thumb and index on both hands; the window between them changes color. Bands and Speed shape the colors.',
+    'Acid, Thermal, Invert, Blur: make an L with thumb and index on both hands; the window between them changes. Bands and Speed shape Acid and Thermal.',
+    'Blur: how soft the window is. Frosted: frosted glass, scattered, hazy and grainy.',
     'Print: hold a sheet by its corners, index fingers on top, thumbs below. Twist to fold it; a side that turns over shows its back.',
     'Sheets: 1 is the folding print. 2–4 give each finger its own sheet (index, middle, ring, pinky), in overprinting riso inks.',
     'Dots, Grain, Shift: halftone size, riso grain, ink misregistration.',
-    'Code: pinch with both hands to span a box, read out as 1-bit code. Cells: block size (an open hand’s spread sets it). Color: ink.',
+    'Code: pinch with both hands to span a box, read out as 1-bit code. Cells: block size. Color: ink.',
     'Lock: on, corners stay where you let go; a fist frees that hand’s corner until your next pinch. Off: the box follows your pinches.',
-    'Outside: codes everything outside the box instead.',
+    'Outside: codes everything outside the box instead. Solid: fills the area with one flat color.',
     'Skeleton: draws the tracked hands.'
   ],
   wisp: [
     'Move your fingers through the picture: the video itself swirls and drags like smoke where they pass, then settles. A still hand does nothing.',
+    'Pinch: sucks the picture back to normal quickly.',
     'Trail: how long the swirl lasts. Flow: how strongly your motion drags the picture.',
     'Swirl: extra curling where you’ve moved. Rise: how much the disturbance drifts upward, like smoke.'
   ],
@@ -433,36 +450,37 @@ Magi.effectGuides = {
     'Wave your fingers: faster fingers blow more bubbles.',
     'Pinch thumb and index and hold: a bubble grows at your fingertips; open to let it float off.',
     'Pop: a bubble pops when its life runs out (2–5 s, longer for blown ones) or, with Pop on, when a fingertip touches it.',
-    'Modes: Soap (lit soap film) or Inverse (inverts the video under each bubble).',
+    'Modes: Soap (lit soap film), Inverse (inverts the video under each bubble), Electrokinetic (the video as dot glazing inside each bubble).',
     'Amount, Size: how many and how big. Float: how fast they rise. Wind: how much the air swirls.'
   ],
   claw: [
-    'Raise a hand: a 3D armature follows it. Curl a finger to retract its talon; open to extend it.',
-    'Claw: talon length. X, Y: move the whole rig away from your hand.',
-    'Glow: bloom on the lines. Glyphs: floating HUD brackets. Color: accent color.'
+    'Raise a hand: a 3D armature follows it, drawn slightly ahead so it keeps up. Curl a finger to retract its talon; open to extend it.',
+    'Talons: talon length. Size: the whole rig’s size. X, Y: move the rig away from your hand.',
+    'Glow: bloom on the lines. Glyphs: HUD brackets orbiting the palm. Color: accent color.'
   ],
   'fluid-cube': [
     'Point: the cube floats at your index fingertip and turns as your hand turns. Bring your hand closer to make it bigger.',
+    'Two hands: bring the other index fingertip closer to the cube and it moves over to that hand.',
     'Flick: throws the fluid. Shake: churns it. Tilting pours it, since gravity stays screen-down.',
-    'Size, Particles, Gravity, Viscosity: the cube and its fluid. Spin: turning with no hand.',
+    'Orbit: keeps the cube turning on its own axis. Size, Particles, Gravity, Viscosity: the cube and its fluid. Spin: turning with no hand.',
     'Cube, Glow, Readouts: edges, additive light, on-screen numbers. Color: fluid color.'
   ],
   accordion: [
     'Hold up both hands: a bellows of panels spans them. Pull apart to open it, bring them together to fold it.',
     'Bring one hand closer to the camera: the bellows stretches in depth toward it. Roll your palms to tilt the panels.',
-    'Pinch and hold: the color drifts around the wheel (the Color slider follows).',
+    'Pinch and hold: the color drifts around the wheel (the Color slider follows); pinch with both hands for twice the speed.',
     'Panels, Waist, Size: count, middle narrowing, height. Spread: hue range. Opacity, Outline, Line: fill, edges, distance readout.'
   ],
   tutting: [
-    'Hold up both hands: a volume of image tiles fills the box between your palms; side by side a slab, stacked a column.',
-    'Flick a hand down: that side of the volume turns over like a Rubik’s cube layer.',
+    'Hold up both hands: a volume of image tiles fills the box between your palms; side by side a slab, stacked a column. It holds when your hands come together.',
+    'Flick a hand down or up: that side of the volume turns over like a Rubik’s cube layer.',
     'Modes: Scatter (pieces of the room) or Behind (what’s behind each tile).',
     'Tiles, Size, Fan, Depth, Drift: count, tile size, page turn, perspective, float. Dim: darkens the camera. Edges: tile outlines.'
   ],
   chromatic: [
-    'Pinch and drag: turns the color space like a trackball; let go and it coasts.',
-    'Point with your index finger: names the color under your fingertip, with its hex.',
-    'Move your hand closer or farther: zooms (the Size slider follows). Tap the tile to change space: Lab, HSL, RGB.',
+    'Point: your index fingertip turns the space (left–right spins it, up–down tips it).',
+    'Spread thumb and index: zooms. Pinch: grabs the name under your fingertip and pulls it out.',
+    'Hold up 1, 2 or 3 fingers, still: switches to Lab, HSL or RGB (tapping the tile does too).',
     'Labels, Text: how many names and how big. Spin: turning with no hand. Dim, Squares, Axes: background, color squares, axes.'
   ],
   'face-landmarks': [
@@ -472,19 +490,19 @@ Magi.effectGuides = {
   'token-cry': [
     'Face the camera: your text falls from your eyes as tears, following your head.',
     'Text: what falls. Speed: how fast. Scale: size relative to your eyes.',
-    'Phrase: whole phrase per tear, or one symbol at a time. Pool: pile up or fall through. Inverse: tokens invert what’s behind them. Color: token color.'
+    'Phrase: whole phrase per tear, or one symbol at a time. Pool: pile up or fall through. Color: token color.'
   ],
   collage: [
-    'Face the camera and raise a hand: snapshots of your eye pile up around your head. Lower your hand and they fly back.',
-    'Pinch: sphere size (Radius follows). Spread fingers: spacing (Spacing follows). Roll your hand: spins the sphere.',
-    'Modes: Eye, or Features (eyes, mouth, nose in turn).',
-    'Rate, Count, Size: how fast, how many, how big. X, Y: sphere position. Sphere: off lays them flat. Mono: gray with grain.'
+    'Face the camera and raise a hand: snapshots of your eyes, mouth and nose pile onto a sphere around your head. The source box stays on your right eye. Lower your hand and they fly back.',
+    'Pinch: sphere size. Spread fingers: spacing between copies.',
+    'Orbit: palm square to the camera, nothing turns; turn your hand and hold, and the sphere keeps turning that way.',
+    'Rate, Count, Size: how fast, how many, how big. Sphere: shows the wireframe sphere on your palm; X, Y move it from your hand. Mono: gray with grain.'
   ],
   glitch: [
-    'Your body glitches inside its outline. A fist stops the glitch; open your hand to start it again. A swipe bursts.',
-    'Split: two seams cross at your hand; each tile slips and splits its red, green and blue.',
-    'Blocks, Dissolve: raise your hand higher to glitch harder. Spread (Dissolve): how far pieces scatter.',
-    'Color: a color profile for the damage. Depth: bigger blocks where you’re closer to the camera.',
+    'Your body glitches inside its outline. A fist stops the glitch; a pinch freezes it until you let go; a swipe bursts.',
+    'Split: two seams cross at your hand; each tile slips and splits its colors.',
+    'Blocks, Dissolve: raise your hand higher to glitch harder. Spread (Dissolve): how far pieces scatter. Overexposed (Blocks): blown-out neon blocks.',
+    'Profile: 0 natural, 1 neon, 2–5 two-ink looks (red/cyan, magenta/green, gold/blue, black/white). Depth: bigger blocks the closer you are.',
     'Amount, Block, Speed: strength, damage size, how often it changes. Hand: off for a steady glitch.'
   ],
   'facade-interactive': [
@@ -495,5 +513,12 @@ Magi.effectGuides = {
   'facade-electrokinetic': [
     'How it works: pixel glazing; colored particles spread over each cell in proportion to the light behind it. Tap the tile to change shape.',
     'Scale, Response, Speed, Shade: as in Interactive. Saturation: image color. Color: hue rotation.'
+  ],
+  web: [
+    'Raise a hand: threads run from your palm to each fingertip and between neighboring fingertips, with rings like an orb web.',
+    'Two hands: threads join matching fingertips across your hands, with rings between them.',
+    'Pinch: draws a taut thumb–index thread; let go and the web gets plucked.',
+    'Threads sag and swing as you move: real rope physics, pinned to your fingers.',
+    'Rings: how many rings. Sag: how much threads droop. Particles: specks running along threads. Glow, Color: light and color.'
   ]
 };

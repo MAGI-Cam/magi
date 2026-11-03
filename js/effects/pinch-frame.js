@@ -35,7 +35,9 @@
 //             hands open the box and its code hold still; a fist frees that hand's corner to
 //             follow it until the next pinch. Lock off: corners follow the pinches live. Outside
 //             codes everything but the box. An open hand's finger spread sets Cells; Color tints
-//             the set bits.
+//             the set bits; Solid fills the area with that color instead of code.
+//   Blur    — the L-hand window shows the camera blurred (24-sample golden-angle disc); Frosted
+//             adds frosted glass's random micro-facet offsets, haze and grain.
 (function () {
   var THUMB_TIP = 4, INDEX_TIP = 8;
   var THERMAL = [[0, 0, 4], [40, 11, 84], [101, 21, 110], [159, 42, 99], [212, 72, 66], [245, 125, 21], [250, 193, 39], [252, 255, 164]];
@@ -332,9 +334,6 @@
       var live = !params.lock || slots.length < 2 || hands.some(function (h) { return h.pinched; }) || slots.some(function (sl) { return sl.free; });
       var wasFrozen = frozen;
       frozen = !live;
-      // An open hand (not pinching, not a fist) sets the cell size with its finger spread.
-      var open = hands.filter(function (h) { return !h.pinched && !h.fist; })[0];
-      if (open && params.lock) frame.setParam('cells', 1 + open.spread * 8);
 
       var x0 = Math.max(0, Math.min(corners[0].x, corners[1].x)), x1 = Math.min(W, Math.max(corners[0].x, corners[1].x));
       var y0 = Math.max(0, Math.min(corners[0].y, corners[1].y)), y1 = Math.min(H, Math.max(corners[0].y, corners[1].y));
@@ -345,10 +344,16 @@
       if (bw >= 2 && bh >= 2) {
         // Inside: the box is the code. Outside: everything but the box is, and the box stays live.
         var rx = params.outside ? 0 : x0, ry = params.outside ? 0 : y0, rw = params.outside ? W : bw, rh = params.outside ? H : bh;
-        if (!(frozen && wasFrozen && bits.width > 0)) encode(frame, rx, ry, rw, rh, (3 + params.cells * 2.5) * u, ink);
-        ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(bits, rx, ry, rw, rh);
-        ctx.imageSmoothingEnabled = true;
+        if (params.solid) {
+          // Solid: the area is one flat color instead of code.
+          ctx.fillStyle = 'rgb(' + ink.join(',') + ')';
+          ctx.fillRect(rx, ry, rw, rh);
+        } else {
+          if (!(frozen && wasFrozen && bits.width > 0)) encode(frame, rx, ry, rw, rh, (3 + params.cells * 2.5) * u, ink);
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(bits, rx, ry, rw, rh);
+          ctx.imageSmoothingEnabled = true;
+        }
         if (params.outside) {
           ctx.save();
           ctx.beginPath(); ctx.rect(x0, y0, bw, bh); ctx.clip();
@@ -371,28 +376,56 @@
       ctx.stroke();
 
       // Corner markers (hollow when free) and their normalized coordinates, full precision.
-      var fs = Math.round(8 * u), sq = 5 * u;
+      var fs = Math.round(8 * u), sq = 5 * u, hud = frame.hud;
       ctx.fillStyle = '#fff';
       ctx.strokeStyle = '#fff';
-      ctx.font = fs + 'px ' + Magi.fx.MONO;
-      ctx.textBaseline = 'top';
+      hud.fillStyle = '#fff';
+      hud.font = fs + 'px ' + Magi.fx.MONO;
+      hud.textBaseline = 'top';
       corners.forEach(function (c) {
         if (c.free && params.lock) ctx.strokeRect(c.x - sq / 2, c.y - sq / 2, sq, sq);
         else ctx.fillRect(c.x - sq / 2, c.y - sq / 2, sq, sq);
         var left = c.x > W * 0.7, above = c.y > H * 0.85;
-        ctx.textAlign = left ? 'right' : 'left';
+        hud.textAlign = left ? 'right' : 'left';
         var tx = c.x + (left ? -sq : sq), ty = c.y + (above ? -fs * 2.6 : sq);
-        ctx.fillText(String(c.x / W), tx, ty);
-        ctx.fillText(String(c.y / H), tx, ty + fs * 1.2);
+        hud.fillText(String(c.x / W), tx, ty);
+        hud.fillText(String(c.y / H), tx, ty + fs * 1.2);
       });
-      if (frozen) { ctx.textAlign = 'left'; ctx.fillText('locked', x0, Math.max(0, y0 - fs * 1.4)); }
+      if (frozen) { hud.textAlign = 'left'; hud.fillText('locked', x0, Math.max(0, y0 - fs * 1.4)); }
       ctx.restore();
       return true;
     };
   }
 
+  // Blur: 24 samples on a golden-angle (Vogel) disc of the given radius, weighted toward the
+  // center, an even approximation of a lens blur. Frosted adds what frosted glass does: each pixel
+  // looks through a randomly tilted micro-facet (a random offset of 0.6 × the radius, fixed per
+  // pixel), a milky haze (12% toward white) and fine grain.
+  var BLUR_FRAG = [
+    'precision highp float;',
+    'uniform sampler2D cam;',
+    'uniform vec2 size;',
+    'uniform float radius, frost, seed;',
+    'varying vec2 uv;',
+    'float hash(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }',
+    'void main() {',
+    '  vec2 px = uv * size;',
+    '  if (frost > 0.5) px += (vec2(hash(floor(px)), hash(floor(px) + 17.0)) - 0.5) * 1.2 * radius;',
+    '  vec3 sum = vec3(0.0); float wsum = 0.0;',
+    '  for (int i = 0; i < 24; i++) {',
+    '    float r = sqrt((float(i) + 0.5) / 24.0), a = float(i) * 2.39996;',
+    '    float w = 1.0 - 0.5 * r;',
+    '    sum += texture2D(cam, clamp((px + vec2(cos(a), sin(a)) * r * radius) / size, 0.0, 1.0)).rgb * w;',
+    '    wsum += w;',
+    '  }',
+    '  vec3 c = sum / wsum;',
+    '  if (frost > 0.5) c = mix(c, vec3(0.92), 0.12) + (hash(px + seed) - 0.5) * 0.05;',
+    '  gl_FragColor = vec4(c, 1.0);',
+    '}'
+  ].join('\n');
+
   function createPinchFrame() {
-    var drawPrint = null, drawCode = null, drawLayers = null;
+    var drawPrint = null, drawCode = null, drawLayers = null, blurPass;
     var work = document.createElement('canvas'), wctx = work.getContext('2d', { willReadFrequently: true });
     var tint = document.createElement('canvas'), tctx = tint.getContext('2d');
     var lut = new Uint8ClampedArray(256 * 3);
@@ -440,7 +473,21 @@
           var x1 = Math.min(W, Math.ceil(Math.max.apply(null, pts.map(function (p) { return p.x; }))));
           var y1 = Math.min(H, Math.ceil(Math.max.apply(null, pts.map(function (p) { return p.y; }))));
           var bw = x1 - x0, bh = y1 - y0;
-          if (bw > 2 && bh > 2) {
+          if (bw > 2 && bh > 2 && params.mode === 'blur') {
+            // Blur: the window shows the camera through a soft (or frosted) pane.
+            if (blurPass === undefined) blurPass = Magi.fx.shaderPass(BLUR_FRAG, ['cam']);
+            if (blurPass) {
+              blurPass.texture('cam', out);
+              blurPass.run(W, H, { size: [W, H], radius: (2 + params.blur / 100 * 30) * Math.max(W, H) / 1280, frost: params.frost ? 1 : 0, seed: frame.time % 1000 });
+              ctx.save();
+              ctx.beginPath();
+              pts.forEach(function (p, k) { k ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y); });
+              ctx.closePath();
+              ctx.clip();
+              ctx.drawImage(blurPass.canvas, 0, 0);
+              ctx.restore();
+            }
+          } else if (bw > 2 && bh > 2) {
             if (work.width !== W || work.height !== H) { work.width = W; work.height = H; }
             frame.draw(wctx, W, H);
             var img = wctx.getImageData(x0, y0, bw, bh), d = img.data;

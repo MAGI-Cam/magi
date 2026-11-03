@@ -7,9 +7,10 @@
 // Each tile turns about the vertical axis like a page of an open book, by θ = (π/2)(1 − |x|)
 // from the edges in, so its visible width is w·sin(π|x|/2): full at the sides, an edge-on
 // sliver at the center. Fan sets how strongly they turn.
-// Flick a hand down (Interaction Engine) and that side of the volume turns 90° like a Rubik's cube
-// layer, its front going down, over 0.35 s (smoothstep easing); the tiles keep the new places,
-// (y, z) → (−z, y). Left hand turns the left half, right hand the right half.
+// Flick a hand down or up (Interaction Engine; a quick vertical swipe counts too) and that side of
+// the volume turns 90° like a Rubik's cube layer, its front going down or up, over 0.35 s
+// (smoothstep easing); the tiles keep the new places. The hand on the left of the screen turns the
+// left half, the one on the right the right half. With fewer than two hands the volume holds.
 // Tiles show the camera itself, no outside images. Scatter: each tile keeps a piece of the room
 // from somewhere in the frame. Behind: each tile shows what is behind it, shifted by its depth,
 // like a pane of thick glass.
@@ -53,19 +54,27 @@
         last = frame.time;
 
         var tracker = Magi.tracking.hands, hands = tracker.detect(frame), ix = Magi.interaction.read(frame);
-        // A downward flick turns that hand's half of the volume like a Rubik's cube layer.
+        // A flick (or quick swipe) down or up turns that hand's half of the volume like a Rubik's
+        // cube layer, down or up. The half is the side of the screen the hand is on.
         ix.events.forEach(function (e) {
           if (e.n <= seenEvent) return;
           seenEvent = e.n;
-          if (e.type !== 'flick' || e.dir !== 'down') return;
-          var side = e.side === 'left' ? -1 : 1;
-          if (!turns.some(function (tn) { return tn.side === side; })) turns.push({ side: side, t: 0 });
+          if ((e.type !== 'flick' && e.type !== 'swipe') || (e.dir !== 'down' && e.dir !== 'up')) return;
+          var hd = ix.hands.filter(function (h) { return h.id === e.hand; })[0];
+          if (!hd) return;
+          var mid = ix.pair ? ix.pair.midpoint.x : (box ? box.x : W / 2);
+          var side = hd.center.x < mid ? -1 : 1;
+          if (!turns.some(function (tn) { return tn.side === side; })) turns.push({ side: side, t: 0, dir: e.dir === 'down' ? 1 : -1 });
         });
         turns = turns.filter(function (tn) {
           tn.t += dt / 0.35;
           if (tn.t < 1) return true;
-          // Done: the half's tiles keep their new places, (y, z) → (−z, y).
-          tiles.forEach(function (q) { if ((q.x < 0 ? -1 : 1) === tn.side) { var y = q.y; q.y = -q.z; q.z = y; } });
+          // Done: the half's tiles keep their new places, (y, z) → (−z, y) turning down, (z, −y) up.
+          tiles.forEach(function (q) {
+            if ((q.x < 0 ? -1 : 1) !== tn.side) return;
+            var y = q.y;
+            if (tn.dir > 0) { q.y = -q.z; q.z = y; } else { q.y = q.z; q.z = -y; }
+          });
           return false;
         });
         if (hands.length >= 2) {
@@ -76,9 +85,9 @@
           if (!box) box = want;
           var e = 1 - Math.exp(-dt / 0.07);
           Object.keys(want).forEach(function (k) { box[k] += (want[k] - box[k]) * e; });
-        } else {
-          box = null;
         }
+        // Fewer than two hands (hands together, a clap, one hand out of view): the volume holds
+        // its last shape until both hands are back.
 
         if (box) {
           if (params.dim) {
@@ -93,7 +102,7 @@
             // A turning half rotates about the horizontal axis, its front going down.
             turns.forEach(function (tn) {
               if ((q.x < 0 ? -1 : 1) !== tn.side) return;
-              var a = smoothstep(tn.t) * Math.PI / 2, c = Math.cos(a), s = Math.sin(a), y0 = y;
+              var a = tn.dir * smoothstep(tn.t) * Math.PI / 2, c = Math.cos(a), s = Math.sin(a), y0 = y;
               y = y0 * c - z * s; z = y0 * s + z * c;
             });
             var k = FOCAL / (FOCAL + z * depth);
@@ -126,7 +135,7 @@
         }
 
         if (tracker.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, tracker, 'hand');
-        else if (hands.length < 2) Magi.tracking.hint(ctx, frame, 'Hold up both hands. Move them apart, together, above and below.');
+        else if (!box) Magi.tracking.hint(ctx, frame, 'Hold up both hands. Move them apart, together, above and below.');
       },
       reset: function () { last = 0; box = null; turns = []; }
     };

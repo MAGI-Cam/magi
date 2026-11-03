@@ -224,6 +224,20 @@
         }
         return last;
       },
+      // The hands extrapolated to now: each point plus its filtered velocity (the One Euro
+      // filter's speed estimate, px/s) × (time since the detection + lead), at most 0.1 s ahead.
+      // For drawing that should keep up with fast moves. Hands only; same order as detect().
+      predicted: function (frame, lead) {
+        if (kind !== 'hands') return last;
+        var ahead = Math.max(0, Math.min(0.1, (frame.time - lastTs) / 1000 + (lead || 0)));
+        return tracks.map(function (t) {
+          var f = filters[t.id];
+          return t.points.map(function (q, i) {
+            if (!f || !f[i]) return q;
+            return { x: q.x + f[i][0].dx * ahead, y: q.y + f[i][1].dx * ahead, z: q.z };
+          });
+        });
+      },
       // Extra results for the latest detection, parallel to detect()'s array:
       // hands: { label: 'Left' | 'Right', score, key (stable per hand), world (metric points) };
       // face: { blendshapes: [{ categoryName, score }], matrix: 4×4 column-major head transform }.

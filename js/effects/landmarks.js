@@ -14,7 +14,9 @@
 
   function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
 
+  // Readout boxes go on the HUD layer, so their text is sharp at the screen's resolution.
   function label(ctx, frame, lines, x, y) {
+    ctx = frame.hud;
     var s = Math.round(11 * frame.pxPerCss), pad = Math.round(s * 0.5), lh = Math.round(s * 1.35);
     ctx.save();
     ctx.font = '400 ' + s + 'px ' + Magi.fx.MONO;
@@ -128,16 +130,16 @@
           marks.forEach(function (m) { ctx.moveTo(m[0].x, m[0].y); ctx.lineTo(m[1].x, m[1].y); });
           ctx.stroke();
           ctx.setLineDash([]);
-          var fsz = Math.round(9 * u);
-          ctx.font = '400 ' + fsz + 'px ' + Magi.fx.MONO;
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
+          var fsz = Math.round(9 * u), hud = frame.hud;
+          hud.font = '400 ' + fsz + 'px ' + Magi.fx.MONO;
+          hud.textAlign = 'center';
+          hud.textBaseline = 'middle';
           marks.forEach(function (m) {
-            var mx = (m[0].x + m[1].x) / 2, my = (m[0].y + m[1].y) / 2, tw = ctx.measureText(m[2]).width + fsz * 0.6;
-            ctx.fillStyle = 'rgba(0,0,0,0.62)';
-            ctx.fillRect(mx - tw / 2, my - fsz * 0.7, tw, fsz * 1.4);
-            ctx.fillStyle = '#fff';
-            ctx.fillText(m[2], mx, my);
+            var mx = (m[0].x + m[1].x) / 2, my = (m[0].y + m[1].y) / 2, tw = hud.measureText(m[2]).width + fsz * 0.6;
+            hud.fillStyle = 'rgba(0,0,0,0.62)';
+            hud.fillRect(mx - tw / 2, my - fsz * 0.7, tw, fsz * 1.4);
+            hud.fillStyle = '#fff';
+            hud.fillText(m[2], mx, my);
           });
           ctx.restore();
         }

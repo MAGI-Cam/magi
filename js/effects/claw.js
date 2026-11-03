@@ -1,6 +1,8 @@
 // Claw: your hand as a 3D rig, built like an armature in a 3D animation tool.
 //
-// X and Y offset the whole rig from the hand, in palm lengths.
+// X and Y offset the whole rig from the hand, in palm lengths; Size scales it about the palm.
+// To keep up with the hand, the rig is drawn from landmarks extrapolated a little ahead: each
+// joint's position plus its One Euro–filtered velocity × (time since detection + 30 ms).
 // Every chain starts at one root low in the palm (0.75 of the way from the knuckles' mean to the wrist)
 // and runs root → knuckle → joint → joint → fingertip (the thumb: root → base → … → tip). Each
 // link is an octahedral bone, the diamond-shaped bone of Blender and Maya: from its head it widens
@@ -98,8 +100,11 @@
 
   function createClaw() {
     var glyphs = [];
+    // Glyphs orbit the palm on ellipses (radius 1.3–2.6 palm lengths, 0.25–0.6 rad/s, half of them
+    // the other way), fading in and out slowly instead of blinking.
     for (var i = 0; i < GLYPHS_PER_HAND * 2; i++) {
-      glyphs.push({ a: -0.6 + Math.random() * 3.2, b: (Math.random() - 0.5) * 4.4, shape: i % 5, phase: Math.random() * 10, rate: 0.5 + Math.random() * 1.2 });
+      glyphs.push({ r: 1.3 + Math.random() * 1.3, a0: Math.random() * Math.PI * 2, w: (0.25 + Math.random() * 0.35) * (i % 2 ? 1 : -1),
+        squash: 0.55 + Math.random() * 0.3, shape: i % 5, phase: Math.random() * 10, rate: 0.3 + Math.random() * 0.4 });
     }
 
     return {
@@ -109,18 +114,25 @@
         if (out.width !== W || out.height !== H) { out.width = W; out.height = H; }
         var ctx = out.getContext('2d');
         frame.draw(ctx, W, H);
-        var tracker = Magi.tracking.hands, hands = tracker.detect(frame), ix = Magi.interaction.read(frame);
+        // Drawn slightly ahead of the last detection (each joint's filtered velocity × the time
+        // since it, plus 30 ms for the camera-to-detection delay), so the rig keeps up with the hand.
+        var tracker = Magi.tracking.hands, raw = tracker.detect(frame), ix = Magi.interaction.read(frame);
+        var pred = tracker.predicted ? tracker.predicted(frame, 0.03) : null;
+        var hands = pred && pred.length === raw.length ? pred : raw;
         var ink = Magi.fx.inkColor(params.color);
         var accent = ink.map(function (v) { return Math.round(v * 255); }), white = [255, 255, 255];
-        var reach = (params.claw / 100) * 4, glow = params.glow / 100;
+        var reach = (params.claw / 100) * 4, glow = params.glow / 100, scale = Math.pow(2, (params.size - 50) / 50);
 
         hands.forEach(function (p, h) {
           var palm = Math.hypot(p[MIDDLE_MCP].x - p[WRIST].x, p[MIDDLE_MCP].y - p[WRIST].y) || 1;
           // Offset: the whole rig moves away from the hand by X and Y, in palm lengths (±2), so
           // it can float beside the hand instead of on it.
+          // Size scales the rig about the palm's center (0.5× to 2×).
           var ox = params.offsetX / 50 * palm, oy = params.offsetY / 50 * palm;
-          var P = p.map(function (q) { return [q.x + ox, q.y + oy, (q.z || 0) * W]; });
-          p = p.map(function (q) { return { x: q.x + ox, y: q.y + oy, z: q.z }; });
+          var pcx = (p[0].x + p[5].x + p[9].x + p[13].x + p[17].x) / 5, pcy = (p[0].y + p[5].y + p[9].y + p[13].y + p[17].y) / 5;
+          p = p.map(function (q) { return { x: pcx + (q.x - pcx) * scale + ox, y: pcy + (q.y - pcy) * scale + oy, z: (q.z || 0) * scale }; });
+          palm *= scale;
+          var P = p.map(function (q) { return [q.x, q.y, q.z * W]; });
           var normal = unit(crossv(sub(P[5], P[0]), sub(P[17], P[0])));
           var knuckles = [0, 1, 2].map(function (k) { return (P[5][k] + P[9][k] + P[13][k] + P[17][k]) / 4; });
           // Root three quarters of the way to the wrist, so the first bones lie along the
@@ -161,17 +173,18 @@
           glowStroke(ctx, accent, Math.max(1, 1.4 * u), glow * 0.8);
 
           if (params.glyphs) {
-            // HUD marks in hand coordinates: along wrist → middle knuckle, and across it.
-            var ax0 = p[MIDDLE_MCP].x - p[WRIST].x, ay0 = p[MIDDLE_MCP].y - p[WRIST].y;
-            ctx.beginPath();
+            // HUD marks orbiting the palm's center, the ellipse turned with the hand.
+            var roll = Math.atan2(p[MIDDLE_MCP].x - p[WRIST].x, -(p[MIDDLE_MCP].y - p[WRIST].y)), cr = Math.cos(roll), sr = Math.sin(roll);
             glyphs.slice(h * GLYPHS_PER_HAND, (h + 1) * GLYPHS_PER_HAND).forEach(function (g) {
-              if (Math.sin(t * g.rate + g.phase) < -0.5) return; // flicker
-              var drift = Math.sin(t * 0.6 + g.phase) * 0.1;
-              var gx = p[WRIST].x + ax0 * (g.a + drift) - ay0 * g.b * 0.5;
-              var gy = p[WRIST].y + ay0 * (g.a + drift) + ax0 * g.b * 0.5;
-              bracket(ctx, gx, gy, palm * 0.06, g.shape);
+              var fade = 0.5 + 0.5 * Math.sin(t * g.rate + g.phase);
+              if (fade < 0.05) return;
+              var a = g.a0 + g.w * t, ex = Math.cos(a) * g.r * palm, ey = Math.sin(a) * g.r * palm * g.squash;
+              ctx.globalAlpha = fade;
+              ctx.beginPath();
+              bracket(ctx, pcx + ox + ex * cr - ey * sr, pcy + oy + ex * sr + ey * cr, palm * 0.06, g.shape);
+              glowStroke(ctx, white, Math.max(1, 1.2 * u), glow * 0.6);
             });
-            glowStroke(ctx, white, Math.max(1, 1.2 * u), glow * 0.6);
+            ctx.globalAlpha = 1;
           }
           ctx.restore();
         });

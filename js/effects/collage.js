@@ -1,38 +1,26 @@
-// Collage: a source box locks onto a feature of your face; while your hand is up, numbered copies
-// of it fill a sphere around your head. Lower the hand and they fly back into the source and vanish.
+// Collage: a source box locks onto your right eye; while your hand is up, numbered snapshots of
+// your face fill a sphere around your head. Lower the hand and they fly back into the source.
 //
-// Face (Face Landmarker): the source box sits on an eye (corners 33/133 or 362/263), the mouth
-// (61/291) or the nose (98/327 around the tip, 1), sized from those landmark distances. Eye mode
-// copies one eye; Features takes eye, eye, mouth, nose in turn, and the box moves with it.
-// Each copy is a still snapshot taken at the moment it spawns (`Rate` per second, up to `Count`).
+// Face (Face Landmarker): the box sits on your right eye (corners 33/133). Snapshots take your
+// right eye, left eye (362/263), mouth (61/291) and nose (98/327 around the tip, 1) in turn, sized
+// from those landmark distances; each is a still taken when it spawns (`Rate` per second, up to
+// `Count`).
 //
 // Sphere: copy k of N sits at the k-th point of a Fibonacci sphere, the even spread of points
-// given by y = 1 − 2(k + ½)/N, r = √(1 − y²), φ = k·137.5° (the golden angle). The sphere turns
-// about its vertical axis and is drawn in perspective, scale f/(f + z) with f = 3 radii, back to
-// front, far copies smaller and dimmer.
-// Hand (Interaction Engine): pinch sets the sphere's size (thumb–index distance 0.15 → 1.1 palm
-// lengths moves the Radius slider 10 → 100), finger spread sets Spacing (copies shrink to 0.55×),
-// and rolling the hand spins it: a damped spring (1.2 Hz, damping ratio 0.6) toward 1.5 × the roll
-// angle, plus a slow drift, so it glides. X and Y move the sphere; Sphere off lays the copies flat
-// on a square spiral. Everything else eases: x += (target − x)·(1 − e^(−7·dt)).
-// The camera is turned gray with film grain, like the reference (a WebGL pass; canvas fallback).
+// given by y = 1 − 2(k + ½)/N, r = √(1 − y²), φ = k·137.5° (the golden angle), drawn in
+// perspective, scale f/(f + z) with f = 3 radii, back to front, far copies smaller and dimmer.
+// Hand (Interaction Engine): pinch sizes the sphere (thumb–index distance 0.15 → 1.1 palm lengths
+// gives 0.6× → 1.7×), finger spread spaces the copies (they shrink to 0.55×). Orbit: with the palm
+// square to the camera nothing turns; turn the hand and hold, and the sphere keeps turning that
+// way, faster the further you turn (the knuckle line's angle in depth spins it about the
+// vertical axis, the palm's tilt about the horizontal one, past a 12° dead zone, eased over 0.3 s).
+// A wireframe sphere on the palm (Sphere switch; X and Y move it relative to the hand) shows the
+// readings. The camera is turned gray with film grain (a WebGL pass; canvas fallback).
 (function () {
   var GREEN = 'rgb(80,255,90)';
 
   var GOLDEN = Math.PI * (3 - Math.sqrt(5)), FOCAL = 3, TILT = 0.28;
 
-  // Square spiral for the flat layout: (0,0), (1,0), (1,1), (0,1), (−1,1), (−1,0), (−1,−1), …
-  var SPIRAL = (function () {
-    var out = [[0, 0]], x = 0, y = 0, dirs = [[1, 0], [0, 1], [-1, 0], [0, -1]], leg = 1, d = 0;
-    while (out.length < 400) {
-      for (var r = 0; r < 2; r++) {
-        for (var k = 0; k < leg && out.length < 400; k++) { x += dirs[d][0]; y += dirs[d][1]; out.push([x, y]); }
-        d = (d + 1) % 4;
-      }
-      leg++;
-    }
-    return out;
-  })();
 
   // Point k of an N-point Fibonacci sphere, unit radius.
   function fib(k, n) {
@@ -88,7 +76,7 @@
 
   function createCollage() {
     var tiles = [], count = 0, lastSpawn = 0, lastT = null, featureIndex = 0, grain = null, collapsing = false;
-    var size = 1, spin = 0, spinV = 0, target = 0, drift = 0, gap = 1; // eased hand readings
+    var size = 1, spin = 0, spinV = 0, tip = 0, tipV = 0, gap = 1; // eased hand readings
     var monoPass;
 
     function sphere(ctx, c, R, yaw, roll, u) {
@@ -161,31 +149,41 @@
         ctx.font = fs + 'px ' + Magi.fx.MONO;
         ctx.textBaseline = 'top';
 
-        var src = null, center = null, unitW = 0;
+        var src = null, box = null, center = null, unitW = 0;
         if (face) {
           var feats = features(face);
-          src = feats[params.mode === 'features' ? featureIndex % 4 : 0];
+          // The box stays on your right eye; the snapshots take eye, eye, mouth, nose in turn.
+          box = feats[0];
+          src = feats[featureIndex % 4];
           unitW = feats[0].w;
-          center = { x: (feats[0].c.x + feats[1].c.x + feats[2].c.x) / 3 + params.posX / 100 * W * 0.5, y: (feats[0].c.y + feats[1].c.y + feats[2].c.y) / 3 + params.posY / 100 * H * 0.5 };
+          center = { x: (feats[0].c.x + feats[1].c.x + feats[2].c.x) / 3, y: (feats[0].c.y + feats[1].c.y + feats[2].c.y) / 3 };
         }
 
-        // Hand readings. Pinch sets the Sphere slider and spread the Spacing slider; the picture
-        // eases toward the sliders, so a slider move works the same as a gesture.
-        var ease = 1 - Math.exp(-dt * 7), rotation = 0, palmC = null, palm = 0;
+        // Hand readings: pinch sizes the snapshot sphere and finger spread spaces the copies.
+        // Orbit: with the palm square to the camera nothing turns. Turn the hand and hold, and the
+        // sphere keeps turning that way, faster the further you turn: the knuckle line's angle in
+        // depth (index vs pinky knuckle, z) spins it about the vertical axis, the palm's tilt
+        // (wrist vs middle knuckle) about the horizontal one, each past a 12° dead zone. Speeds
+        // ease in and out (0.3 s), so it glides.
+        var ease = 1 - Math.exp(-dt * 7), rotation = 0, palmC = null, palm = 0, wantYaw = 0, wantPitch = 0;
         if (sig) {
-          palm = sig.size; palmC = sig.center; rotation = sig.rotation;
-          frame.setParam('radius', 10 + 90 * Math.min(1, Math.max(0, (sig.pinchWith.index.distance - 0.15) / 0.95)));
-          frame.setParam('spacing', sig.spread * 100);
-          // Spin: a damped spring (1.2 Hz, damping ratio 0.6) toward 1.5 × the hand's roll, on top
-          // of a slow 0.25 rad/s drift, so it glides and settles instead of snapping.
-          target = rotation * Math.PI / 180 * 1.5;
+          palm = sig.size; rotation = sig.rotation;
+          palmC = { x: sig.center.x + params.posX / 100 * palm * 2, y: sig.center.y + params.posY / 100 * palm * 2 };
+          var hp = sig.points, Wz = W;
+          function tilt(a, b) {
+            var dx = b.x - a.x, dy = b.y - a.y, dz = ((b.z || 0) - (a.z || 0)) * Wz, flat = Math.hypot(dx, dy) || 1;
+            return Math.atan2(dz, flat);
+          }
+          var yawA = tilt(hp[17], hp[5]) * (hp[5].x > hp[17].x ? 1 : -1), pitchA = tilt(hp[0], hp[9]);
+          var dz = 0.21;
+          wantYaw = Math.abs(yawA) > dz ? (yawA - Math.sign(yawA) * dz) * 2.2 : 0;
+          wantPitch = Math.abs(pitchA) > dz ? (pitchA - Math.sign(pitchA) * dz) * 1.6 : 0;
+          size += (0.6 + 1.1 * Math.min(1, Math.max(0, (sig.pinchWith.index.distance - 0.15) / 0.95)) - size) * ease;
+          gap += (1 - 0.45 * sig.spread - gap) * ease;
         }
-        drift += dt * 0.25;
-        var wn = 2 * Math.PI * 1.2;
-        spinV += (wn * wn * (target + drift - spin) - 2 * 0.6 * wn * spinV) * dt;
-        spin += spinV * dt;
-        size += (0.4 + params.radius / 100 * 1.4 - size) * ease;
-        gap += (1 - 0.45 * params.spacing / 100 - gap) * ease;
+        var e3 = 1 - Math.exp(-dt / 0.3);
+        spinV += (wantYaw - spinV) * e3; tipV += (wantPitch - tipV) * e3;
+        spin += spinV * dt; tip += tipV * dt;
 
         // Spawn while a face and a hand are in view; otherwise everything returns to the source.
         collapsing = !(face && hand);
@@ -202,17 +200,13 @@
         }
 
         // Targets on the sphere: turn about the vertical axis by `spin`, tip back by TILT, project.
-        var R = unitW * 0.8 * size, cy = Math.cos(spin), sy = Math.sin(spin), ct = Math.cos(TILT), st = Math.sin(TILT);
+        var R = unitW * 0.8 * size, cy = Math.cos(spin), sy = Math.sin(spin), ct = Math.cos(TILT + tip), st = Math.sin(TILT + tip);
         tiles = tiles.filter(function (tl) {
           var tx, ty, ts = 1, tz = 0;
           if (collapsing || !center) {
             var home = src ? src.c : { x: tl.x, y: tl.y };
             tx = home.x; ty = home.y; ts = 0.3;
             if (Math.hypot(tx - tl.x, ty - tl.y) < Math.max(4, tl.w * 0.15)) return false;
-          } else if (!params.sphere) {
-            // Flat: a square spiral of slots around the face, turned by the spin.
-            var sp = SPIRAL[tl.slot % SPIRAL.length], fx = sp[0] * tl.w * 1.05 * size * gap, fy = sp[1] * tl.h * 1.15 * size * gap;
-            tx = center.x + fx * Math.cos(spin * 0.3) - fy * Math.sin(spin * 0.3); ty = center.y + fx * Math.sin(spin * 0.3) + fy * Math.cos(spin * 0.3); ts = 1; tz = 0;
           } else {
             var q = fib(tl.slot % params.count, params.count);
             var x1 = q[0] * cy + q[2] * sy, z1 = -q[0] * sy + q[2] * cy;
@@ -231,7 +225,11 @@
 
         ctx.save();
         ctx.lineWidth = Math.max(1, u);
-        // Back to front; far copies dimmer.
+        // Back to front; far copies dimmer. Numbers (front copies only) and labels go on the HUD
+        // layer, sharp at the screen's resolution.
+        var numbers = [], hud = frame.hud;
+        hud.font = fs + 'px ' + Magi.fx.MONO;
+        hud.textBaseline = 'top';
         tiles.slice().sort(function (a, b) { return b.z - a.z; }).forEach(function (tl) {
           var w = Math.max(2, Math.round(tl.w * tl.s)), h = Math.max(2, Math.round(tl.h * tl.s));
           var x = Math.round(tl.x - w / 2), y = Math.round(tl.y - h / 2);
@@ -239,29 +237,28 @@
           ctx.drawImage(tl.img, x, y, w, h);
           ctx.strokeStyle = GREEN;
           ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
-          if (w > fs * 2.5) {
-            ctx.fillStyle = GREEN;
-            ctx.textAlign = 'right';
-            ctx.fillText(String(tl.n).padStart(2, '0'), x + w - pad * 2, y + pad * 2);
-          }
+          if (w > fs * 2.5 && tl.z < 0.3) numbers.push([String(tl.n).padStart(2, '0'), x + w - pad * 2, y + pad * 2]);
         });
         ctx.globalAlpha = 1;
-        ctx.textAlign = 'left';
-        if (src) {
-          var bw = src.w, bh = bw * 0.62, bx = src.c.x - bw / 2, by = src.c.y - bh / 2;
+        hud.fillStyle = GREEN;
+        hud.textAlign = 'right';
+        numbers.forEach(function (nb) { hud.fillText(nb[0], nb[1], nb[2]); });
+        hud.textAlign = 'left';
+        if (box) {
+          var bw = box.w, bh = bw * 0.62, bx = box.c.x - bw / 2, by = box.c.y - bh / 2;
           ctx.strokeStyle = GREEN;
           ctx.strokeRect(bx, by, bw, bh);
-          label(ctx, 'source:', bx, by - fs - pad * 1.4, fs, pad);
+          label(hud, 'source:', bx, by - fs - pad * 1.4, fs, pad);
         }
-        if (hand) {
+        if (hand && params.sphere) {
           var rot = rotation * Math.PI / 180, PR = palm * 0.75;
           sphere(ctx, palmC, PR, spin + t * 0.3, rot, u);
           // Readouts beside the sphere, on whichever side has room.
           var t1 = 'scale: ' + scale.toFixed(2), t2 = 'rotation: ' + rotation.toFixed(1);
-          var lw = ctx.measureText(t2).width + pad * 2, right = palmC.x + PR + 6 * u + lw < W;
+          var lw = hud.measureText(t2).width + pad * 2, right = palmC.x + PR + 6 * u + lw < W;
           var lx = right ? palmC.x + PR + 6 * u : palmC.x - PR - 6 * u - lw, ly = palmC.y - PR * 0.3;
-          label(ctx, t1, lx, ly, fs, pad);
-          label(ctx, t2, lx, ly + fs + pad * 4, fs, pad);
+          label(hud, t1, lx, ly, fs, pad);
+          label(hud, t2, lx, ly + fs + pad * 4, fs, pad);
         }
         ctx.restore();
 
@@ -270,7 +267,7 @@
         else if (!face) frame.say('Face the camera.');
         else if (!hand) frame.say('Raise a hand to start copying.');
       },
-      reset: function () { tiles = []; count = 0; lastSpawn = 0; lastT = null; featureIndex = 0; size = 1; spin = 0; spinV = 0; target = 0; gap = 1; }
+      reset: function () { tiles = []; count = 0; lastSpawn = 0; lastT = null; featureIndex = 0; size = 1; spin = 0; spinV = 0; tip = 0; tipV = 0; gap = 1; }
     };
   }
 

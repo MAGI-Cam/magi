@@ -13,7 +13,7 @@
 // bigger, switching back below 10%), the bellows stretches in depth toward it: panels scale in
 // perspective from the far hand's relative palm size up to full size at the near hand, turn to
 // face the camera, and are drawn far to near. Rolling your palms (their mean rotation) tilts the
-// panels by 0.6 × that angle. Pinch and hold to drift the color around the hue wheel.
+// panels by 0.6 × that angle. Pinch and hold to drift the color around the hue wheel (both hands: twice as fast).
 (function () {
   var WRIST = 0, MIDDLE_TIP = 12;
   var DEPTH = [Math.cos(Math.PI / 6), -Math.sin(Math.PI / 6)];
@@ -37,10 +37,11 @@
         last = frame.time;
         var tracker = Magi.tracking.hands, ix = Magi.interaction.read(frame), pair = ix.pair, hands = ix.hands;
 
-        // Pinch and hold (either hand): the color drifts around the hue wheel, 12% of the wheel
-        // per second, and the Color slider follows. From white, it starts at red.
-        if (hands.some(function (h) { return h.pinched; })) {
-          hueAcc += dt * 12;
+        // Pinch and hold: the color drifts around the hue wheel, 12% of the wheel per second with
+        // one hand pinching and twice that with both, and the Color slider follows.
+        var pinching = hands.filter(function (h) { return h.pinched; }).length;
+        if (pinching) {
+          hueAcc += dt * 12 * pinching;
           var step = Math.floor(hueAcc);
           if (step >= 1) {
             hueAcc -= step;
@@ -142,10 +143,12 @@
               ctx.arc(q[0], q[1], Math.max(2, 3 * u), 0, Math.PI * 2);
               ctx.fill();
             });
-            ctx.font = '400 ' + Math.round(12 * u) + 'px ' + Magi.fx.MONO;
-            ctx.textAlign = 'left';
-            ctx.textBaseline = 'bottom';
-            ctx.fillText('distance ' + dn.toFixed(2), p0[0], p0[1] - 6 * u);
+            var hud = frame.hud;
+            hud.fillStyle = '#fff';
+            hud.font = '400 ' + Math.round(12 * u) + 'px ' + Magi.fx.MONO;
+            hud.textAlign = 'left';
+            hud.textBaseline = 'bottom';
+            hud.fillText('distance ' + dn.toFixed(2), p0[0], p0[1] - 6 * u);
           }
           ctx.restore();
         }

@@ -11,7 +11,7 @@
 // its current and previous position, velocity is their difference, and constraints are solved by
 // moving points directly. A symbol is one circle; a phrase is a straight stick of circles held
 // by distance constraints, so it can tip, lean and lie across others. Collisions push circles
-// apart, a small restitution gives the tiny bounce, and friction lets the pile settle like
+// apart, a small restitution (0.11) gives the slight bounce, and friction lets the pile settle like
 // objects in a jar. Pool off: there is no floor and tokens fall out of the frame.
 (function () {
   var LOWER_LID = [145, 374];
@@ -20,7 +20,7 @@
   var FONT = 'Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif';
   var MAX_POINTS = 900;      // simulation budget; the oldest pooled tokens fade out past it
   var SUBSTEPS = 2, ITERATIONS = 4;
-  var RESTITUTION = 0.22, FRICTION = 0.86, DAMPING = 0.998;
+  var RESTITUTION = 0.11, FRICTION = 0.86, DAMPING = 0.998;
 
   var segmenter = window.Intl && Intl.Segmenter ? new Intl.Segmenter(undefined, { granularity: 'grapheme' }) : null;
   function graphemes(text) {
@@ -212,15 +212,14 @@
           return true;
         });
 
-        ctx.save();
-        var ink = Magi.fx.inkColor(params.color);
-        ctx.fillStyle = 'rgb(' + ink.map(function (v) { return Math.round(v * 255); }).join(',') + ')';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        // Inverse: tokens invert whatever is beneath them (difference blend), so they read on any
-        // background. Otherwise they are solid ink with a soft shadow.
-        if (params.inverse) ctx.globalCompositeOperation = 'difference';
-        else ctx.shadowColor = 'rgba(0,0,0,0.45)';
+        // Tokens are text, drawn on the HUD layer so they stay sharp at the screen's resolution:
+        // solid ink with a soft shadow.
+        var hud = frame.hud, ink = Magi.fx.inkColor(params.color);
+        hud.save();
+        hud.fillStyle = 'rgb(' + ink.map(function (v) { return Math.round(v * 255); }).join(',') + ')';
+        hud.textAlign = 'center';
+        hud.textBaseline = 'middle';
+        hud.shadowColor = 'rgba(0,0,0,0.45)';
         bodies.forEach(function (b) {
           var p = b.pts, a = p[0], z = p[p.length - 1], x, y, angle;
           if (p.length > 1) {
@@ -234,13 +233,16 @@
             b.spin *= 0.97;
             x = a.x; y = a.y; angle = b.angle;
           }
-          ctx.globalAlpha = Math.max(0, b.alpha);
-          if (!params.inverse) ctx.shadowBlur = b.size * 0.2;
-          ctx.font = '400 ' + b.size + 'px ' + FONT;
-          ctx.setTransform(Math.cos(angle), Math.sin(angle), -Math.sin(angle), Math.cos(angle), x, y);
-          ctx.fillText(b.ch, 0, 0);
+          hud.globalAlpha = Math.max(0, b.alpha);
+          hud.shadowBlur = b.size * 0.2;
+          hud.font = '400 ' + b.size + 'px ' + FONT;
+          hud.save();
+          hud.translate(x, y);
+          hud.rotate(angle);
+          hud.fillText(b.ch, 0, 0);
+          hud.restore();
         });
-        ctx.restore();
+        hud.restore();
 
         var tracker = Magi.tracking.face;
         if (tracker.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, tracker, 'face');

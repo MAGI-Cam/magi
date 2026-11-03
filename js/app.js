@@ -151,7 +151,8 @@
     dirty = true;
   }
 
-  var shownW = 0, shownH = 0;
+  var shownW = 0, shownH = 0, hudShown = false;
+  var hud = document.getElementById('hud'), hctx = hud.getContext('2d');
 
   function tick() {
     requestAnimationFrame(tick);
@@ -192,12 +193,37 @@
       }
     };
 
+    // frame.hud: a canvas over the preview at the screen's resolution, for text. Effects draw on it
+    // in frame coordinates, like on the picture; it's prepared only when an effect asks for it,
+    // then copied into the picture so photos and videos include the text.
+    var hudUsed = false;
+    Object.defineProperty(frame, 'hud', { get: function () {
+      if (!hudUsed) {
+        hudUsed = true;
+        var dpr = window.devicePixelRatio || 1;
+        var hw = Math.max(1, Math.round(parseFloat(view.style.width || w) * dpr)), hh = Math.max(1, Math.round(parseFloat(view.style.height || h) * dpr));
+        if (hud.width !== hw || hud.height !== hh) { hud.width = hw; hud.height = hh; }
+        hctx.setTransform(1, 0, 0, 1, 0, 0);
+        hctx.clearRect(0, 0, hw, hh);
+        hctx.setTransform(hw / w, 0, 0, hh / h, 0, 0);
+      }
+      return hctx;
+    } });
+
     var said = null;
     if (renderer) {
       renderer.render(frame, view, state.params[state.effectId]);
     } else {
       if (view.width !== w || view.height !== h) { view.width = w; view.height = h; }
       frame.draw(ctx, w, h);
+    }
+    if (hudUsed) {
+      ctx.drawImage(hud, 0, 0, view.width, view.height);
+      hudShown = true;
+    } else if (hudShown) {
+      hctx.setTransform(1, 0, 0, 1, 0, 0);
+      hctx.clearRect(0, 0, hud.width, hud.height);
+      hudShown = false;
     }
 
     if (said !== hint.textContent) hint.textContent = said || '';
@@ -224,6 +250,10 @@
     var s = Math.min(r.width / view.width, r.height / view.height);
     view.style.width = Math.floor(view.width * s) + 'px';
     view.style.height = Math.floor(view.height * s) + 'px';
+    hud.style.width = view.style.width;
+    hud.style.height = view.style.height;
+    hud.style.left = (r.width - Math.floor(view.width * s)) / 2 + 'px';
+    hud.style.top = (r.height - Math.floor(view.height * s)) / 2 + 'px';
     // Nearest-pixel scaling keeps pixels square when enlarging, but when shrinking it drops whole
     // rows and columns (thin strokes vanish), so shrink smoothly instead.
     view.classList.toggle('is-reduced', s * (window.devicePixelRatio || 1) < 1);
@@ -799,15 +829,12 @@
     drag = null;
   });
 
-  // Trackpad: a two-finger swipe up opens the tray, down closes it. Over the tray, a swipe that
-  // can still scroll its list scrolls it instead. Pinch-zoom (ctrl + wheel) is left alone.
+  // Trackpad: a two-finger swipe up opens the tray, down closes it, anywhere outside the tray.
+  // Inside it, swipes only scroll. Pinch-zoom (ctrl + wheel) is left alone.
   var swipe = { sum: 0, last: 0, quietUntil: 0 };
   window.addEventListener('wheel', function (e) {
     if (e.ctrlKey || Math.abs(e.deltaY) < Math.abs(e.deltaX)) return;
-    if (tray.contains(e.target)) {
-      var canScroll = e.deltaY > 0 ? tray.scrollTop + tray.clientHeight < tray.scrollHeight - 1 : tray.scrollTop > 0;
-      if (canScroll) return;
-    }
+    if (tray.contains(e.target)) return; // inside the tray a swipe only ever scrolls it
     var now = performance.now();
     if (now < swipe.quietUntil) return; // one gesture, one action
     if (now - swipe.last > 250) swipe.sum = 0;

@@ -1,6 +1,7 @@
 // Bubbles: soap bubbles from your hands. Wave your fingers to stream small ones; pinch thumb and
 // index and a bubble grows at your fingertips while you hold, and floats off when you let go.
-// Inverse mode: each bubble inverts the video under it instead.
+// Inverse mode: each bubble inverts the video under it instead. Electrokinetic mode: inside each
+// bubble the video turns into electrokinetic pixel glazing (dots sized by brightness).
 // A bubble pops when its life runs out (2–5 s; 4–7 s for one you blew), or, with Pop on, when a
 // fingertip touches it after its first 0.4 s.
 //
@@ -57,8 +58,27 @@
   }
   function bucketFor(r) { return Math.max(0, Math.min(SIZES - 1, Math.round(Math.log(Math.max(4, r) / 4) / Math.log(1.32)))); }
 
+  // Electrokinetic glazing, as in the Facade effect: per cell, a dot of the cell's color whose area
+  // is proportional to its brightness (radius = cell · √(luma / π) · 1.1), anti-aliased, on black.
+  var EK_FRAG = [
+    'precision highp float;',
+    'uniform sampler2D cam;',
+    'uniform vec2 size;',
+    'uniform float cell;',
+    'varying vec2 uv;',
+    'void main() {',
+    '  vec2 px = uv * size, c = (floor(px / cell) + 0.5) * cell;',
+    '  vec3 col = texture2D(cam, c / size).rgb;',
+    '  float l = dot(col, vec3(0.299, 0.587, 0.114));',
+    '  float r = cell * sqrt(l / 3.14159) * 1.1;',
+    '  float a = clamp(r - length(px - c) + 0.5, 0.0, 1.0);',
+    '  vec3 sat = clamp(mix(vec3(l), col, 1.6), 0.0, 1.0);',
+    '  gl_FragColor = vec4(sat * a, 1.0);',
+    '}'
+  ].join('\n');
+
   function createBubbles() {
-    var bubbles = [], pops = [], prev = {}, wands = {}, lastT = null, lastFrame = null;
+    var bubbles = [], pops = [], prev = {}, wands = {}, lastT = null, lastFrame = null, ekPass;
 
     function air(x, y, t, H, wind) {
       // ψ = sin(kx·x + ωt)·cos(ky·y − ω′t); u = (∂ψ/∂y, −∂ψ/∂x).
@@ -173,7 +193,26 @@
         ctx.save();
         var all = bubbles.map(function (b) { return { x: b.x, y: b.y, r: b.r * Math.min(1, b.age / 0.2) * (1 + 0.03 * Math.sin(t * 5 + b.phase)), film: b.film, spin: b.spin + t * 0.5, wob: 0.03 * Math.sin(t * 5 + b.phase) }; });
         Object.keys(wands).forEach(function (k) { var w = wands[k]; all.push({ x: w.x, y: w.y, r: w.r, film: w.film, spin: w.phase + t, wob: 0.06 * Math.sin(t * 7 + w.phase) }); });
-        if (params.mode === 'inverse') {
+        if (params.mode === 'electro') {
+          // Electrokinetic: inside each bubble the video becomes pixel glazing, a grid of colored
+          // dots whose area follows the brightness behind them.
+          if (ekPass === undefined) ekPass = Magi.fx.shaderPass(EK_FRAG, ['cam']);
+          if (ekPass) {
+            ekPass.texture('cam', out);
+            ekPass.run(W, H, { size: [W, H], cell: Math.max(4, Math.round(7 * u)) });
+            ctx.beginPath();
+            all.forEach(function (b) { if (b.r >= 1) { ctx.moveTo(b.x + b.r, b.y); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); } });
+            ctx.save();
+            ctx.clip();
+            ctx.drawImage(ekPass.canvas, 0, 0);
+            ctx.restore();
+          }
+          ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+          ctx.lineWidth = Math.max(1, u);
+          ctx.beginPath();
+          all.forEach(function (b) { if (b.r >= 2) { ctx.moveTo(b.x + b.r, b.y); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); } });
+          ctx.stroke();
+        } else if (params.mode === 'inverse') {
           // Inverse: each bubble inverts the video beneath it (difference with white: c → 1 − c),
           // edged with a crisp 1 px rim.
           ctx.globalCompositeOperation = 'difference';

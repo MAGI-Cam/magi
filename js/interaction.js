@@ -30,9 +30,11 @@
 // hands, and `closer` (the hand whose palm looks at least 20% bigger; it changes back below 10%).
 // Motion events (ix.events, each with a unique `n` so an effect acts on it once):
 //   swipe  the palm travels a third of the frame height within 0.3 s, mostly along one axis
-//   flick  a wrist snap: the index tip moves faster than 8 palm lengths per second relative to
+//   flick  a wrist snap: the index tip moves faster than 6 palm lengths per second relative to
 //          the palm
 //   shake  four reversals of the palm's horizontal motion within 0.8 s
+//   clap   both palms close by 2.5 palm lengths within 0.3 s to within 1.3 palm lengths (or the
+//          two hands merge into one detection while closing that fast), 0.8 s cooldown
 // Every on/off state must hold for 80 ms before it switches, so a single noisy frame can't
 // trigger anything; events have cooldowns (swipe 0.5 s, flick 0.4 s, shake 0.8 s).
 (function () {
@@ -65,6 +67,7 @@
 
   function createEngine() {
     var lastPoints = null, cache = { hands: [], pair: null, events: [] }, states = {}, closer = null;
+    var gap = [], lastClap = -9; // palm gap history, in palm lengths, for claps
 
     function readHand(p, d, frame, t, dt) {
       var id = d.key || 'hand', st = states[id] || (states[id] = { hist: [], cool: {} });
@@ -155,7 +158,7 @@
       }
       // Flick: fingertip snapping relative to the palm.
       var rel = Math.hypot(r.tipRel.x, r.tipRel.y);
-      if (rel > 8 * hand.size) emit(events, st, hand, 'flick', { dir: dir4(r.tipRel.x, r.tipRel.y) }, t, 0.4);
+      if (rel > 6 * hand.size) emit(events, st, hand, 'flick', { dir: dir4(r.tipRel.x, r.tipRel.y) }, t, 0.4);
       // Shake: reversals of horizontal motion faster than 0.6 frame heights per second.
       var flips = 0, sign = 0;
       hist.forEach(function (h) {
@@ -196,6 +199,28 @@
             closer: closer === a.id ? a : closer === b.id ? b : null
           };
         } else closer = null;
+
+        // Clap: the palms close by at least 2.5 palm lengths within 0.3 s (over 8 palm lengths a
+        // second; bringing hands together slowly doesn't count) and end within 1.3 palm lengths
+        // of each other, or the two hands merge into one detection while closing that fast
+        // (common when palms touch).
+        var clap = false;
+        if (pair) {
+          var g = pair.distance / ((pair.left.size + pair.right.size) / 2);
+          gap.push({ t: t, g: g });
+          while (gap.length && t - gap[0].t > 0.3) gap.shift();
+          var far = Math.max.apply(null, gap.map(function (x) { return x.g; }));
+          clap = g < 1.3 && far - g > 2.5;
+        } else if (hands.length === 1 && gap.length) {
+          var lastG = gap[gap.length - 1];
+          clap = t - lastG.t < 0.25 && lastG.g < 3.5 && gap.length > 1 && (gap[0].g - lastG.g) / Math.max(0.03, lastG.t - gap[0].t) > 8;
+          gap = [];
+        } else gap = [];
+        if (clap && t - lastClap > 0.8) {
+          lastClap = t;
+          gap = [];
+          events.push({ n: ++EVENT_N, type: 'clap', t: t });
+        }
 
         cache = { hands: hands, pair: pair, events: events, t: t };
         return cache;

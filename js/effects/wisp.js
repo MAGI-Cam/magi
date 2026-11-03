@@ -18,7 +18,8 @@
 // Distortion: a map C(x) of where each pixel's image comes from, carried by the flow. Advecting
 // C(x) ← C(x − v·dt) as a texture of coordinates is the standard fluid image warp; stored as an
 // offset D = C − x, one step is D(x) ← D(x − v·dt) − v·dt. The offset then relaxes toward zero
-// with the same half-life, so the video settles back. The output is the live camera sampled at C.
+// with the same half-life, so the video settles back; while you pinch it relaxes in 0.12 s and the
+// flow is damped, sucking the picture back to normal. The output is the live camera sampled at C.
 (function () {
   var WRIST = 0, MIDDLE_MCP = 9;
   // Capsules that fill the palm, on top of MediaPipe's bone connections.
@@ -214,10 +215,13 @@
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, out);
         gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
 
-        var vt = [1 / sw, 1 / sh], keep = Math.pow(2, -dt / (0.15 * Math.pow(2, params.trail / 20)));
+        // Pinch: the stirred picture is drawn back to normal quickly (0.12 s half-life) and the flow
+        // is damped, as if sucked back up.
+        var sucking = Magi.interaction.read(frame).hands.some(function (h) { return h.pinched; });
+        var vt = [1 / sw, 1 / sh], keep = Math.pow(2, -dt / (sucking ? 0.12 : 0.15 * Math.pow(2, params.trail / 20)));
         run('emit', { act: act.read, mask: maskTex }, act.write, vt); act.swap();
         run('force', { vel: vel.read, mask: maskTex, act: act.read, size: [sw, sh], flow: params.flow / 100, dt: dt,
-          swirl: params.swirl / 100 * 220, rise: params.rise / 100 * 160, t: t, damp: Math.exp(-dt * 0.8) }, vel.write, vt);
+          swirl: params.swirl / 100 * 220, rise: params.rise / 100 * 160, t: t, damp: Math.exp(-dt * (sucking ? 8 : 0.8)) }, vel.write, vt);
         vel.swap();
         run('curl', { vel: vel.read }, curl, vt);
         run('vorticity', { vel: vel.read, curl: curl, strength: 10 + params.swirl * 0.35, dt: dt }, vel.write, vt);

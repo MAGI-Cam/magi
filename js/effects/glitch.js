@@ -4,26 +4,29 @@
 // The hand is the controller (Interaction Engine). In Blocks and Dissolve, the higher your highest
 // fingertip, the stronger the glitch; in Split, the seams cross at your hand. A swipe fires a
 // burst that fades with a 0.25 s half-life. A fist stops the glitch while you hold it (the video
-// keeps running clean). With Hand off, the glitch holds steady at Amount.
+// keeps running clean); a pinch freezes the glitched picture until you let go. With Hand off, the
+// glitch holds steady at Amount.
 //
 // The corruption is redrawn from a new random seed `Speed` times a second (2–30 Hz) and holds in
 // between, so it stutters like a broken stream instead of shimmering. Each mode is a real failure:
 //   Split    — tiles out of register, like the reference: two seams, one vertical and one
-//              horizontal, cross at your hand and cut the frame into four tiles. Within each tile
-//              the picture slips by its own offset and its red, green and blue channels are read
-//              from three different places (chroma misregistration), so edges grow red, green and
-//              blue ghosts that change from tile to tile, while the photo itself stays visible.
+//              horizontal, cross at your hand and cut the frame into four tiles (cross-faded over
+//              1.5% of the frame, so the seams aren't hard cuts). Within each tile the picture
+//              slips by its own offset and its channels are read from different places (chroma
+//              misregistration), so edges grow colored ghosts that change from tile to tile,
+//              while the photo stays visible; the effect fades in softly at the body's edge.
 //   Blocks   — 8×8-style macroblock damage: blocks that lose their AC coefficients decode as their
 //              DC term alone (the block's mean color), blocks with a wrong motion vector copy
 //              pixels from the wrong place, and some decode with the channels in the wrong order.
 //   Dissolve — packet loss: pieces of the body arrive in the wrong place (up to Spread away), and
 //              the missing pieces decode as random bits, 1 bit per channel against a random
 //              threshold, which keeps the body's color on average.
-// Color (Blocks, Dissolve) gives the damage a color profile: 0 keeps the picture's own colors;
-// above that, damaged pixels are hue-rotated by the slider's angle (Rodrigues rotation about the
-// gray axis, which keeps brightness) and saturated 1.5×. Depth (Blocks, Dissolve) sizes the blocks
-// by how close you are: the share of the frame your body fills, and near each hand that hand's
-// size, snapped to ½×, 1×, 2× or 4× so neighboring grids nest.
+// Profile: 0 keeps the picture's colors; 1 is neon (saturation and contrast up); 2–5 are two-ink
+// duotones (red/cyan, magenta/green, gold/blue, black/white). In Split each ink reads the picture
+// from its own offset, like an anaglyph; in Blocks and Dissolve damaged pixels map from one ink to
+// the other by brightness. Overexposed (Blocks): include blocks decoded at 1 bit per channel.
+// Depth (Blocks, Dissolve) sizes the blocks by how close you are: the share of the frame your body
+// fills, snapped to ½×, 1×, 2× or 4×.
 // It runs as a WebGL fragment shader: every pixel is decided independently from the seed.
 (function () {
   var INDEX_TIP = 8;
@@ -33,30 +36,30 @@
     'precision highp float;',
     'uniform sampler2D cam, mask;',
     'uniform vec2 size, seam;',
-    'uniform float amount, block, seed, mode, hue, depth, spread, near;',
-    'uniform vec3 handA, handB;', // x, y, scale; scale 0 = no hand
+    'uniform float amount, block, seed, mode, profile, depth, spread, near, neon;',
     'varying vec2 uv;',
     // Dave Hoskins' hash without sine: a uniform pseudo-random number in [0, 1) per input.
     'float hash(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }',
     'float body(vec2 px) { return smoothstep(0.35, 0.65, texture2D(mask, px / size).r); }',
+    'float soft(vec2 px) { return smoothstep(0.15, 0.85, texture2D(mask, px / size).r); }',
+    'float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }',
     'vec3 cam1(vec2 px) { return texture2D(cam, clamp(px / size, 0.0, 1.0)).rgb; }',
     'vec3 crush(vec3 c) { return step(0.5, c); }', // 1 bit per channel
-    // Hue rotation about the gray axis (Rodrigues), then saturation × 1.5 around the luma.
-    'vec3 profile(vec3 c) {',
-    '  if (hue <= 0.0) return c;',
-    '  float a = hue, k = 0.57735, cs = cos(a), sn = sin(a);',
-    '  vec3 ax = vec3(k);',
-    '  c = c * cs + cross(ax, c) * sn + ax * dot(ax, c) * (1.0 - cs);',
-    '  float l = dot(c, vec3(0.299, 0.587, 0.114));',
-    '  return clamp(mix(vec3(l), c, 1.5), 0.0, 1.0);',
+    // Profiles: 0 the picture's own colors, 1 neon (saturation × 1.8, contrast × 1.3), then two-ink
+    // duotones that map luma from one ink to the other: 2 red/cyan, 3 magenta/green, 4 gold/blue,
+    // 5 black/white.
+    'vec3 inkA(float p) { return p < 2.5 ? vec3(1.0, 0.1, 0.15) : p < 3.5 ? vec3(1.0, 0.0, 0.8) : p < 4.5 ? vec3(1.0, 0.75, 0.0) : vec3(1.0); }',
+    'vec3 inkB(float p) { return p < 2.5 ? vec3(0.0, 0.9, 1.0) : p < 3.5 ? vec3(0.0, 1.0, 0.3) : p < 4.5 ? vec3(0.1, 0.25, 1.0) : vec3(0.0); }',
+    'vec3 tone(vec3 c) {',
+    '  if (profile < 0.5) return c;',
+    '  if (profile < 1.5) { float l = luma(c); return clamp((mix(vec3(l), c, 1.8) - 0.5) * 1.3 + 0.5, 0.0, 1.0); }',
+    '  float l = smoothstep(0.1, 0.9, luma(c));',
+    '  return mix(inkB(profile), inkA(profile), l);',
     '}',
-    // Block size here: by body proximity, and near a hand by that hand's size; powers of two.
+    // Block size by how close the body is (the share of the frame it fills), as a power of two.
     'float blockAt(vec2 px) {',
     '  if (depth < 0.5) return block;',
-    '  float s = near;',
-    '  if (handA.z > 0.0) s = mix(s, handA.z, exp(-pow(length(px - handA.xy) / (size.y * 0.25), 2.0)));',
-    '  if (handB.z > 0.0) s = mix(s, handB.z, exp(-pow(length(px - handB.xy) / (size.y * 0.25), 2.0)));',
-    '  return block * exp2(clamp(floor(log2(s) + 0.5), -1.0, 2.0));',
+    '  return block * exp2(clamp(floor(log2(near) + 0.5), -1.0, 2.0));',
     '}',
     'void main() {',
     '  vec2 px = uv * size;',
@@ -64,17 +67,31 @@
     '  vec3 col = base;',
     '  float s = seed * 0.6180339;',
     '  if (mode < 0.5) {',
-    '    vec2 tile = vec2(px.x < seam.x ? 0.0 : 1.0, px.y < seam.y ? 0.0 : 1.0);',
-    '    float mag = amount * size.x * 0.05;',
-    '    vec2 slip = (vec2(hash(tile + s), hash(tile + s + 2.1)) - 0.5) * 2.0 * mag;',
-    '    vec2 src = px - slip;',
-    '    vec2 oR = (vec2(hash(tile + s + 4.3), hash(tile + s + 5.9)) - 0.5) * 2.0 * mag;',
-    '    vec2 oB = (vec2(hash(tile + s + 7.7), hash(tile + s + 8.1)) - 0.5) * 2.0 * mag;',
-    '    float m = max(body(src), max(body(src + oR), body(src + oB)));',
-    '    if (m > 0.0) {',
-    '      vec3 c = vec3(cam1(src + oR).r, cam1(src).g, cam1(src + oB).b);',
-    '      col = mix(base, c, m);',
+    // Two seams cross at the hand; within 1.5% of the frame of a seam the tiles cross-fade, so
+    // the seams read as slips, not hard cuts.
+    '    float feather = size.y * 0.015;',
+    '    vec2 w = smoothstep(-feather, feather, px - seam);',
+    '    vec3 acc = vec3(0.0); float tot = 0.0;',
+    '    for (int i = 0; i < 2; i++) for (int j = 0; j < 2; j++) {',
+    '      vec2 tile = vec2(float(i), float(j));',
+    '      float k = (i == 0 ? 1.0 - w.x : w.x) * (j == 0 ? 1.0 - w.y : w.y);',
+    '      if (k < 0.001) continue;',
+    '      float mag = amount * size.x * 0.045;',
+    '      vec2 src = px - (vec2(hash(tile + s), hash(tile + s + 2.1)) - 0.5) * 2.0 * mag;',
+    '      vec2 oR = (vec2(hash(tile + s + 4.3), hash(tile + s + 5.9)) - 0.5) * 2.0 * mag;',
+    '      vec2 oB = (vec2(hash(tile + s + 7.7), hash(tile + s + 8.1)) - 0.5) * 2.0 * mag;',
+    '      vec3 c;',
+    '      if (profile < 1.5) c = tone(vec3(cam1(src + oR).r, cam1(src).g, cam1(src + oB).b));',
+    // Two-ink profiles split like an anaglyph: each ink reads the picture from its own offset.
+    // The inks are complementary (they add to about white), so where the two reads agree the
+    // picture is gray and where they differ the ghosts come out in the two inks.
+    '      else {',
+    '        float la = luma(cam1(src + oR)), lb = luma(cam1(src + oB));',
+    '        c = profile > 4.5 ? vec3(0.5 * (la + lb)) : clamp(inkA(profile) * la + inkB(profile) * lb, 0.0, 1.0);',
+    '      }',
+    '      acc += c * k; tot += k;',
     '    }',
+    '    col = mix(base, acc / max(tot, 1e-4), soft(px));',
     '  } else if (mode < 1.5) {',
     '    float b = blockAt(px);',
     '    vec2 cell = floor(px / b), center = (cell + 0.5) * b;',
@@ -87,10 +104,12 @@
     '      } else if (k < 0.8) {',
     '        vec2 mv = (vec2(hash(cell + s + 5.1), hash(cell + s + 9.3)) - 0.5) * b * 6.0 * amount;',
     '        col = cam1(px + mv);',
+    '      } else if (neon > 0.5) {',
+    '        col = crush(base.gbr);', // overexposed: wrong channel order at 1 bit
     '      } else {',
-    '        col = crush(base.gbr);',
+    '        col = base.gbr;',
     '      }',
-    '      col = profile(col);',
+    '      col = tone(col);',
     '    }',
     '  } else {',
     '    float c = max(2.0, floor(blockAt(px) * 0.5));',
@@ -100,12 +119,12 @@
     '    float r = hash(cell + s + 2.9);',
     '    if (body(from) > 0.5 && r < amount * 0.5) {',
     '      vec3 piece = cam1(from);',
-    '      col = profile(hash(cell + s + 4.4) < 0.3 ? crush(piece) : piece);',
+    '      col = tone(hash(cell + s + 4.4) < 0.3 ? crush(piece) : piece);',
     '    } else if (body(center) > 0.5 && r < amount * 0.75) {',
     // A lost piece decodes as random bits: 1 bit per channel with a random threshold, so on
     // average it keeps the body's own color (stochastic quantization).
     '      vec3 noise = vec3(hash(cell + s + 6.1), hash(cell + s + 7.7), hash(cell + s + 8.3));',
-    '      col = profile(step(noise, cam1(center)));',
+    '      col = tone(step(noise, cam1(center)));',
     '    }',
     '  }',
     '  gl_FragColor = vec4(col, 1.0);',
@@ -113,7 +132,7 @@
   ].join('\n');
 
   function createGlitch() {
-    var pass, maskBytes = null, burst = 0, lastT = null, seenEvent = 0, seam = null;
+    var pass, maskBytes = null, burst = 0, lastT = null, seenEvent = 0, seam = null, held = null;
     return {
       animated: true,
       render: function (frame, out, params) {
@@ -128,7 +147,7 @@
         var dt = lastT === null ? 1 / 30 : Math.max(1 / 120, Math.min(0.1, t - lastT));
         lastT = t;
         var body = Magi.tracking.body, seg = body.detect(frame);
-        var hands = [], hand = Magi.tracking.hands, level = 1, split = params.mode === 'split' || !params.mode, stopped = false;
+        var hands = [], hand = Magi.tracking.hands, level = 1, split = params.mode === 'split' || !params.mode, stopped = false, pinched = false;
         burst *= Math.pow(2, -dt / 0.25);
         if (!seam) seam = { x: W / 2, y: H / 2 };
         if (params.hand) {
@@ -140,6 +159,7 @@
             burst = 1;
           });
           stopped = hands.some(function (h) { return h.fist; });
+          pinched = hands.some(function (h) { return h.pinched; });
           if (!hands.length) level = 0.3;
           else if (split) {
             // The seams follow your hand, eased.
@@ -151,8 +171,10 @@
             level = x * x * (3 - 2 * x);
           }
         }
-        // A fist stops the glitch; the video keeps running.
-        if (stopped) { frame.say('Open your hand to glitch again.'); return; }
+        // A fist stops the glitch; the video keeps running. A pinch holds the glitched picture as
+        // it is until you let go.
+        if (stopped) { held = null; frame.say('Open your hand to glitch again.'); return; }
+        if (pinched && held) { ctx.drawImage(held, 0, 0); return; }
         var amount = Math.min(1, params.amount / 100 * level + burst);
 
         if (seg) {
@@ -168,8 +190,7 @@
             pass.texture('cam', out);
             pass.data('mask', seg.width, seg.height, maskBytes);
             var rate = 2 + params.speed / 100 * 28;
-            // Depth: a body filling 35% of the frame is 1×; hands at 15% of the frame height are 1×.
-            var hs = function (h) { return h ? [h.center.x, h.center.y, Math.max(0.5, h.size / (H * 0.15))] : [0, 0, 0]; };
+            // Depth: a body filling 35% of the frame is 1×.
             pass.run(W, H, {
               size: [W, H],
               amount: amount,
@@ -177,14 +198,15 @@
               seed: Math.floor(t * rate) % 4096,
               mode: MODES[params.mode] || 0,
               seam: [seam.x, seam.y],
-              hue: params.color > 0 ? (params.color - 1) / 99 * Math.PI * 2 + 0.001 : 0,
+              profile: params.profile,
               depth: params.depth ? 1 : 0,
               near: Math.max(0.5, (present / n) / 0.35),
               spread: (params.spread / 100) * 0.6,
-              handA: hs(hands[0]),
-              handB: hs(hands[1])
+              neon: params.neon ? 1 : 0
             });
             ctx.drawImage(pass.canvas, 0, 0);
+            if (!held || held.width !== W || held.height !== H) { held = document.createElement('canvas'); held.width = W; held.height = H; }
+            held.getContext('2d').drawImage(out, 0, 0);
           }
           if (present / n <= 0.01) return frame.say('Step into view.');
         }
@@ -194,7 +216,7 @@
         else if (params.hand && !hands.length) frame.say(split ? 'Raise a hand: the seams cross at your hand. Fist stops.' : 'Raise a hand: higher glitches harder, swipe bursts, fist stops.');
       },
       reset: function () {
-        burst = 0; seenEvent = 0; seam = null;
+        burst = 0; seenEvent = 0; seam = null; held = null;
         lastT = null;
       }
     };

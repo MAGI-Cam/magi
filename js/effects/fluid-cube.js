@@ -20,7 +20,9 @@
 // middle knuckle), z out of the palm, from MediaPipe's metric world points, then tipped 25° and
 // turned 30° so it always reads in 3D. Its size follows your palm's apparent size, so bringing the
 // hand closer makes it bigger. A flick (Interaction Engine) throws the fluid the flick's way; a
-// shake churns it for 0.6 s. With no hand the cube stays and turns slowly.
+// shake churns it for 0.6 s. With two hands the cube stays with one index fingertip and moves to
+// the other when that one comes clearly closer (within 80% of the distance), gliding over.
+// Orbit turns the cube about its own vertical axis. With no hand it stays and turns slowly.
 //
 // Drawing: each simulated particle is a small cluster of 14 tiny glowing points (WebGL, additive),
 // so 1,200 particles read as a dense cloud of about 17,000 specks, like the reference. (The
@@ -109,7 +111,7 @@
   function createFluidCube() {
     var N = 0, x, p, v, s0, h, rho0, lim, offs;
     var nA = new Int32Array(0), nB = new Int32Array(0), nU = new Float32Array(0), pairs = 0;
-    var cube = null, Rot = null, yaw = 0, last = 0, hist = [], seenEvent = 0, churn = 0;
+    var cube = null, Rot = null, yaw = 0, last = 0, hist = [], seenEvent = 0, churn = 0, holder = null, handoff = 0, orbit = 0;
     var points, pointData = null;
 
     function init(count) {
@@ -244,17 +246,27 @@
         var dt = last ? Math.min(0.05, (frame.time - last) / 1000) : 1 / 60;
         last = frame.time;
 
-        // One hand: where it wants the cube, and its orientation.
-        var tracker = Magi.tracking.hands, ix = Magi.interaction.read(frame), hd = ix.hands[0];
-        var details = tracker.details(), want = null, target = null;
+        // The holding hand: the cube stays with one index fingertip; when the other index tip comes
+        // clearly closer to the cube (within 80% of the holder's distance) it changes hands, gliding
+        // over for 0.5 s.
+        var tracker = Magi.tracking.hands, ix = Magi.interaction.read(frame);
+        var details = tracker.details(), want = null, target = null, hd = null, hi = -1;
         if (!cube) cube = { x: W / 2, y: H / 2, s: Math.min(W, H) * 0.22 };
+        var tipD = ix.hands.map(function (h) { return Math.hypot(h.points[INDEX_TIP].x - cube.x, h.points[INDEX_TIP].y - cube.y); });
+        ix.hands.forEach(function (h, i) { if (h.id === holder) hi = i; });
+        if (hi < 0 && ix.hands.length) { hi = tipD.indexOf(Math.min.apply(null, tipD)); }
+        else if (hi >= 0) ix.hands.forEach(function (h, i) { if (i !== hi && tipD[i] < tipD[hi] * 0.8) { hi = i; handoff = 0.5; } });
+        if (hi >= 0) { hd = ix.hands[hi]; holder = hd.id; } else holder = null;
+        handoff = Math.max(0, handoff - dt);
+        orbit += (params.orbit / 100) * 1.5 * dt;
         if (hd) {
           var hp = hd.points, tip = hp[INDEX_TIP], base = hp[INDEX_MCP];
           var dl = Math.hypot(tip.x - base.x, tip.y - base.y) || 1, size = hd.size * 1.3;
           want = { x: tip.x + (tip.x - base.x) / dl * size * 1.1, y: tip.y + (tip.y - base.y) / dl * size * 1.1, s: size };
-          var world = details[0] && details[0].world;
+          var world = details[hi] && details[hi].world;
           var q = world && world.length === 21 ? world : hp.map(function (r) { return { x: r.x, y: r.y, z: (r.z || 0) * W }; });
-          target = mul(handFrame(q), VIEW);
+          // Orbit: the cube also turns about its own vertical axis at Orbit × 1.5 rad/s.
+          target = mul(mul(handFrame(q), VIEW), [[Math.cos(orbit), 0, Math.sin(orbit)], [0, 1, 0], [-Math.sin(orbit), 0, Math.cos(orbit)]]);
           ix.events.forEach(function (e) {
             if (e.n <= seenEvent) return;
             seenEvent = e.n;
@@ -266,7 +278,7 @@
             } else if (e.type === 'shake') churn = 0.6;
           });
         }
-        var e = 1 - Math.exp(-dt / 0.08);
+        var e = 1 - Math.exp(-dt / (handoff > 0 ? 0.22 : 0.08));
         if (want) {
           cube.x += (want.x - cube.x) * e; cube.y += (want.y - cube.y) * e; cube.s += (want.s - cube.s) * e;
           Rot = Rot ? easeRot(Rot, target, e) : target;
@@ -347,28 +359,29 @@
         if (params.readouts) {
           // Readouts like the reference: the simulation's parameters on the left, the hand on the right.
           var fs = Math.round(9 * u), lh = Math.round(fs * 1.35), pad = Math.round(14 * u);
-          ctx.save();
-          ctx.fillStyle = 'rgba(255,255,255,0.85)';
-          ctx.font = '400 ' + Math.round(fs * 1.4) + 'px Inter, sans-serif';
-          ctx.textBaseline = 'top';
-          ctx.fillText('Fluid Particle Simulation', pad, pad);
-          ctx.font = '400 ' + fs + 'px ' + Magi.fx.MONO;
+          var hud = frame.hud;
+          hud.save();
+          hud.fillStyle = 'rgba(255,255,255,0.85)';
+          hud.font = '400 ' + Math.round(fs * 1.4) + 'px Inter, sans-serif';
+          hud.textBaseline = 'top';
+          hud.fillText('Fluid Particle Simulation', pad, pad);
+          hud.font = '400 ' + fs + 'px ' + Magi.fx.MONO;
           [['particles', N], ['radius', h.toFixed(3)], ['rest density', rho0.toFixed(2)], ['stiffness', K], ['near stiffness', K_NEAR],
             ['viscosity', (params.viscosity / 100).toFixed(2)], ['gravity', g.toFixed(1)], ['pairs', pairs], ['dt', DT.toFixed(4)]
-          ].forEach(function (r, i) { ctx.fillText(r[0] + '  ' + r[1], pad, pad + fs * 2.2 + i * lh); });
+          ].forEach(function (r, i) { hud.fillText(r[0] + '  ' + r[1], pad, pad + fs * 2.2 + i * lh); });
           if (hd) {
-            ctx.textAlign = 'right';
+            hud.textAlign = 'right';
             [['HAND_1_ROTATION', hd.rotation.toFixed(1)], ['HAND_1_POSITION_X', (hd.center.x / W).toFixed(2)],
               ['HAND_1_POSITION_Y', (hd.center.y / H).toFixed(2)], ['HAND_1_POSITION_Z', (-hd.size / H).toFixed(2)]
-            ].forEach(function (r, i) { ctx.fillText('+ ' + r[0] + '  ' + r[1], W - pad, pad + fs * 2.2 + i * lh); });
+            ].forEach(function (r, i) { hud.fillText('+ ' + r[0] + '  ' + r[1], W - pad, pad + fs * 2.2 + i * lh); });
           }
-          ctx.restore();
+          hud.restore();
         }
 
         if (tracker.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, tracker, 'hand');
         else if (!hd) Magi.tracking.hint(ctx, frame, 'Point at the cube: it floats at your fingertip and turns with your hand. Flick to slosh, shake to churn.');
       },
-      reset: function () { N = 0; cube = null; Rot = null; last = 0; hist = []; churn = 0; }
+      reset: function () { N = 0; cube = null; Rot = null; last = 0; hist = []; churn = 0; holder = null; handoff = 0; orbit = 0; }
     };
   }
 
