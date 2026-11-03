@@ -99,13 +99,18 @@ Magi.effectConfig = [
     group: 'hand',
     ready: true,
     photoType: 'image/jpeg',
+    modes: [
+      { id: 'skeleton', name: 'Skeleton' },
+      { id: 'controller', name: 'Controller' },
+      { id: 'link', name: 'Link' }
+    ],
     params: [
-      toggle('readouts', 'Readouts', true, 'Show which hand it is, the tracking score and rotation.'),
-      toggle('pinch', 'Pinch', true, 'Show the thumb–index line and pinch value.'),
-      toggle('distance', 'Distance', true, 'Show the line and distance between two hands.'),
-      toggle('fingers', 'Fingers', false, 'Show the gaps between neighboring fingertips on each hand.'),
-      toggle('pairs', 'Pairs', false, 'Show the distances between matching fingertips of your left and right hands.'),
-      toggle('signals', 'Signals', false, 'Show what MAGI reads from each hand: fingers, curl, spread, pinches, speed and motions.')
+      { id: 'readouts', label: 'Readouts', type: 'toggle', default: true, modes: ['skeleton'], hint: 'Show which hand it is, the tracking score and rotation.' },
+      { id: 'pinch', label: 'Pinch', type: 'toggle', default: true, modes: ['skeleton'], hint: 'Show the thumb–index line and pinch value.' },
+      { id: 'distance', label: 'Distance', type: 'toggle', default: true, modes: ['skeleton'], hint: 'Show the line and distance between two hands.' },
+      { id: 'fingers', label: 'Fingers', type: 'toggle', default: false, modes: ['skeleton'], hint: 'Show the gaps between neighboring fingertips on each hand.' },
+      { id: 'pairs', label: 'Pairs', type: 'toggle', default: false, modes: ['skeleton'], hint: 'Show the distances between matching fingertips of your left and right hands.' },
+      { id: 'signals', label: 'Signals', type: 'toggle', default: false, modes: ['skeleton'], hint: 'Show what MAGI reads from each hand: fingers, curl, spread, pinches, speed and motions.' }
     ]
   },
   {
@@ -174,6 +179,10 @@ Magi.effectConfig = [
     group: 'hand',
     ready: true,
     photoType: 'image/jpeg',
+    modes: [
+      { id: 'threads', name: 'Threads' },
+      { id: 'strings', name: 'Strings' }
+    ],
     params: [
       range('rings', 'Rings', 0, 5, 3),
       range('sag', 'Sag', 0, 100, 35),
@@ -295,6 +304,50 @@ Magi.effectConfig = [
       range('dim', 'Dim', 0, 100, 0),
       toggle('squares', 'Squares', true, 'A small square at every color.'),
       toggle('axes', 'Axes', true, 'Draw the color space’s axes.')
+    ]
+  },
+  {
+    id: 'tendrils',
+    name: 'Tendrils',
+    group: 'hand',
+    ready: true,
+    photoType: 'image/jpeg',
+    params: [
+      range('count', 'Count', 0, 100, 50),
+      range('curl', 'Curl', 0, 100, 50),
+      range('length', 'Length', 0, 100, 50),
+      range('glow', 'Glow', 0, 100, 60),
+      { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' }
+    ]
+  },
+  {
+    id: 'vines',
+    name: 'Vines',
+    group: 'hand',
+    ready: true,
+    photoType: 'image/jpeg',
+    params: [
+      range('growth', 'Growth', 0, 100, 50),
+      range('density', 'Density', 0, 100, 50),
+      range('leaves', 'Leaves', 0, 100, 40),
+      range('wither', 'Wither', 0, 100, 40),
+      range('glow', 'Glow', 0, 100, 60),
+      { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' }
+    ]
+  },
+  {
+    id: 'dna',
+    name: 'DNA',
+    group: 'hand',
+    ready: true,
+    photoType: 'image/jpeg',
+    params: [
+      range('size', 'Size', 0, 100, 50),
+      range('spin', 'Spin', 0, 100, 30),
+      range('glow', 'Glow', 0, 100, 60),
+      { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
+      toggle('letters', 'Letters', false, 'Show the base letters (A, T, G, C) on the pairs facing you.'),
+      { id: 'text', label: 'Text', type: 'text', default: 'MAGI', placeholder: 'Spell it in DNA', maxLength: 60 }
     ]
   },
 
@@ -423,7 +476,10 @@ Magi.effectGuides = {
     'Distance: line and distance between two palms, as a share of the frame width.',
     'Fingers: gaps between neighboring fingertips, in palm lengths.',
     'Pairs: distances between matching fingertips of your two hands.',
-    'Signals: what MAGI reads from your hand: finger count, curl, spread, pinches, speed, last swipe, flick or shake.'
+    'Signals: what MAGI reads from your hand: finger count, curl, spread, pinches, speed, last swipe, flick or shake.',
+    'Modes: tap the tile. Skeleton (the toggles above), Controller, Link.',
+    'Controller: the ball sits between your thumb and index and slides along the ruler; its value is your position across the frame. Open thumb and index to swell the rings; the dots trace your index fingertip, the bars recent values.',
+    'Link: two hands; a line joins your index fingertips with their distance at the green midpoint; the scope shows your fingertips around the palm.'
   ],
   mosh: [
     'Spread thumb and index: the zone between them moshes; spreading wider makes it bigger.',
@@ -521,6 +577,23 @@ Magi.effectGuides = {
     'Two hands: threads join matching fingertips across your hands, with rings between them.',
     'Pinch: draws a taut thumb–index thread; let go and the web gets plucked.',
     'Threads sag and swing as you move: real rope physics, pinned to your fingers.',
-    'Rings: how many rings. Sag: how much threads droop. Particles: specks running along threads. Glow, Color: light and color.'
+    'Rings: how many rings. Sag: how much threads droop. Particles: specks running along threads. Glow, Color: light and color.',
+    'Modes: tap the tile. Threads, or Strings: glowing bead strings with pulsing nodes at your fingertips and palms.'
+  ],
+  tendrils: [
+    'How it works: moving fingertips release particles that follow a curl-noise flow (swirls with no sources or sinks) and leave glowing trails.',
+    'Pinch: pulls the tendrils toward the pinch. Make a fist, then open it: a ring bursts from your palm.',
+    'Count: how many come off a moving finger. Curl: flow strength. Length: how long trails last. Glow, Color: light and color.'
+  ],
+  vines: [
+    'How it works: space colonization, the algorithm used to model how trees and leaf veins grow; vines compete for space, so they branch and spread.',
+    'Move your fingers: they plant buds along their path. Pinch and hold: growth runs three times as fast.',
+    'Growth: speed. Density: how much space they fill. Leaves: share of tips with a leaf. Wither: how soon old vines fade. Glow, Color: light and color.'
+  ],
+  dna: [
+    'How it works: B-DNA, 10.5 base pairs per turn with a minor and a major groove; your Text is written in bases, two bits each (A, C, G, T), paired A–T and G–C.',
+    'Two hands: the helix runs palm to palm; turning a hand twists that end. One hand: it runs out past your index finger.',
+    'Pinch and hold: unzips the helix from that end; let go and it zips back.',
+    'Size: helix radius. Spin: turning on its own. Glow, Color: light and color (far left: a color per base). Letters: base letters. Text: what it spells.'
   ]
 };

@@ -2,6 +2,9 @@
 // Hands: MediaPipe's 21-point skeleton per hand (green bones, red joints), handedness and score,
 // pinch (thumb tip to index tip, divided by palm length so it doesn't change with distance),
 // rotation (wrist → middle knuckle, 0° = pointing up) and the distance between two hands.
+// Modes: Skeleton (the readouts below), Controller (the hand as a control surface: pinch ball and
+// value, ruler, ring stack, fingertip constellation, value bars) and Link (index-to-index line,
+// h1/h2 tags, a radial scope of fingertip angles and distances).
 // Fingers: the gap between each pair of neighboring fingertips, in palm lengths. Pairs: lines
 // between matching fingertips of the left and right hands, as a share of the frame width.
 // Signals: what the Interaction Engine (js/interaction.js) reads from each hand: finger count and
@@ -49,7 +52,137 @@
   }
 
   function createHands() {
-    var lastEvent = {};
+    var lastEvent = {}, trail = [], values = [], lastSample = 0, lastIx = null;
+
+    // Controller (after the VCV Rack reference): the hand read as a control surface. A white ball
+    // at the pinch point (midpoint of thumb and index tips) carries its value, x as a share of
+    // the frame width, printed at full precision on a leader line; a ruler along the bottom takes
+    // a drop line from the ball like a slider's handle. On the left a stack of rings swells with
+    // the pinch's openness, a traveling wave like a level meter; on the right a constellation of
+    // the index fingertip's last 40 positions (sampled every 80 ms, joined in order with a few
+    // cross-links); top right, a bar chart of the last 16 values.
+    function controller(ctx, frame, ix, u) {
+      var W = frame.width, H = frame.height, t = frame.time / 1000, hud = frame.hud, hd = ix.hands[0];
+      var lw = Math.max(1, u), fs = Math.round(11 * u);
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      ctx.lineWidth = lw;
+      // Ruler.
+      var ry = H * 0.9;
+      ctx.beginPath();
+      ctx.moveTo(0, ry); ctx.lineTo(W, ry);
+      for (var k = 0; k <= 16; k++) { var tx = W * k / 16; ctx.moveTo(tx, ry); ctx.lineTo(tx, ry - 10 * u); }
+      ctx.stroke();
+      var openness = 0;
+      if (hd) {
+        var p = hd.points, bx = (p[THUMB_TIP].x + p[INDEX_TIP].x) / 2, by = (p[THUMB_TIP].y + p[INDEX_TIP].y) / 2, br = hd.size * 0.28;
+        openness = Math.min(1, hd.pinchWith.index.distance / 1.2);
+        var value = bx / W;
+        // Ball, drop line and marker, leader line and value.
+        ctx.beginPath(); ctx.moveTo(bx, by + br); ctx.lineTo(bx, ry); ctx.stroke();
+        ctx.fillRect(bx - 3 * u, ry - 3 * u, 6 * u, 6 * u);
+        ctx.beginPath(); ctx.moveTo(0, ry); ctx.lineTo(bx - br * 0.7, by + br * 0.7); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(W * 0.08, by); ctx.lineTo(bx - br, by); ctx.stroke();
+        var g = ctx.createRadialGradient(bx - br * 0.3, by - br * 0.3, br * 0.1, bx, by, br);
+        g.addColorStop(0, 'rgba(255,255,255,0.95)'); g.addColorStop(1, 'rgba(225,225,225,0.75)');
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(bx, by, br, 0, Math.PI * 2); ctx.fill();
+        hud.font = '600 ' + fs + 'px ' + Magi.fx.MONO;
+        hud.fillStyle = '#fff';
+        hud.textBaseline = 'bottom';
+        hud.textAlign = 'left';
+        hud.fillText(String(value), W * 0.08, by - 4 * u);
+        if (ix !== lastIx && t - lastSample > 0.08) {
+          lastSample = t;
+          trail.push({ x: p[INDEX_TIP].x, y: p[INDEX_TIP].y });
+          values.push(value);
+          if (trail.length > 40) trail.shift();
+          if (values.length > 16) values.shift();
+        }
+      }
+      lastIx = ix;
+      // Ring stack: 26 ellipses down the left edge, widths a traveling wave scaled by openness.
+      ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+      ctx.beginPath();
+      var cx = W * 0.06, n = 26;
+      for (var i = 0; i < n; i++) {
+        var yy = H * 0.12 + (H * 0.7) * i / (n - 1);
+        var r = W * 0.035 * (0.15 + (0.25 + openness) * Math.abs(Math.sin(i * 0.45 - t * 3)));
+        ctx.moveTo(cx + r, yy);
+        ctx.ellipse(cx, yy, r, r * 0.32, 0, 0, Math.PI * 2);
+      }
+      ctx.stroke();
+      // Constellation: the fingertip's recent path, scaled into a box on the right.
+      if (trail.length > 1) {
+        var x0 = Math.min.apply(null, trail.map(function (q) { return q.x; })), x1 = Math.max.apply(null, trail.map(function (q) { return q.x; }));
+        var y0 = Math.min.apply(null, trail.map(function (q) { return q.y; })), y1 = Math.max.apply(null, trail.map(function (q) { return q.y; }));
+        var bw = W * 0.2, bh = H * 0.35, ox = W * 0.77, oy = H * 0.3, sc = Math.min(bw / Math.max(1, x1 - x0), bh / Math.max(1, y1 - y0));
+        var pts = trail.map(function (q) { return [ox + (q.x - x0) * sc, oy + (q.y - y0) * sc]; });
+        ctx.beginPath();
+        pts.forEach(function (q, j) {
+          j ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]);
+        });
+        for (var j2 = 0; j2 + 7 < pts.length; j2 += 5) { ctx.moveTo(pts[j2][0], pts[j2][1]); ctx.lineTo(pts[j2 + 7][0], pts[j2 + 7][1]); }
+        ctx.stroke();
+        ctx.fillStyle = '#fff';
+        pts.forEach(function (q) { ctx.beginPath(); ctx.arc(q[0], q[1], Math.max(1.5, 2.6 * u), 0, Math.PI * 2); ctx.fill(); });
+      }
+      // Bars: recent values.
+      var px0 = W * 0.77, py0 = H * 0.04, pw = W * 0.2, ph = H * 0.16;
+      ctx.fillStyle = 'rgba(255,255,255,0.22)';
+      ctx.fillRect(px0, py0, pw, ph);
+      ctx.fillStyle = 'rgba(255,255,255,0.95)';
+      values.forEach(function (v, j) { var bh2 = ph * v; ctx.fillRect(px0 + pw * 0.5 + j * pw / 32, py0 + ph - bh2, pw / 32 - 1, bh2); });
+      ctx.restore();
+    }
+
+    // Link (after the reference): a line between the two index fingertips with a node at its
+    // middle, h1/h2 tags, and a radial scope: each fingertip plotted at its angle around the palm
+    // center and its distance in palm lengths, inside four rings with a dotted outer ring.
+    function link(ctx, frame, ix, u) {
+      var W = frame.width, H = frame.height, hud = frame.hud, hs = ix.pair ? [ix.pair.left, ix.pair.right] : ix.hands;
+      var lw = Math.max(1, u), fs = Math.round(11 * u);
+      ctx.save();
+      ctx.lineWidth = lw;
+      hud.font = '500 ' + fs + 'px ' + Magi.fx.MONO;
+      hud.fillStyle = '#fff';
+      hud.textAlign = 'left';
+      hud.textBaseline = 'bottom';
+      hs.forEach(function (h, i) { var q = h.points[INDEX_TIP]; hud.fillText('h' + (i + 1), q.x + 6 * u, q.y - 6 * u); });
+      if (hs.length === 2) {
+        var a = hs[0].points[INDEX_TIP], b = hs[1].points[INDEX_TIP], mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+        ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+        ctx.fillStyle = 'rgb(70,230,110)';
+        ctx.beginPath(); ctx.arc(mx, my, Math.max(3, 5 * u), 0, Math.PI * 2); ctx.fill();
+        hud.fillText((Math.hypot(b.x - a.x, b.y - a.y) / W).toFixed(3), mx + 8 * u, my - 6 * u);
+      }
+      // Radial scope, top right.
+      var R = H * 0.14, cx = W - R - 16 * u, cy = R + 16 * u;
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.beginPath(); ctx.arc(cx, cy, R * 1.1, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+      ctx.beginPath();
+      for (var k = 1; k <= 4; k++) { ctx.moveTo(cx + R * k / 4, cy); ctx.arc(cx, cy, R * k / 4, 0, Math.PI * 2); }
+      for (var a2 = 0; a2 < 12; a2++) { var an = a2 / 12 * Math.PI * 2; ctx.moveTo(cx + Math.cos(an) * R * 0.92, cy + Math.sin(an) * R * 0.92); ctx.lineTo(cx + Math.cos(an) * R, cy + Math.sin(an) * R); }
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(70,230,110,0.9)';
+      for (var d = 0; d < 48; d++) { var ad = d / 48 * Math.PI * 2; ctx.fillRect(cx + Math.cos(ad) * R * 1.05 - u, cy + Math.sin(ad) * R * 1.05 - u, 2 * u, 2 * u); }
+      hs.forEach(function (h, i) {
+        ctx.strokeStyle = i ? 'rgba(70,230,110,0.95)' : 'rgba(255,255,255,0.95)';
+        ctx.fillStyle = ctx.strokeStyle;
+        ctx.beginPath();
+        [4, 8, 12, 16, 20].forEach(function (tp) {
+          var q = h.points[tp], an = Math.atan2(q.y - h.center.y, q.x - h.center.x), rr = Math.min(1, Math.hypot(q.x - h.center.x, q.y - h.center.y) / h.size / 2.2) * R;
+          ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(an) * rr, cy + Math.sin(an) * rr);
+          ctx.fillRect(cx + Math.cos(an) * rr - 2 * u, cy + Math.sin(an) * rr - 2 * u, 4 * u, 4 * u);
+        });
+        ctx.stroke();
+      });
+      ctx.restore();
+    }
+
     return {
       animated: true,
       render: function (frame, out, params) {
@@ -59,7 +192,7 @@
         frame.draw(ctx, w, h);
         var tracker = Magi.tracking.hands;
         var hands = tracker.detect(frame), info = tracker.details(), C = Magi.tracking.connections;
-        var ix = Magi.interaction.read(frame);
+        var ix = Magi.interaction.read(frame), basic = !params.mode || params.mode === 'skeleton';
         if (params.signals) ix.events.forEach(function (e) { lastEvent[e.hand] = e; });
 
         hands.forEach(function (p, i) {
@@ -77,7 +210,7 @@
           var sig = ix.hands[i];
           var pinch = sig ? sig.pinchWith.index.distance : dist(p[THUMB_TIP], p[INDEX_TIP]) / (dist(p[WRIST], p[MIDDLE_MCP]) || 1);
           var rot = sig ? sig.rotation : 0;
-          if (params.pinch) {
+          if (params.pinch && basic) {
             // Pinch line between thumb and index tips.
             ctx.save();
             ctx.setLineDash([4 * u, 4 * u]);
@@ -90,6 +223,7 @@
             ctx.restore();
           }
           var d = info[i] || { label: 'Hand', score: 0 }, lines = [];
+          if (!basic) return;
           if (params.readouts) lines.push(d.label + '  ' + d.score.toFixed(2));
           if (params.pinch) lines.push('pinch    ' + pinch.toFixed(2) + (sig && sig.pinched ? '  closed' : ''));
           if (params.readouts) lines.push('rotation ' + (rot >= 0 ? ' ' : '') + rot.toFixed(0) + '°');
@@ -112,7 +246,7 @@
 
         // Fingers: the gaps between neighboring fingertips on each hand, in palm lengths.
         // Pairs: matching fingertips of the left and right hands, as a share of the frame width.
-        if (params.fingers || (params.pairs && hands.length === 2)) {
+        if (basic && (params.fingers || (params.pairs && hands.length === 2))) {
           ctx.save();
           ctx.strokeStyle = 'rgba(255,255,255,0.85)';
           ctx.lineWidth = Math.max(1, u);
@@ -144,7 +278,10 @@
           ctx.restore();
         }
 
-        if (params.distance && hands.length === 2) {
+        if (params.mode === 'controller') controller(ctx, frame, ix, u);
+        else if (params.mode === 'link') link(ctx, frame, ix, u);
+
+        if (basic && params.distance && hands.length === 2) {
           var a = palmCenter(hands[0]), b = palmCenter(hands[1]);
           ctx.save();
           ctx.strokeStyle = '#fff';

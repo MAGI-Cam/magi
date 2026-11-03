@@ -141,9 +141,41 @@
         });
         if (hands.length) step(hands, params, dt, H, pinched);
 
-        var ink = Magi.fx.inkColor(params.color), rgb = ink.map(function (v) { return Math.round(v * 255); }).join(',');
+        var strings = params.mode === 'strings';
+        // Strings default to violet; Color picks another hue.
+        var ink = strings && !params.color ? [0.62, 0.42, 1] : Magi.fx.inkColor(params.color), rgb = ink.map(function (v) { return Math.round(v * 255); }).join(',');
         var glow = params.glow / 100;
+        if (strings) {
+          // Strings (after "String Spiders"): each thread is a strand of glowing beads, added like
+          // light, with soft pulsing hubs at the fingertips and palms where threads meet.
+          ctx.save();
+          ctx.globalCompositeOperation = 'lighter';
+          var gap = Math.max(2, 3 * u), bead = Math.max(1, 1.3 * u);
+          ctx.fillStyle = 'rgba(' + rgb + ',0.55)';
+          ctx.beginPath();
+          ropes.forEach(function (R) {
+            if (R.kind === 'pinch' && !pinched[R.a.hand]) return;
+            for (var i = 0; i < R.pts.length - 1; i++) {
+              var a = R.pts[i], b = R.pts[i + 1], d = Math.hypot(b.x - a.x, b.y - a.y), m = Math.max(1, Math.floor(d / gap));
+              for (var k = 0; k < m; k++) { var x = a.x + (b.x - a.x) * k / m, y = a.y + (b.y - a.y) * k / m; ctx.moveTo(x + bead, y); ctx.arc(x, y, bead, 0, Math.PI * 2); }
+            }
+          });
+          ctx.fill();
+          hands.forEach(function (p) {
+            TIPS.concat([0]).forEach(function (ti, j) {
+              var q = ti === 0 ? center(p) : p[ti], r = (ti === 0 ? 0.35 : 0.18) * Math.hypot(p[9].x - p[0].x, p[9].y - p[0].y) * (0.85 + 0.15 * Math.sin(t * 3 + j)) * (0.5 + glow);
+              var g = ctx.createRadialGradient(q.x, q.y, 0, q.x, q.y, r);
+              g.addColorStop(0, 'rgba(255,255,255,0.9)');
+              g.addColorStop(0.25, 'rgba(' + rgb + ',0.7)');
+              g.addColorStop(1, 'rgba(' + rgb + ',0)');
+              ctx.fillStyle = g;
+              ctx.beginPath(); ctx.arc(q.x, q.y, r, 0, Math.PI * 2); ctx.fill();
+            });
+          });
+          ctx.restore();
+        }
         ctx.save();
+        if (strings) ctx.globalAlpha = 0.25;
         ctx.lineJoin = 'round';
         ctx.lineCap = 'round';
         // Threads: a faint wide stroke for glow under a fine bright one.
