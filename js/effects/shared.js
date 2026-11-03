@@ -331,7 +331,6 @@
     bodoni: { family: 'Bodoni Moda', stack: '"Bodoni Moda", Didot, "Bodoni 72", Georgia, serif', threshold: 40 }
   };
 
-  // Wraps one renderer per mode, built on first use, and draws with the mode in params.mode.
   // A full-frame WebGL pass: one fragment shader run on every pixel, for per-pixel work over large
   // areas that would be too slow in JavaScript. Returns null where WebGL is unavailable.
   //   pass.texture(name, source)              upload an image, video or canvas
@@ -400,6 +399,62 @@
     };
   };
 
+  // Motion vectors the way video codecs find them: the frame is cut into B×B macroblocks, each
+  // shrunk to 8×8 for matching, and each block's vector is found by three-step search (Koga et
+  // al. 1981): test the 8 neighbors at distance 4, recenter on the best, then 2, then 1, keeping
+  // the offset with the smallest sum of absolute luma differences against the previous frame.
+  //   est.update(canvas, w, h, B)   measure against the frame passed last time (zero vectors at first)
+  //   est.vector(bx, by)            the vector of block (bx, by), in frame pixels: where it came from
+  //   est.cols, est.rows
+  fx.motionEstimator = function () {
+    var EST = 8, STEPS = [4, 2, 1];
+    var c = document.createElement('canvas'), ctx = c.getContext('2d', { willReadFrequently: true });
+    var luma = null, prev = null, ew = 0, eh = 0, scale = 1;
+    function sad(bx, by, dx, dy, best) {
+      var sum = 0;
+      for (var y = 0; y < EST; y++) {
+        var cy = by + y, py = Math.min(eh - 1, Math.max(0, cy + dy));
+        for (var x = 0; x < EST; x++) {
+          var cx = bx + x, px = Math.min(ew - 1, Math.max(0, cx + dx));
+          sum += Math.abs(luma[cy * ew + cx] - prev[py * ew + px]);
+        }
+        if (sum >= best) return sum; // already worse than the best candidate
+      }
+      return sum;
+    }
+    var est = {
+      cols: 0, rows: 0,
+      update: function (src, w, h, B) {
+        var cols = Math.ceil(w / B), rows = Math.ceil(h / B);
+        if (cols * EST !== ew || rows * EST !== eh) {
+          ew = c.width = cols * EST; eh = c.height = rows * EST;
+          luma = new Float32Array(ew * eh); prev = null;
+        }
+        est.cols = cols; est.rows = rows; scale = EST / B;
+        ctx.drawImage(src, 0, 0, w * scale, h * scale);
+        var d = ctx.getImageData(0, 0, ew, eh).data;
+        var swap = prev || new Float32Array(ew * eh), first = !prev;
+        prev = luma; luma = swap;
+        for (var p = 0, n = ew * eh; p < n; p++) luma[p] = 0.2126 * d[p * 4] + 0.7152 * d[p * 4 + 1] + 0.0722 * d[p * 4 + 2];
+        if (first) prev.set(luma);
+      },
+      vector: function (bx, by) {
+        var x0 = bx * EST, y0 = by * EST, vx = 0, vy = 0, best = sad(x0, y0, 0, 0, Infinity);
+        for (var s = 0; s < STEPS.length; s++) {
+          var step = STEPS[s], cx = vx, cy = vy;
+          for (var oy = -1; oy <= 1; oy++) for (var ox = -1; ox <= 1; ox++) {
+            if (!ox && !oy) continue;
+            var d = sad(x0, y0, cx + ox * step, cy + oy * step, best);
+            if (d < best) { best = d; vx = cx + ox * step; vy = cy + oy * step; }
+          }
+        }
+        return [vx / scale, vy / scale];
+      }
+    };
+    return est;
+  };
+
+  // Wraps one renderer per mode, built on first use, and draws with the mode in params.mode.
   fx.createModeRenderer = function (modes, fallback) {
     var made = {};
     var current = null;

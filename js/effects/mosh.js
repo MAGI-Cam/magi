@@ -4,7 +4,7 @@
 // from 3 px to the left") plus a small correction. Datamoshing removes the I-frames (full
 // pictures), so those vectors keep moving the pixels of a stale picture and the image smears
 // and blooms. Here the vectors are measured from the camera with three-step search, a classic
-// codec block-matching algorithm, and applied, with no correction, to a buffer that is never
+// codec block-matching algorithm (fx.motionEstimator), and applied, with no correction, to a buffer that is never
 // refreshed, but only inside the zone around your hand.
 //
 // Hand: the zone sits between thumb and index fingertip and grows as they spread apart.
@@ -15,48 +15,14 @@
   var fx = Magi.fx;
   // Macroblock size in frame pixels for each Block step (1–9).
   var BLOCKS = [12, 16, 20, 24, 32, 40, 48, 56, 64];
-  var EST = 8;                 // each block is matched at 8×8 pixels
-  var STEPS = [4, 2, 1];       // three-step search: ±7 estimation pixels
   var THUMB_TIP = 4, INDEX_TIP = 8;
 
   function createMosh() {
     var cur = document.createElement('canvas'), cctx = cur.getContext('2d');
     var bufs = [document.createElement('canvas'), document.createElement('canvas')];
-    var est = document.createElement('canvas'), ectx = est.getContext('2d', { willReadFrequently: true });
-    var prevLuma = null, luma = null, key = '', front = 0, lastSeen = 0;
+    var est = fx.motionEstimator(), key = '', front = 0, lastSeen = 0;
     // Per block: entry order while moshing (−1 = clean), and when it should restore.
     var order = null, restoreAt = null, counter = 0, fresh = true, seenClap = 0;
-
-    // Sum of absolute differences between the current 8×8 block at (bx, by) and the previous
-    // frame's block offset by (dx, dy), in estimation pixels. Offsets past the edge clamp.
-    function sad(ew, eh, bx, by, dx, dy, best) {
-      var sum = 0;
-      for (var y = 0; y < EST; y++) {
-        var cy = by + y, py = Math.min(eh - 1, Math.max(0, cy + dy));
-        for (var x = 0; x < EST; x++) {
-          var cx = bx + x, px = Math.min(ew - 1, Math.max(0, cx + dx));
-          sum += Math.abs(luma[cy * ew + cx] - prevLuma[py * ew + px]);
-        }
-        if (sum >= best) return sum; // already worse than the best candidate
-      }
-      return sum;
-    }
-
-    // Three-step search: test the 8 neighbors at distance 4, recenter on the best, then 2, then 1.
-    function vector(ew, eh, bx, by) {
-      var vx = 0, vy = 0, best = sad(ew, eh, bx, by, 0, 0, Infinity);
-      for (var s = 0; s < STEPS.length; s++) {
-        var step = STEPS[s], cx = vx, cy = vy;
-        for (var oy = -1; oy <= 1; oy++) {
-          for (var ox = -1; ox <= 1; ox++) {
-            if (!ox && !oy) continue;
-            var d = sad(ew, eh, bx, by, cx + ox * step, cy + oy * step, best);
-            if (d < best) { best = d; vx = cx + ox * step; vy = cy + oy * step; }
-          }
-        }
-      }
-      return [vx, vy];
-    }
 
     return {
       animated: true,
@@ -64,15 +30,10 @@
         var w = frame.width, h = frame.height;
         var B = BLOCKS[params.block - 1] || 32;
         var cols = Math.ceil(w / B), rows = Math.ceil(h / B);
-        var ew = cols * EST, eh = rows * EST, scale = EST / B;
         var k = w + 'x' + h + ':' + B;
         if (k !== key) {
           key = k;
           [cur, out, bufs[0], bufs[1]].forEach(function (c) { c.width = w; c.height = h; });
-          est.width = ew;
-          est.height = eh;
-          luma = new Float32Array(ew * eh);
-          prevLuma = null;
           order = new Int32Array(cols * rows).fill(-1);
           restoreAt = new Float64Array(cols * rows).fill(Infinity);
           counter = 0;
@@ -132,14 +93,7 @@
         if (!any) counter = 0;
         var gain = Math.pow(2, (params.scale - 50) / 25); // Scale: motion vectors × 0.25 to × 4
 
-        // Estimation frame: the current picture at 8 pixels per block, as luma.
-        ectx.drawImage(cur, 0, 0, w * scale, h * scale);
-        var d = ectx.getImageData(0, 0, ew, eh).data;
-        if (!prevLuma) prevLuma = new Float32Array(ew * eh);
-        var swap = prevLuma; prevLuma = luma; luma = swap;
-        for (var p = 0, n = ew * eh; p < n; p++) {
-          luma[p] = 0.2126 * d[p * 4] + 0.7152 * d[p * 4 + 1] + 0.0722 * d[p * 4 + 2];
-        }
+        est.update(cur, w, h, B);
 
         var src = bufs[front], dst = bufs[1 - front], dctx = dst.getContext('2d');
         if (!any) {
@@ -151,9 +105,9 @@
               var X = x * B, Y = y * B;
               if (order[j] >= 0) {
                 // P-block: copy from the stale buffer along the motion vector, no correction.
-                var v = vector(ew, eh, x * EST, y * EST);
-                var sx = Math.min(w - B, Math.max(0, X + gain * v[0] / scale));
-                var sy = Math.min(h - B, Math.max(0, Y + gain * v[1] / scale));
+                var v = est.vector(x, y);
+                var sx = Math.min(w - B, Math.max(0, X + gain * v[0]));
+                var sy = Math.min(h - B, Math.max(0, Y + gain * v[1]));
                 dctx.drawImage(src, sx, sy, B, B, X, Y, B, B);
               } else {
                 // I-block: the real picture.

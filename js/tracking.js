@@ -47,7 +47,9 @@
     return c.rvfc ? 'v' + c.n : 't' + el.currentTime;
   }
 
-  Magi.tracking = { connections: null };
+  // Magi.tracking.frameId(frame.source): effects that keep frame history use it to act once per
+  // new camera or video frame, whether or not tracking has loaded.
+  Magi.tracking = { connections: null, frameId: frameId };
 
   var vision = null;
   function loadVision() {

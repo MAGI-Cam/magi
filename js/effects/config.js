@@ -350,6 +350,58 @@ Magi.effectConfig = [
       { id: 'text', label: 'Text', type: 'text', default: 'MAGI', placeholder: 'Spell it in DNA', maxLength: 60 }
     ]
   },
+  {
+    id: 'datamosh',
+    name: 'Datamosh',
+    group: 'hand',
+    ready: true,
+    photoType: 'image/jpeg',
+    params: [
+      range('block', 'Block', 1, 9, 4),
+      range('scale', 'Scale', 0, 100, 50),
+      range('bloom', 'Bloom', 0, 100, 50),
+      range('residual', 'Residual', 0, 100, 0),
+      range('keyframes', 'Keyframes', 0, 100, 0),
+      toggle('hand', 'Hand', true, 'Fist starts the mosh, clap cleans it. Off: it always moshes.')
+    ]
+  },
+  {
+    id: 'timescan',
+    name: 'Timescan',
+    group: 'hand',
+    ready: true,
+    photoType: 'image/jpeg',
+    modes: [
+      { id: 'gradient', name: 'Gradient' },
+      { id: 'radial', name: 'Radial' },
+      { id: 'luma', name: 'Luma' }
+    ],
+    params: [
+      range('depth', 'Depth', 0, 100, 60),
+      { id: 'radius', label: 'Radius', min: 0, max: 100, step: 1, default: 40, modes: ['radial'] },
+      toggle('invert', 'Invert', false, 'Swap which parts are live and which lag behind.')
+    ]
+  },
+  {
+    id: 'slitscan',
+    name: 'Slitscan',
+    group: 'hand',
+    ready: true,
+    photoType: 'image/jpeg',
+    modes: [
+      { id: 'sweep', name: 'Sweep' },
+      { id: 'stretch', name: 'Stretch' },
+      { id: 'delay', name: 'Delay' }
+    ],
+    params: [
+      range('angle', 'Angle', -90, 90, 0),
+      { id: 'speed', label: 'Speed', min: 0, max: 100, step: 1, default: 50, modes: ['sweep', 'stretch'] },
+      { id: 'slits', label: 'Slits', min: 2, max: 40, step: 1, default: 12, modes: ['delay'] },
+      { id: 'step', label: 'Step', min: 0, max: 100, step: 1, default: 50, modes: ['delay'] },
+      { id: 'loop', label: 'Loop', type: 'toggle', default: true, modes: ['sweep'], hint: 'Start a new sweep a second after each one ends.' },
+      { id: 'line', label: 'Line', type: 'toggle', default: true, modes: ['sweep', 'stretch'], hint: 'Show the slit.' }
+    ]
+  },
 
   {
     id: 'face-landmarks',
@@ -595,5 +647,23 @@ Magi.effectGuides = {
     'Two hands: the helix runs palm to palm; turning a hand twists that end. One hand: it runs out past your index finger.',
     'Pinch and hold: unzips the helix from that end; let go and it zips back.',
     'Size: helix radius. Spin: turning on its own. Glow, Color: light and color (far left: a color per base). Letters: base letters. Text: what it spells.'
+  ],
+  datamosh: [
+    'How it works: real datamoshing. The keyframes (full pictures) are dropped, so each new frame’s motion vectors keep moving the pixels of a picture that is gone, and it melts along the motion.',
+    'Make a fist: the keyframes stop and everything that moves smears. Clap: a fresh keyframe cleans the picture.',
+    'Swipe: Bloom, a repeated P-frame; the same vectors push again and again and the picture balloons in the swipe’s direction.',
+    'Block: macroblock size. Scale: how far vectors push. Bloom: how long a swipe keeps pushing. Residual: how much real correction gets through (0 is pure mosh). Keyframes: a clean picture every 1–10 s (far left: never). Hand: off to mosh all the time.'
+  ],
+  timescan: [
+    'How it works: the last 60 camera frames are kept, and every pixel shows one from a different moment.',
+    'Modes: tap the tile. Gradient: the top is now, the bottom the past. Radial: around your palm, the farther the older. Luma: dark parts lag behind, bright parts are live.',
+    'Pinch and drag up or down: more or less time (Depth).',
+    'Depth: how far back (up to 2 s). Radius: size of the Radial rings. Invert: swaps live and past.'
+  ],
+  slitscan: [
+    'How it works: a slit decides when each part of the picture was taken, as in slit-scan photography.',
+    'Modes: tap the tile. Sweep: the slit crosses the frame and freezes the picture behind it. Stretch: strip photography (the photo-finish camera); what passes the slit flows out to one side, stretched or squeezed by its speed. Delay: the picture cut into slits, each one step further in the past.',
+    'Pinch and turn your hand: turns the slit. Let go: a new sweep starts.',
+    'Angle: slit direction. Speed: how fast it sweeps or flows. Slits, Step: how many slits and how many frames apart. Loop: sweep again and again. Line: show the slit.'
   ]
 };
