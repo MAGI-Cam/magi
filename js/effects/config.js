@@ -142,6 +142,7 @@ Magi.effectConfig = [
       { id: 'blur', label: 'Blur', min: 0, max: 100, step: 1, default: 40, modes: ['blur'] },
       { id: 'frost', label: 'Frosted', type: 'toggle', default: false, modes: ['blur'], hint: 'Frosted glass: scattered, hazy and grainy.' },
       { id: 'speed', label: 'Speed', min: 0, max: 100, step: 1, default: 30, modes: ['acid', 'thermal'] },
+      { id: 'line', label: 'Line', type: 'toggle', default: false, modes: ['acid', 'thermal', 'invert', 'blur'], hint: 'A crisp outline around the window.' },
       { id: 'sheets', label: 'Sheets', min: 1, max: 4, step: 1, default: 1, modes: ['print'] },
       { id: 'dots', label: 'Dots', min: 1, max: 9, step: 1, default: 4, modes: ['print'] },
       { id: 'grain', label: 'Grain', min: 0, max: 100, step: 1, default: 60, modes: ['print'] },
@@ -432,6 +433,7 @@ Magi.effectGuides = {
   'pinch-frame': [
     'Acid, Thermal, Invert, Blur: make an L with thumb and index on both hands; the window between them changes. Bands and Speed shape Acid and Thermal.',
     'Blur: how soft the window is. Frosted: frosted glass, scattered, hazy and grainy.',
+    'Line: a crisp outline around the filter window.',
     'Print: hold a sheet by its corners, index fingers on top, thumbs below. Twist to fold it; a side that turns over shows its back.',
     'Sheets: 1 is the folding print. 2–4 give each finger its own sheet (index, middle, ring, pinky), in overprinting riso inks.',
     'Dots, Grain, Shift: halftone size, riso grain, ink misregistration.',

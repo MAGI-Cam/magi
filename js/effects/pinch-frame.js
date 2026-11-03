@@ -456,7 +456,7 @@
         frame.draw(ctx, W, H);
         var tracker = Magi.tracking.hands, hands = tracker.detect(frame);
 
-        var drewCode = false;
+        var drewCode = false, windowPts = null;
         if (params.mode === 'print' && params.sheets >= 2) {
           drewCode = (drawLayers || (drawLayers = createLayers()))(frame, ctx, Magi.interaction.read(frame), params) !== false;
         } else if (params.mode === 'code') {
@@ -468,6 +468,7 @@
           var cx = 0, cy = 0;
           pts.forEach(function (p) { cx += p.x / 4; cy += p.y / 4; });
           pts.sort(function (a, b) { return Math.atan2(a.y - cy, a.x - cx) - Math.atan2(b.y - cy, b.x - cx); });
+          windowPts = pts;
           var x0 = Math.max(0, Math.floor(Math.min.apply(null, pts.map(function (p) { return p.x; }))));
           var y0 = Math.max(0, Math.floor(Math.min.apply(null, pts.map(function (p) { return p.y; }))));
           var x1 = Math.min(W, Math.ceil(Math.max.apply(null, pts.map(function (p) { return p.x; }))));
@@ -511,6 +512,19 @@
             ctx.drawImage(tint, x0, y0);
             ctx.restore();
           }
+        }
+
+        // Line: a crisp outline around the filter window.
+        if (params.line && windowPts && ['acid', 'thermal', 'invert', 'blur'].indexOf(params.mode || 'acid') >= 0) {
+          ctx.save();
+          ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+          ctx.lineWidth = Math.max(1, 1.25 * u);
+          ctx.lineJoin = 'miter';
+          ctx.beginPath();
+          windowPts.forEach(function (p, k) { k ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y); });
+          ctx.closePath();
+          ctx.stroke();
+          ctx.restore();
         }
 
         var C = Magi.tracking.connections;
