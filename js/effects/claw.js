@@ -5,16 +5,20 @@
 // joint's position plus its One Euro–filtered velocity × (time since detection + 30 ms).
 // Every chain starts at one root low in the palm (0.75 of the way from the knuckles' mean to the wrist)
 // and runs root → knuckle → joint → joint → fingertip (the thumb: root → base → … → tip). Each
-// link is an octahedral bone, the diamond-shaped bone of Blender and Maya: from its head it widens
-// to a ring of four points 25% along, then tapers to its tail. Bones are built in 3D from
+// link is an octahedral bone, the diamond-shaped bone of Blender and Maya, drawn slender like a
+// crystal: from its head it widens to a ring of four points a third of the way along (radius 14%
+// of its length on the fingers, 7% on the metacarpals), then tapers to a long point at its tail. Bones are built in 3D from
 // MediaPipe's landmark depth (z, in the same units as x, so ×frame width for pixels): the ring
 // lies in the plane perpendicular to the bone, turned by the palm's normal n = (p5 − p0) × (p17 − p0),
 // and is projected orthographically, so bones turn with the hand.
 //
-// Each fingertip carries a wireframe cylinder on the last bone's 3D axis â. A circle of radius r
-// perpendicular to â projects to an ellipse with radii r and r·|â_z|, so a finger pointing at the
-// camera shows its cylinder as overlapping circles. Past each fingertip a talon continues the
-// finger (`claw` × the last bone's length), with a crosshair at its point; it retracts as the
+// Each last finger segment wears a wireframe cylinder, a sleeve about a finger wide (radius 40% of
+// the segment, held between 7% and 12% of the palm) and 60% of the segment long, centered on it
+// along its 3D axis â, with the bone running through it. A circle of radius r perpendicular to â
+// projects to an ellipse with radii r and r·|â_z|, so a finger pointing at the camera shows its
+// cylinder as overlapping circles. Out of each fingertip a talon continues the finger (`claw` ×
+// the last bone's length), a thin spike, with a small crosshair at its point (arms 6.5% of the
+// palm); it retracts as the
 // finger curls, by (1 − curl)^1.5, curl from the Interaction Engine. Lines glow: each path is stroked
 // wide and faint, then narrower, then crisp, a cheap stand-in for a Gaussian bloom.
 (function () {
@@ -27,14 +31,15 @@
   function len3(a) { return Math.hypot(a[0], a[1], a[2]); }
   function unit(a) { var l = len3(a) || 1; return [a[0] / l, a[1] / l, a[2] / l]; }
 
-  // Octahedral bone from 3D point a to b, ring radius wk·|ab|, ring turned by the palm normal.
-  function bone(ctx, a, b, wk, normal) {
+  // Octahedral bone from 3D point a to b, ring radius wk·|ab| at fraction `at` along it, ring turned
+  // by the palm normal.
+  function bone(ctx, a, b, wk, normal, at) {
     var d = sub(b, a), L = len3(d);
     if (L < 1) return;
     var ax = unit(d), v = crossv(normal, ax);
     if (len3(v) < 1e-3) v = crossv([0, 0, 1], ax);
     v = unit(v);
-    var w = crossv(ax, v), r = L * wk, c = [a[0] + d[0] * 0.25, a[1] + d[1] * 0.25, a[2] + d[2] * 0.25];
+    var f = at || 0.33, w = crossv(ax, v), r = L * wk, c = [a[0] + d[0] * f, a[1] + d[1] * f, a[2] + d[2] * f];
     var ring = [];
     for (var k = 0; k < 4; k++) {
       var t = Math.PI / 4 + k * Math.PI / 2, cs = Math.cos(t) * r, sn = Math.sin(t) * r;
@@ -148,8 +153,8 @@
           // Bones, white with a glow.
           ctx.beginPath();
           FINGERS.forEach(function (f, fi) {
-            bone(ctx, root, P[f[0]], 0.12, normal);
-            for (var k = 0; k < 3; k++) bone(ctx, P[f[k]], P[f[k + 1]], 0.26, normal);
+            bone(ctx, root, P[f[0]], 0.07, normal, 0.3);
+            for (var k = 0; k < 3; k++) bone(ctx, P[f[k]], P[f[k + 1]], 0.14, normal, 0.33);
             var a = P[f[2]], b = P[f[3]], d = sub(b, a);
             // The talon points along the last two bones (middle joint → tip): a longer baseline
             // than the last bone alone, so its direction is steadier. It is as long as the last
@@ -157,7 +162,7 @@
             var dir = unit(sub(b, P[f[1]])), curl = sig ? sig.fingers[NAMES[fi]].curl : 0;
             var len = len3(d) * reach * Math.pow(1 - curl, 1.5);
             var end = [b[0] + dir[0] * len, b[1] + dir[1] * len, b[2] + dir[2] * len];
-            if (len > 1) bone(ctx, b, end, 0.11, normal);
+            if (len > 1) bone(ctx, b, end, 0.07, normal, 0.2);
             tips.push({ a: a, b: b, d: d, end: end, out: len > 1 });
           });
           glowStroke(ctx, white, Math.max(1, 1.3 * u), glow);
@@ -166,9 +171,10 @@
           ctx.beginPath();
           tips.forEach(function (tp) {
             var L = len3(tp.d) || 1, ax = unit(tp.d);
-            var c = [tp.b[0] - tp.d[0] * 0.15, tp.b[1] - tp.d[1] * 0.15, tp.b[2] - tp.d[2] * 0.15];
-            cylinder(ctx, c, ax, L * 0.75, Math.max(L * 0.42, palm * 0.09));
-            if (tp.out) cross(ctx, tp.end[0], tp.end[1], palm * 0.13);
+            // A sleeve on the last segment, centered just past its middle.
+            var c = [tp.a[0] + tp.d[0] * 0.55, tp.a[1] + tp.d[1] * 0.55, tp.a[2] + tp.d[2] * 0.55];
+            cylinder(ctx, c, ax, L * 0.6, Math.min(palm * 0.12, Math.max(L * 0.4, palm * 0.07)));
+            if (tp.out) cross(ctx, tp.end[0], tp.end[1], palm * 0.065);
           });
           glowStroke(ctx, accent, Math.max(1, 1.4 * u), glow * 0.8);
 
