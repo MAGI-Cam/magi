@@ -13,6 +13,10 @@
 // With no hand the space turns slowly on its own. Hold up 1, 2 or 3 fingers, still, for 0.7 s to
 // switch to Lab, HSL or RGB (tapping the tile still cycles them). Pinch to grab the name under
 // your fingertip and pull it out of the space; open to let it go.
+// Two hands: hold one pinched and pinch with the other; moving that pinch spins the space (left–
+// right spins, up–down tips, 1.6π and 0.7π across the frame, like the fingertip), and letting go
+// keeps it spinning, slowing with a 0.8 s time constant. The fingertip then steers from where the
+// spin left it.
 (function () {
   var THUMB_TIP = 4, INDEX_TIP = 8, FOCAL = 3;
 
@@ -65,6 +69,7 @@
 
   function createChromatic() {
     var view = { yaw: 0.6, pitch: 0.25, zoom: 1 }, last = 0;
+    var offset = { yaw: 0, pitch: 0 }, vel = { yaw: 0, pitch: 0 }, spin = null, pinchedAt = {};
     var override = null, cand = null, candSince = 0, grabbed = null, switchedAt = -9;
     var SPACES = ['lab', 'hsl', 'rgb'], SPACE_NAMES = { lab: 'Lab', hsl: 'HSL', rgb: 'RGB' };
     return {
@@ -83,11 +88,35 @@
 
         var tracker = Magi.tracking.hands, ix = Magi.interaction.read(frame), hd = ix.hands[0], hands = ix.hands, tip = null;
         var e = 1 - Math.exp(-dt / 0.12), now = frame.time / 1000;
+        hands.forEach(function (h) { if (!h.pinched) delete pinchedAt[h.id]; else if (!(h.id in pinchedAt)) pinchedAt[h.id] = now; });
+        // Two pinched hands: the one that pinched last spins the space by its movement.
+        var both = ix.pair && ix.pair.left.pinched && ix.pair.right.pinched;
+        if (both) {
+          var mover = pinchedAt[ix.pair.left.id] > pinchedAt[ix.pair.right.id] ? ix.pair.left : ix.pair.right, mp = mover.points;
+          var m = { x: (mp[THUMB_TIP].x + mp[INDEX_TIP].x) / 2, y: (mp[THUMB_TIP].y + mp[INDEX_TIP].y) / 2 };
+          if (spin && spin.id === mover.id) {
+            var dy = (m.x - spin.x) / W * Math.PI * 1.6, dp = (m.y - spin.y) / H * Math.PI * 0.7;
+            view.yaw += dy; view.pitch += dp;
+            vel.yaw += (dy / Math.max(dt, 1e-3) - vel.yaw) * 0.3; vel.pitch += (dp / Math.max(dt, 1e-3) - vel.pitch) * 0.3;
+          }
+          spin = { id: mover.id, x: m.x, y: m.y };
+          grabbed = null;
+        } else {
+          spin = null;
+          // Momentum after a spin, slowing down.
+          var decay = Math.exp(-dt / 0.8);
+          offset.yaw += vel.yaw * dt; offset.pitch += vel.pitch * dt;
+          vel.yaw *= decay; vel.pitch *= decay;
+        }
         if (hd) {
           var p = hd.points;
           tip = p[INDEX_TIP];
-          view.yaw += ((tip.x / W - 0.5) * Math.PI * 1.6 - view.yaw) * e;
-          view.pitch += ((tip.y / H - 0.5) * Math.PI * 0.7 - view.pitch) * e;
+          var aimYaw = (tip.x / W - 0.5) * Math.PI * 1.6, aimPitch = (tip.y / H - 0.5) * Math.PI * 0.7;
+          if (both) { offset.yaw = view.yaw - aimYaw; offset.pitch = view.pitch - aimPitch; }
+          else {
+            view.yaw += (aimYaw + offset.yaw - view.yaw) * e;
+            view.pitch += (aimPitch + offset.pitch - view.pitch) * e;
+          }
           // Zoom holds while pinching, so grabbing a name doesn't zoom out.
           if (!hd.pinched) view.zoom += (Math.min(1.8, Math.max(0.5, 0.55 + hd.pinchWith.index.distance * 0.7)) - view.zoom) * e;
           // 1, 2 or 3 fingers held still for 0.7 s: Lab, HSL or RGB.
@@ -97,7 +126,8 @@
           } else cand = null;
           if (!hd.pinched) grabbed = null;
         } else {
-          view.yaw += (params.spin / 100) * 0.6 * dt;
+          view.yaw += (params.spin / 100) * 0.6 * dt + vel.yaw * dt;
+          view.pitch += vel.pitch * dt;
           grabbed = null;
         }
 
@@ -146,7 +176,7 @@
           }
         });
         ctx.globalAlpha = hud.globalAlpha = 1;
-        if (hd && hd.pinched && !grabbed && near) grabbed = near.c;
+        if (hd && hd.pinched && !grabbed && near && !both) grabbed = near.c;
         if (grabbed) {
           // A grabbed name follows the pinch, tied to its place in the space by a thin line.
           var gp = hd.points, gx = (gp[THUMB_TIP].x + gp[INDEX_TIP].x) / 2, gy = (gp[THUMB_TIP].y + gp[INDEX_TIP].y) / 2;
@@ -181,7 +211,7 @@
         if (tracker.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, tracker, 'hand');
         else if (!hands.length) Magi.tracking.hint(ctx, frame, 'Point to turn the colors, spread to zoom, pinch to grab a name, hold up 1–3 fingers to change space.');
       },
-      reset: function () { last = 0; override = null; cand = null; grabbed = null; }
+      reset: function () { last = 0; override = null; cand = null; grabbed = null; spin = null; offset = { yaw: 0, pitch: 0 }; vel = { yaw: 0, pitch: 0 }; pinchedAt = {}; }
     };
   }
 

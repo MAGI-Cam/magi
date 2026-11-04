@@ -110,7 +110,8 @@ Magi.effectConfig = [
       { id: 'distance', label: 'Distance', type: 'toggle', default: true, modes: ['skeleton'], hint: 'Show the line and distance between two hands.' },
       { id: 'fingers', label: 'Fingers', type: 'toggle', default: false, modes: ['skeleton'], hint: 'Show the gaps between neighboring fingertips on each hand.' },
       { id: 'pairs', label: 'Pairs', type: 'toggle', default: false, modes: ['skeleton'], hint: 'Show the distances between matching fingertips of your left and right hands.' },
-      { id: 'signals', label: 'Signals', type: 'toggle', default: false, modes: ['skeleton'], hint: 'Show what MAGI reads from each hand: fingers, curl, spread, pinches, speed and motions.' }
+      { id: 'signals', label: 'Signals', type: 'toggle', default: false, modes: ['skeleton'], hint: 'Show what MAGI reads from each hand: fingers, curl, spread, pinches, speed and motions.' },
+      { id: 'opacity', label: 'Opacity', min: 0, max: 100, step: 1, default: 85, modes: ['controller'] }
     ]
   },
   {
@@ -124,6 +125,21 @@ Magi.effectConfig = [
       range('block', 'Block', 1, 9, 5),
       range('hold', 'Hold', 0, 100, 40),
       range('reach', 'Reach', 0, 100, 50)
+    ]
+  },
+  {
+    id: 'datamosh',
+    name: 'Mosh 2.0',
+    group: 'hand',
+    ready: true,
+    photoType: 'image/jpeg',
+    params: [
+      range('block', 'Block', 1, 9, 4),
+      range('scale', 'Scale', 0, 100, 50),
+      range('bloom', 'Bloom', 0, 100, 50),
+      range('residual', 'Residual', 0, 100, 0),
+      range('keyframes', 'Keyframes', 0, 100, 0),
+      toggle('hand', 'Hand', true, 'Pinch starts the mosh, an open hand releases it. Off: it always moshes.')
     ]
   },
 
@@ -179,10 +195,6 @@ Magi.effectConfig = [
     group: 'hand',
     ready: true,
     photoType: 'image/jpeg',
-    modes: [
-      { id: 'threads', name: 'Threads' },
-      { id: 'strings', name: 'Strings' }
-    ],
     params: [
       range('rings', 'Rings', 0, 5, 3),
       range('sag', 'Sag', 0, 100, 35),
@@ -312,94 +324,16 @@ Magi.effectConfig = [
     group: 'hand',
     ready: true,
     photoType: 'image/jpeg',
+    modes: [
+      { id: 'silk', name: 'Silk' },
+      { id: 'neon', name: 'Neon' }
+    ],
     params: [
       range('count', 'Count', 0, 100, 50),
       range('curl', 'Curl', 0, 100, 50),
       range('length', 'Length', 0, 100, 50),
       range('glow', 'Glow', 0, 100, 60),
       { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' }
-    ]
-  },
-  {
-    id: 'vines',
-    name: 'Vines',
-    group: 'hand',
-    ready: true,
-    photoType: 'image/jpeg',
-    params: [
-      range('growth', 'Growth', 0, 100, 50),
-      range('density', 'Density', 0, 100, 50),
-      range('leaves', 'Leaves', 0, 100, 40),
-      range('wither', 'Wither', 0, 100, 40),
-      range('glow', 'Glow', 0, 100, 60),
-      { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' }
-    ]
-  },
-  {
-    id: 'dna',
-    name: 'DNA',
-    group: 'hand',
-    ready: true,
-    photoType: 'image/jpeg',
-    params: [
-      range('size', 'Size', 0, 100, 50),
-      range('spin', 'Spin', 0, 100, 30),
-      range('glow', 'Glow', 0, 100, 60),
-      { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
-      toggle('letters', 'Letters', false, 'Show the base letters (A, T, G, C) on the pairs facing you.'),
-      { id: 'text', label: 'Text', type: 'text', default: 'MAGI', placeholder: 'Spell it in DNA', maxLength: 60 }
-    ]
-  },
-  {
-    id: 'datamosh',
-    name: 'Datamosh',
-    group: 'hand',
-    ready: true,
-    photoType: 'image/jpeg',
-    params: [
-      range('block', 'Block', 1, 9, 4),
-      range('scale', 'Scale', 0, 100, 50),
-      range('bloom', 'Bloom', 0, 100, 50),
-      range('residual', 'Residual', 0, 100, 0),
-      range('keyframes', 'Keyframes', 0, 100, 0),
-      toggle('hand', 'Hand', true, 'Fist starts the mosh, clap cleans it. Off: it always moshes.')
-    ]
-  },
-  {
-    id: 'timescan',
-    name: 'Timescan',
-    group: 'hand',
-    ready: true,
-    photoType: 'image/jpeg',
-    modes: [
-      { id: 'gradient', name: 'Gradient' },
-      { id: 'radial', name: 'Radial' },
-      { id: 'luma', name: 'Luma' }
-    ],
-    params: [
-      range('depth', 'Depth', 0, 100, 60),
-      { id: 'radius', label: 'Radius', min: 0, max: 100, step: 1, default: 40, modes: ['radial'] },
-      toggle('invert', 'Invert', false, 'Swap which parts are live and which lag behind.')
-    ]
-  },
-  {
-    id: 'slitscan',
-    name: 'Slitscan',
-    group: 'hand',
-    ready: true,
-    photoType: 'image/jpeg',
-    modes: [
-      { id: 'sweep', name: 'Sweep' },
-      { id: 'stretch', name: 'Stretch' },
-      { id: 'delay', name: 'Delay' }
-    ],
-    params: [
-      range('angle', 'Angle', -90, 90, 0),
-      { id: 'speed', label: 'Speed', min: 0, max: 100, step: 1, default: 50, modes: ['sweep', 'stretch'] },
-      { id: 'slits', label: 'Slits', min: 2, max: 40, step: 1, default: 12, modes: ['delay'] },
-      { id: 'step', label: 'Step', min: 0, max: 100, step: 1, default: 50, modes: ['delay'] },
-      { id: 'loop', label: 'Loop', type: 'toggle', default: true, modes: ['sweep'], hint: 'Start a new sweep a second after each one ends.' },
-      { id: 'line', label: 'Line', type: 'toggle', default: true, modes: ['sweep', 'stretch'], hint: 'Show the slit.' }
     ]
   },
 
@@ -530,12 +464,14 @@ Magi.effectGuides = {
     'Pairs: distances between matching fingertips of your two hands.',
     'Signals: what MAGI reads from your hand: finger count, curl, spread, pinches, speed, last swipe, flick or shake.',
     'Modes: tap the tile. Skeleton (the toggles above), Controller, Link.',
-    'Controller: the ball sits between your thumb and index and slides along the ruler; its value is your position across the frame. Open thumb and index to swell the rings; the dots trace your index fingertip, the bars recent values.',
+    'Controller: a circle spans your thumb and index fingertips and grows as they open; it slides along the ruler, and its value is your position across the frame. Opacity: the circle’s fill.',
+    'Controller, index only (thumb tucked): the circle shrinks to a pointer dot on your fingertip and keeps sliding. Two hands: the second hand gets its own circle, value and ring stack on the right.',
+    'Controller: rings swell as thumb and index open; the dots trace your index fingertips, the bars recent values (hand 2 in gray).',
     'Link: two hands; a line joins your index fingertips with their distance at the green midpoint; the scope shows your fingertips around the palm.'
   ],
   mosh: [
     'Spread thumb and index: the zone between them moshes; spreading wider makes it bigger.',
-    'Clap your hands: snaps the picture clean, like a fresh keyframe.',
+    'Pinch (thumb and index touching): snaps the picture clean, like a fresh keyframe.',
     'Scale: how far motion vectors push. Block: macroblock size. Hold: how long the smear lasts before it unwinds. Reach: zone size.'
   ],
   'pinch-frame': [
@@ -583,12 +519,13 @@ Magi.effectGuides = {
   ],
   tutting: [
     'Hold up both hands: a volume of image tiles fills the box between your palms; side by side a slab, stacked a column. It holds when your hands come together.',
-    'Flick a hand down or up: that side of the volume turns over like a Rubik’s cube layer.',
+    'Flick a hand down or up (a quick snap of the fingers or hand is enough): that side of the volume turns over like a Rubik’s cube layer.',
     'Modes: Scatter (pieces of the room) or Behind (what’s behind each tile).',
     'Tiles, Size, Fan, Depth, Drift: count, tile size, page turn, perspective, float. Dim: darkens the camera. Edges: tile outlines.'
   ],
   chromatic: [
     'Point: your index fingertip turns the space (left–right spins it, up–down tips it).',
+    'Two hands: keep one pinched and pinch with the other; moving that pinch spins the space, and letting go keeps it spinning.',
     'Spread thumb and index: zooms. Pinch: grabs the name under your fingertip and pulls it out.',
     'Hold up 1, 2 or 3 fingers, still: switches to Lab, HSL or RGB (tapping the tile does too).',
     'Labels, Text: how many names and how big. Spin: turning with no hand. Dim, Squares, Axes: background, color squares, axes.'
@@ -628,42 +565,20 @@ Magi.effectGuides = {
     'Raise a hand: threads run from your palm to each fingertip and between neighboring fingertips, with rings like an orb web.',
     'Two hands: threads join matching fingertips across your hands, with rings between them.',
     'Pinch: draws a taut thumb–index thread; let go and the web gets plucked.',
+    'Flick: the web lets go of your fingers and floats away, and a new one forms.',
     'Threads sag and swing as you move: real rope physics, pinned to your fingers.',
-    'Rings: how many rings. Sag: how much threads droop. Particles: specks running along threads. Glow, Color: light and color.',
-    'Modes: tap the tile. Threads, or Strings: glowing bead strings with pulsing nodes at your fingertips and palms.'
+    'Rings: how many rings. Sag: how much threads droop. Particles: how many specks flow along the threads. Glow, Color: light and color.'
   ],
   tendrils: [
-    'How it works: moving fingertips release particles that follow a curl-noise flow (swirls with no sources or sinks) and leave glowing trails.',
+    'How it works: moving fingertips release particles that follow a curl-noise flow (swirls with no sources or sinks); each draws a thread that tapers to a fine tail.',
+    'Modes: tap the tile. Silk: fine pale threads. Neon: colored tubes with a white-hot core and bloom.',
     'Pinch: pulls the tendrils toward the pinch. Make a fist, then open it: a ring bursts from your palm.',
-    'Count: how many come off a moving finger. Curl: flow strength. Length: how long trails last. Glow, Color: light and color.'
-  ],
-  vines: [
-    'How it works: space colonization, the algorithm used to model how trees and leaf veins grow; vines compete for space, so they branch and spread.',
-    'Move your fingers: they plant buds along their path. Pinch and hold: growth runs three times as fast.',
-    'Growth: speed. Density: how much space they fill. Leaves: share of tips with a leaf. Wither: how soon old vines fade. Glow, Color: light and color.'
-  ],
-  dna: [
-    'How it works: B-DNA, 10.5 base pairs per turn with a minor and a major groove; your Text is written in bases, two bits each (A, C, G, T), paired A–T and G–C.',
-    'Two hands: the helix runs palm to palm; turning a hand twists that end. One hand: it runs out past your index finger.',
-    'Pinch and hold: unzips the helix from that end; let go and it zips back.',
-    'Size: helix radius. Spin: turning on its own. Glow, Color: light and color (far left: a color per base). Letters: base letters. Text: what it spells.'
+    'Count: how many come off a moving finger. Curl: flow strength. Length: how long threads are. Glow, Color: light and color.'
   ],
   datamosh: [
     'How it works: real datamoshing. The keyframes (full pictures) are dropped, so each new frame’s motion vectors keep moving the pixels of a picture that is gone, and it melts along the motion.',
-    'Make a fist: the keyframes stop and everything that moves smears. Clap: a fresh keyframe cleans the picture.',
+    'Pinch: the keyframes stop and everything that moves smears. Open your hand: a fresh keyframe releases the picture.',
     'Swipe: Bloom, a repeated P-frame; the same vectors push again and again and the picture balloons in the swipe’s direction.',
     'Block: macroblock size. Scale: how far vectors push. Bloom: how long a swipe keeps pushing. Residual: how much real correction gets through (0 is pure mosh). Keyframes: a clean picture every 1–10 s (far left: never). Hand: off to mosh all the time.'
-  ],
-  timescan: [
-    'How it works: the last 60 camera frames are kept, and every pixel shows one from a different moment.',
-    'Modes: tap the tile. Gradient: the top is now, the bottom the past. Radial: around your palm, the farther the older. Luma: dark parts lag behind, bright parts are live.',
-    'Pinch and drag up or down: more or less time (Depth).',
-    'Depth: how far back (up to 2 s). Radius: size of the Radial rings. Invert: swaps live and past.'
-  ],
-  slitscan: [
-    'How it works: a slit decides when each part of the picture was taken, as in slit-scan photography.',
-    'Modes: tap the tile. Sweep: the slit crosses the frame and freezes the picture behind it. Stretch: strip photography (the photo-finish camera); what passes the slit flows out to one side, stretched or squeezed by its speed. Delay: the picture cut into slits, each one step further in the past.',
-    'Pinch and turn your hand: turns the slit. Let go: a new sweep starts.',
-    'Angle: slit direction. Speed: how fast it sweeps or flows. Slits, Step: how many slits and how many frames apart. Loop: sweep again and again. Line: show the slit.'
   ]
 };

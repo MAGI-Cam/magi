@@ -26,6 +26,7 @@
 //   (a pinch needs that finger not curled past 0.8, so a fist with the thumb tucked isn't one;
 //   spread counts only extended neighbors)
 //   velocity   palm center, pixels per second;   speed: its length
+//   tipVelocity  index fingertip relative to the palm, pixels per second (what a flick measures)
 // Two hands (ix.pair, or null): distance and angle between palm centers, midpoint, left and right
 // hands, and `closer` (the hand whose palm looks at least 20% bigger; it changes back below 10%).
 // Motion events (ix.events, each with a unique `n` so an effect acts on it once):
@@ -131,7 +132,7 @@
         pinch: pinchWith.index.amount, pinched: pinchWith.index.on, pinchWith: pinchWith, spread: spread,
         pointing: fingers.index.extended && !fingers.middle.extended && !fingers.ring.extended && !fingers.pinky.extended,
         fist: fingers.index.curl > 0.7 && fingers.middle.curl > 0.7 && fingers.ring.curl > 0.7 && fingers.pinky.curl > 0.7,
-        velocity: v, speed: Math.hypot(v.x, v.y)
+        velocity: v, speed: Math.hypot(v.x, v.y), tipVelocity: tipRel
       };
       return { hand: hand, st: st, tipRel: tipRel };
     }

@@ -8,7 +8,7 @@
 // refreshed, but only inside the zone around your hand.
 //
 // Hand: the zone sits between thumb and index fingertip and grows as they spread apart.
-// Clap your hands and the whole picture snaps clean, like a fresh I-frame.
+// Pinch (thumb and index touching) and the whole picture snaps clean, like a fresh I-frame.
 // Scale multiplies the vectors; Hold sets how long the smear stays before it unwinds, block by
 // block, in the reverse of the order it was moshed.
 (function () {
@@ -22,7 +22,7 @@
     var bufs = [document.createElement('canvas'), document.createElement('canvas')];
     var est = fx.motionEstimator(), key = '', front = 0, lastSeen = 0;
     // Per block: entry order while moshing (−1 = clean), and when it should restore.
-    var order = null, restoreAt = null, counter = 0, fresh = true, seenClap = 0;
+    var order = null, restoreAt = null, counter = 0, fresh = true;
 
     return {
       animated: true,
@@ -59,10 +59,8 @@
           var spread = Math.hypot(a.x - b.x, a.y - b.y);
           zones.push({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, r: spread * reach + B });
         });
-        // A clap (Interaction Engine) snaps the picture clean.
-        Magi.interaction.read(frame).events.forEach(function (e) {
-          if (e.type === 'clap' && e.n > seenClap) { seenClap = e.n; pinched = true; }
-        });
+        // A pinch (Interaction Engine, with hysteresis) snaps the picture clean.
+        if (Magi.interaction.read(frame).hands.some(function (hd) { return hd.pinched; })) pinched = true;
         if (hands.length) lastSeen = frame.time;
 
         // Hold: a block that leaves the zone keeps moshing for `hold` seconds, then blocks restore
@@ -123,7 +121,7 @@
         if (tracker.status() !== 'ready') {
           Magi.tracking.drawStatus(octx, frame, tracker, 'hand');
         } else if (frame.time - lastSeen > 1500) {
-          Magi.tracking.hint(octx, frame, 'Raise a hand. Spread to mosh, clap to clear.');
+          Magi.tracking.hint(octx, frame, 'Raise a hand. Spread to mosh, pinch to clear.');
         }
       },
       reset: function () { key = ''; }

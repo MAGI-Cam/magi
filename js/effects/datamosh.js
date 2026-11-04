@@ -1,4 +1,4 @@
-// Datamosh: the whole picture loses its keyframes and melts along its own motion.
+// Mosh 2.0 (datamosh): the whole picture loses its keyframes and melts along its own motion.
 //
 // A video codec sends a full picture (I-frame) now and then and, between them, P-frames: one
 // motion vector per macroblock ("this block came from 6 px to the left") plus a residual that
@@ -12,8 +12,8 @@
 //   that frame's vectors (spread out a little, plus the swipe's direction where things moved) and
 //   repeats them, fading over up to 3 s.
 //   Keyframes: an I-frame every 1–10 s (far left: never).
-// Hand: make a fist and the keyframes stop; clap and a fresh keyframe cleans the picture. With
-// Hand off it always moshes.
+// Hand: pinch and the keyframes stop; open your hand and a fresh keyframe releases the picture.
+// With Hand off it always moshes.
 (function () {
   var fx = Magi.fx;
   var BLOCKS = [12, 16, 20, 24, 32, 40, 48, 56, 64];
@@ -23,7 +23,7 @@
     var cur = document.createElement('canvas'), cctx = cur.getContext('2d');
     var bufs = [document.createElement('canvas'), document.createElement('canvas')];
     var est = fx.motionEstimator(), key = '', front = 0, fresh = true;
-    var moshing = false, seen = 0, fistSince = null, lastKey = 0, lastIx = null;
+    var moshing = false, seen = 0, pinchSince = null, openSince = null, lastKey = 0, lastIx = null;
     var bloom = null, bloomAt = 0, vecs = null;
 
     function keyframe(t) { fresh = true; lastKey = t; }
@@ -45,16 +45,19 @@
         var ix = Magi.interaction.read(frame), fid = Magi.tracking.frameId(frame.source) + w, newFrame = fid !== lastIx;
         lastIx = fid;
 
-        // Gestures: a fist held 0.15 s drops the keyframes; a clap brings one back.
+        // Gestures: a pinch held 0.15 s drops the keyframes; an open hand (four or five fingers
+        // out, no pinch) held 0.2 s brings one back.
         if (params.hand) {
-          var fist = ix.hands.some(function (hd) { return hd.fist; });
-          if (fist) { if (fistSince === null) fistSince = t; } else fistSince = null;
-          if (fistSince !== null && t - fistSince > 0.15 && !moshing) { moshing = true; keyframe(t); }
+          var pinch = ix.hands.some(function (hd) { return hd.pinched; });
+          var open = !pinch && ix.hands.some(function (hd) { return hd.count >= 4; });
+          if (pinch) { if (pinchSince === null) pinchSince = t; } else pinchSince = null;
+          if (open) { if (openSince === null) openSince = t; } else openSince = null;
+          if (pinchSince !== null && t - pinchSince > 0.15 && !moshing) { moshing = true; keyframe(t); }
+          if (openSince !== null && t - openSince > 0.2 && moshing) { moshing = false; keyframe(t); }
         } else if (!moshing) { moshing = true; keyframe(t); }
         ix.events.forEach(function (e) {
           if (e.n <= seen) return;
           seen = e.n;
-          if (e.type === 'clap') { if (params.hand) moshing = false; keyframe(t); }
           if (e.type === 'swipe' && moshing && vecs) {
             // P-frame duplication: keep this frame's vectors, spread to neighbors, plus the swipe.
             var d = DIRS[e.dir] || [0, 0], push = B * 0.5, field = new Float32Array(vecs.length);
@@ -118,10 +121,10 @@
         if (params.hand) {
           var tracker = Magi.tracking.hands;
           if (tracker.status() !== 'ready') Magi.tracking.drawStatus(octx, frame, tracker, 'hand');
-          else if (!moshing) Magi.tracking.hint(octx, frame, 'Make a fist to drop the keyframes. Clap to clean.');
+          else if (!moshing) Magi.tracking.hint(octx, frame, 'Pinch to mosh. Open your hand to release.');
         }
       },
-      reset: function () { key = ''; moshing = false; fistSince = null; bloom = null; lastIx = null; }
+      reset: function () { key = ''; moshing = false; pinchSince = null; openSince = null; bloom = null; lastIx = null; }
     };
   }
 

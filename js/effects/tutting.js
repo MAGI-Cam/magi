@@ -7,10 +7,14 @@
 // Each tile turns about the vertical axis like a page of an open book, by θ = (π/2)(1 − |x|)
 // from the edges in, so its visible width is w·sin(π|x|/2): full at the sides, an edge-on
 // sliver at the center. Fan sets how strongly they turn.
-// Flick a hand down or up (Interaction Engine; a quick vertical swipe counts too) and that side of
+// Flick a hand down or up and that side of
 // the volume turns 90° like a Rubik's cube layer, its front going down or up, over 0.35 s
 // (smoothstep easing); the tiles keep the new places. The hand on the left of the screen turns the
 // left half, the one on the right the right half. With fewer than two hands the volume holds.
+// Turns read more easily than the Interaction Engine's general flick: the index fingertip snapping
+// faster than 3 palm lengths per second relative to the palm (flick: 6), or the palm itself moving
+// faster than 1.1 frame heights per second, mostly vertically (twice as much as sideways); 0.45 s
+// apart per hand. The engine's flick and swipe events count too.
 // Tiles show the camera itself, no outside images. Scatter: each tile keeps a piece of the room
 // from somewhere in the frame. Behind: each tile shows what is behind it, shifted by its depth,
 // like a pane of thick glass.
@@ -26,7 +30,7 @@
   function smoothstep(x) { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); }
 
   function createTutting() {
-    var tiles = [], box = null, last = 0, turns = [], seenEvent = 0;
+    var tiles = [], box = null, last = 0, turns = [], seenEvent = 0, lastTurn = {}, lastIx = null;
     var cam = document.createElement('canvas'), cctx = cam.getContext('2d');
 
     function build(n) {
@@ -56,16 +60,28 @@
         var tracker = Magi.tracking.hands, hands = tracker.detect(frame), ix = Magi.interaction.read(frame);
         // A flick (or quick swipe) down or up turns that hand's half of the volume like a Rubik's
         // cube layer, down or up. The half is the side of the screen the hand is on.
+        function turn(hd, dir) {
+          if (frame.time / 1000 - (lastTurn[hd.id] || -9) < 0.45) return;
+          lastTurn[hd.id] = frame.time / 1000;
+          var mid = ix.pair ? ix.pair.midpoint.x : (box ? box.x : W / 2);
+          var side = hd.center.x < mid ? -1 : 1;
+          if (!turns.some(function (tn) { return tn.side === side; })) turns.push({ side: side, t: 0, dir: dir });
+        }
         ix.events.forEach(function (e) {
           if (e.n <= seenEvent) return;
           seenEvent = e.n;
           if ((e.type !== 'flick' && e.type !== 'swipe') || (e.dir !== 'down' && e.dir !== 'up')) return;
           var hd = ix.hands.filter(function (h) { return h.id === e.hand; })[0];
-          if (!hd) return;
-          var mid = ix.pair ? ix.pair.midpoint.x : (box ? box.x : W / 2);
-          var side = hd.center.x < mid ? -1 : 1;
-          if (!turns.some(function (tn) { return tn.side === side; })) turns.push({ side: side, t: 0, dir: e.dir === 'down' ? 1 : -1 });
+          if (hd) turn(hd, e.dir === 'down' ? 1 : -1);
         });
+        if (ix !== lastIx) {
+          ix.hands.forEach(function (hd) {
+            var tv = hd.tipVelocity || { x: 0, y: 0 }, v = hd.velocity;
+            if (Math.abs(tv.y) > 3 * hd.size && Math.abs(tv.y) > 2 * Math.abs(tv.x)) turn(hd, tv.y > 0 ? 1 : -1);
+            else if (Math.abs(v.y) > 1.1 * H && Math.abs(v.y) > 2 * Math.abs(v.x)) turn(hd, v.y > 0 ? 1 : -1);
+          });
+        }
+        lastIx = ix;
         turns = turns.filter(function (tn) {
           tn.t += dt / 0.35;
           if (tn.t < 1) return true;
