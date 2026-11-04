@@ -92,6 +92,21 @@ Magi.effectConfig = [
     ],
     params: halftoneParams()
   },
+  {
+    id: 'quadtree',
+    name: 'Quadtree',
+    group: 'halftone',
+    ready: true,
+    photoType: 'image/jpeg',
+    params: [
+      range('detail', 'Detail', 0, 100, 60),
+      range('min', 'Min', 2, 24, 4),
+      range('max', 'Max', 8, 256, 128),
+      range('blur', 'Blur', 0, 100, 50),
+      range('lines', 'Lines', 0, 100, 30),
+      COLOR
+    ]
+  },
 
   {
     id: 'hand-landmarks',
@@ -454,6 +469,12 @@ Magi.effectGuides = {
   'xs-and-os': [
     'How it works: x, o, X and O by brightness. Tap the tile to switch font (Bodoni, Silkscreen).',
     'Scale, Intensity, Saturation, Color: as in Bitmap.'
+  ],
+  quadtree: [
+    'How it works: a quadtree. Squares split into four while their brightness varies too much, and always where the lens is in focus, so what’s sharp breaks into fine cells that keep the picture, and soft, out-of-focus areas stay big flat squares of their average color.',
+    'Bokeh: a lens blur. You stay in focus and the room blurs, by the thin-lens circle of confusion (needs a person in view).',
+    'Pinch: focus moves to what’s under your pinch, and blur grows with distance from it. Make a fist: focus goes back to you.',
+    'Detail: how readily squares split. Min, Max: smallest and largest square. Blur: bokeh strength. Lines: outline opacity. Color: line tint (far left: white).'
   ],
   'hand-landmarks': [
     'How it works: the 21-point hand skeleton MediaPipe tracks, with the measurements effects use.',

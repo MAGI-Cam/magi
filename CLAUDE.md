@@ -1,6 +1,6 @@
 # Magi
 
-Minimalist effects tool library: apply a visual effect to live camera input or an uploaded photo/video, adjust it, capture, and save to the device. Tray: **Normal** (no effect), then parent tiles: **Halftone** (Bitmap, ASCII, Binary, XO), **Gesture** (**Hand Tracking**: Landmarks, Mosh, Mosh 2.0, Pinch Frame, Wisp, Web, Bubbles, Claw, Fluid Cube, Accordion, Tutting, Chromatic, Tendrils; **Face Tracking**: Landmarks, Token Cry, Collage; **Body Tracking**: Glitch), **Facade** (Interactive, Electrokinetic). Groups live in `Magi.effectGroups` and nest with `parent`; an effect joins one with `group`. The tray shows one level at a time with a back row, and reopens at the last level you looked at.
+Minimalist effects tool library: apply a visual effect to live camera input or an uploaded photo/video, adjust it, capture, and save to the device. Tray: **Normal** (no effect), then parent tiles: **Halftone** (Bitmap, ASCII, Binary, XO, Quadtree), **Gesture** (**Hand Tracking**: Landmarks, Mosh, Mosh 2.0, Pinch Frame, Wisp, Web, Bubbles, Claw, Fluid Cube, Accordion, Tutting, Chromatic, Tendrils; **Face Tracking**: Landmarks, Token Cry, Collage; **Body Tracking**: Glitch), **Facade** (Interactive, Electrokinetic). Groups live in `Magi.effectGroups` and nest with `parent`; an effect joins one with `group`. The tray shows one level at a time with a back row, and reopens at the last level you looked at.
 
 Source of truth for scope is the PRD in `docs/`. This file guides implementation. Both are starting points; update them when prototyping proves a better direction.
 
@@ -32,7 +32,7 @@ To add an effect: add its entry in `config.js` with `ready: true`, create its re
 - Shared controls: Scale, Intensity, Saturation (media color), Color (ink hue). Medium default Scale, reset-to-defaults. Defaults keep the original black-and-white look.
 - Effects can have modes (`modes` in config); tapping the active tile cycles them. ASCII has five.
 - Glyph effects size cells in screen pixels (`frame.pxPerCss`) so characters stay legible on phones. Bitmap sizes in image pixels.
-- Photos: PNG by default (exact edges); photographic effects set `photoType: 'image/jpeg'` (Normal, Landmarks, Mosh, Token Cry).
+- Photos: PNG by default (exact edges); photographic effects set `photoType: 'image/jpeg'` (Normal, Landmarks, Mosh, Token Cry, Quadtree).
 - Performance: anything drawn per cell or per module at small sizes goes through a pixel buffer (`fx.blitGlyphs`, Electrokinetic's `paint`), not thousands of canvas calls. Measure frame time at the smallest Scale before shipping. Per-pixel work over large areas (Glitch, Collage's grain) goes in a WebGL fragment shader through `fx.shaderPass`; Wisp runs its whole fluid on WebGL2 (half-float render targets); headless Chromium needs `--enable-unsafe-swiftshader` for WebGL and runs shaders on the CPU, so time those on a real device. Headless tests run MediaPipe on CPU (~150 ms/frame); time effects with detection stubbed out.
 - Effects follow the real formula or mechanism they're named for, written in a comment next to the code. Verify math numerically when it can be.
 - The preview canvas scales with nearest-pixel only when enlarging; when shrunk it scales smoothly (`.view.is-reduced`), or thin strokes vanish.

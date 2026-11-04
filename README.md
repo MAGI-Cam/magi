@@ -10,6 +10,7 @@ The tray opens on **Normal** (the plain camera) and three parent tiles: Halftone
 - **ASCII**: one character per cell. Tap the active tile to switch mode: *Classic* (`.:-=+*#%@`), *Detailed* (Paul Bourke's 70-character ramp), *Blocks* (░ ▒ ▓ █), *Braille* (2×4 dots per cell, 8× finer), *Edges* (`- | / \` along edges).
 - **Binary**: only `0`, `1` and space, in VT323 or Silkscreen.
 - **XO**: x, o, X, O in Bodoni or Silkscreen.
+- **Quadtree**: quadtree × bokeh. A lens blur (thin-lens circle of confusion) keeps you in focus and blurs the room, using the body segmenter; pinch to move focus to what's under your pinch (blur also grows with distance from it), make a fist to return it to you. Then a quadtree splits squares while their brightness varies, and always where the lens is in focus, so what's sharp breaks into fine cells that keep the picture and the bokeh becomes big flat squares of its average color, outlined by faint lines. Controls: Detail, Min, Max, Blur, Lines, Color.
 
 Halftone controls: Scale, Intensity, Saturation (how much of the media's own color shows) and Color (ink: white at the far left, then the hue wheel). Glyphs are written straight into one pixel buffer per frame, so the smallest scales keep up with live video.
 
