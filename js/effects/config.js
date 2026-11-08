@@ -151,13 +151,15 @@ Magi.effectConfig = [
     ready: true,
     photoType: 'image/jpeg',
     params: [
+      range('size', 'Size', 0, 100, 50),
       range('thickness', 'Thickness', 0, 100, 15),
       range('texture', 'Texture', 0, 100, 0),
       range('spikiness', 'Spikiness', 0, 100, 30),
       range('rate', 'Rate', 0, 100, 30),
       range('points', 'Points', 40, 600, 220),
       { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
-      range('dim', 'Dim', 0, 100, 0)
+      range('dim', 'Dim', 0, 100, 0),
+      toggle('connect', 'Connect', true, 'One line through both hands, with strands between matching fingertips. Off: a line per hand.')
     ]
   },
   {
@@ -464,6 +466,10 @@ Magi.effectConfig = [
     group: 'face',
     ready: true,
     photoType: 'image/jpeg',
+    modes: [
+      { id: 'eye', name: 'Eye' },
+      { id: 'features', name: 'Features' }
+    ],
     params: [
       range('rate', 'Rate', 0, 100, 50),
       range('count', 'Count', 3, 100, 12),
@@ -471,7 +477,7 @@ Magi.effectConfig = [
       range('posX', 'X', -100, 100, 0),
       range('posY', 'Y', -100, 100, 0),
       toggle('sphere', 'Sphere', true, 'Show the wireframe sphere on your palm.'),
-      range('mosaic', 'Mosaic', 0, 100, 35),
+      range('mosaic', 'Mosaic', 0, 100, 8),
       range('mono', 'Mono', 0, 100, 100)
     ]
   },
@@ -594,6 +600,7 @@ Magi.effectGuides = {
   'line-art': [
     'How it works: points gather on the outlines of your hands and arms (where the picture’s edges are strongest) and one continuous line runs through them, always to the nearest point, redrawn as you move.',
     'Pinch: freezes the drawing until you let go.',
+    'Size: how large the drawing is around each hand. Connect: one line through both hands with strands between matching fingertips (off: each hand its own line).',
     'Thickness: line width. Texture: a dry brush, broken and layered. Spikiness: 0 rounded curves, 50 straight lines, 100 sharp spikes. Rate: how often it redraws. Points: how many. Color: far left lime. Dim: darkens the camera.'
   ],
   particles: [
@@ -682,6 +689,7 @@ Magi.effectGuides = {
     'Phrase: whole phrase per tear, or one symbol at a time. Pool: pile up or fall through. Color: token color.'
   ],
   collage: [
+    'Modes: tap the tile. Eye: every snapshot is your right eye. Features: eye, eye, mouth and nose in turn.',
     'Face the camera and raise a hand: snapshots of your eyes, mouth and nose pile onto a sphere around your head. The source box stays on your right eye. Lower your hand and they fly back.',
     'Pinch: sphere size. Spread fingers: spacing between copies.',
     'Orbit: palm square to the camera, nothing turns; turn your hand and hold, and the sphere keeps turning that way.',

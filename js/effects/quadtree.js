@@ -3,12 +3,13 @@
 //
 // Bokeh: a lens blur. A thin lens images a point at distance S, focused at Sf, as a disc (circle
 // of confusion) of diameter c = A·f·|S − Sf| / (S·(Sf − f)), so c ∝ |1 − Sf/S| for a fixed lens.
-// Depth comes from MediaPipe's person mask (Magi.tracking.body): you at 0.35, the room at 1 (in
+// Depth comes from MediaPipe's person mask (Magi.tracking.body), smoothed in time and space: you at 0.35, the room at 1 (in
 // units of the background distance). Focus starts on you, so the room blurs (portrait mode).
 // Pinch: focus moves to what's under the pinch (you or the room), and blur also grows with
 // distance from that point across the frame, like a tilted focal plane. Make a fist: back to
 // portrait focus. With nobody in view everything is in focus until you pinch. Blur sets the largest disc (Blur, up to 40 px at 720 p).
-// The disc is gathered with 36 golden-angle taps over each pixel's own disc; a tap counts only
+// The disc is gathered at half resolution with 64 golden-angle taps (turned per pixel by a fixed
+// noise, so no rings show) over each pixel's own disc, then laid over the sharp camera; a tap counts only
 // where its own disc reaches back to this pixel (scatter as gather), so sharp things don't smear
 // into the blur around them, and bright taps weigh more, as highlights bloom into discs.
 // Quadtree (Finkel & Bentley 1974; as in quadtree image coding): the frame is tiled with
@@ -37,17 +38,20 @@
     '  vec2 px = uv * size;',
     '  float rc = coc(uv);',
     '  vec3 base = texture2D(cam, uv).rgb;',
-    '  if (rc < 0.5) { gl_FragColor = vec4(base, 1.0); return; }',
+    '  if (rc < 0.35) { gl_FragColor = vec4(base, 0.0); return; }',
     '  vec3 sum = base; float wsum = 1.0;',
-    '  for (int i = 0; i < 36; i++) {',
-    '    float r = sqrt((float(i) + 0.5) / 36.0) * rc, a = float(i) * 2.39996;',
+    // A fixed rotation per pixel (interleaved gradient noise) turns the taps' rings into fine,
+    // still grain instead of visible circles.
+    '  float rot = 6.2832 * fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));',
+    '  for (int i = 0; i < 64; i++) {',
+    '    float r = sqrt((float(i) + 0.5) / 64.0) * rc, a = float(i) * 2.39996 + rot;',
     '    vec2 q = clamp((px + vec2(cos(a), sin(a)) * r) / size, 0.0, 1.0);',
     '    vec3 c = texture2D(cam, q).rgb;',
     '    float w = clamp(coc(q) - r + 1.0, 0.0, 1.0);',
     '    w *= 1.0 + 3.0 * pow(dot(c, vec3(0.2126, 0.7152, 0.0722)), 4.0);',
     '    sum += c * w; wsum += w;',
     '  }',
-    '  gl_FragColor = vec4(sum / wsum, 1.0);',
+    '  gl_FragColor = vec4(sum / wsum, smoothstep(0.35, 1.5, rc));',
     '}'
   ].join('\n');
 
@@ -56,7 +60,8 @@
     var ana = document.createElement('canvas'), actx = ana.getContext('2d', { willReadFrequently: true });
     var mos = document.createElement('canvas'), mctx = mos.getContext('2d');
     var pattern = null, patternKey = '';
-    var pass, maskBytes = null, focus = null, zf = 0.35, lastSeg = null, present = 0;
+    var pass, maskBytes = null, maskDirty = false, focus = null, zf = 0.35, lastSeg = null, present = 0, smooth = null, mw = 0, mh = 0;
+    var half = document.createElement('canvas'), hctx = half.getContext('2d'), cellPrev = null;
     var satY = null, satY2 = null, satR = null, satG = null, satB = null, satF = null, mosaic = null, gw = 0, gh = 0;
 
     return {
@@ -70,10 +75,33 @@
 
         // Depth from the person mask; focus from a pinch.
         var seg = Magi.tracking.body.detect(frame), ix = Magi.interaction.read(frame);
+        // The person mask, smoothed in time (each new mask moves it 40% of the way, so its edge
+        // doesn't flicker) and in space (a 3×3 box blur feathers the edge); read bilinearly.
+        if (seg && seg !== lastSeg) {
+          lastSeg = seg;
+          var nm = seg.width * seg.height, fresh = !smooth || mw !== seg.width || mh !== seg.height;
+          if (fresh) { smooth = new Float32Array(nm); mw = seg.width; mh = seg.height; }
+          var tmp = new Float32Array(nm);
+          for (var yy0 = 0; yy0 < mh; yy0++) for (var xx0 = 0; xx0 < mw; xx0++) {
+            var acc = 0, cnt = 0;
+            for (var dy = -1; dy <= 1; dy++) for (var dx = -1; dx <= 1; dx++) {
+              var xs = xx0 + dx, ys = yy0 + dy;
+              if (xs >= 0 && ys >= 0 && xs < mw && ys < mh) { acc += seg.mask[ys * mw + xs]; cnt++; }
+            }
+            tmp[yy0 * mw + xx0] = acc / cnt;
+          }
+          present = 0;
+          for (var q = 0; q < nm; q++) { smooth[q] = fresh ? tmp[q] : smooth[q] + (tmp[q] - smooth[q]) * 0.4; if (smooth[q] > 0.5) present++; }
+          present /= nm;
+          if (!maskBytes || maskBytes.length !== nm * 4) maskBytes = new Uint8Array(nm * 4);
+          for (var q2 = 0, o2 = 0; q2 < nm; q2++, o2 += 4) { var v2 = Math.round(smooth[q2] * 255); maskBytes[o2] = maskBytes[o2 + 1] = maskBytes[o2 + 2] = v2; maskBytes[o2 + 3] = 255; }
+          maskDirty = true;
+        }
         var maskAt = function (x, y) {
-          if (!seg) return 0;
-          var mx = Math.min(seg.width - 1, Math.max(0, Math.floor(x / W * seg.width))), my = Math.min(seg.height - 1, Math.max(0, Math.floor(y / H * seg.height)));
-          return seg.mask[my * seg.width + mx];
+          if (!smooth) return 0;
+          var fx = Math.max(0, Math.min(mw - 1.001, x / W * mw - 0.5)), fy = Math.max(0, Math.min(mh - 1.001, y / H * mh - 0.5));
+          var x0 = Math.floor(fx), y0 = Math.floor(fy), ax = fx - x0, ay = fy - y0, i0 = y0 * mw + x0;
+          return (smooth[i0] * (1 - ax) + smooth[i0 + 1] * ax) * (1 - ay) + (smooth[i0 + mw] * (1 - ax) + smooth[i0 + mw + 1] * ax) * ay;
         };
         ix.hands.forEach(function (hd) {
           if (hd.pinched) {
@@ -85,27 +113,25 @@
         });
 
         // With nobody in view (under 1% of the frame) there is no depth: all in focus, unless pinched.
-        var person = seg && present > 0.01;
+        var person = !!smooth && present > 0.01;
         var img = cur;
         if (pass === undefined) pass = Magi.fx.shaderPass(FRAG, ['cam', 'mask']);
         if (pass && params.blur > 0) {
-          if (seg && seg !== lastSeg) {
-            lastSeg = seg;
-            var n = seg.width * seg.height;
-            if (!maskBytes || maskBytes.length !== n * 4) maskBytes = new Uint8Array(n * 4);
-            present = 0;
-            for (var i = 0, o = 0; i < n; i++, o += 4) { var v = Math.round(seg.mask[i] * 255); maskBytes[o] = maskBytes[o + 1] = maskBytes[o + 2] = v; maskBytes[o + 3] = 255; if (v > 128) present++; }
-            present /= n;
-            pass.data('mask', seg.width, seg.height, maskBytes);
-          }
-          pass.texture('cam', cur);
-          pass.run(W, H, {
-            size: [W, H], focus: focus ? [focus.x, focus.y] : [0, 0], rmax: params.blur / 100 * 40 * H / 720,
-            zf: person || focus ? zf : 1, useFocus: focus ? 1 : 0, hasMask: person ? 1 : 0, H: H
+          if (maskDirty && maskBytes) { pass.data('mask', mw, mh, maskBytes); maskDirty = false; }
+          // The blur runs at half resolution (a blurred picture loses nothing there), which buys 64
+          // taps; it comes out transparent where you're in focus and is laid over the sharp camera.
+          var hw = Math.max(1, Math.round(W / 2)), hh = Math.max(1, Math.round(H / 2));
+          if (half.width !== hw || half.height !== hh) { half.width = hw; half.height = hh; }
+          hctx.drawImage(cur, 0, 0, hw, hh);
+          pass.texture('cam', half);
+          pass.run(hw, hh, {
+            size: [hw, hh], focus: focus ? [focus.x / 2, focus.y / 2] : [0, 0], rmax: params.blur / 100 * 20 * H / 720,
+            zf: person || focus ? zf : 1, useFocus: focus ? 1 : 0, hasMask: person ? 1 : 0, H: hh
           });
-          img = pass.canvas;
-        }
-        ctx.drawImage(img, 0, 0, W, H);
+          ctx.drawImage(cur, 0, 0);
+          ctx.drawImage(pass.canvas, 0, 0, W, H);
+          img = out;
+        } else ctx.drawImage(img, 0, 0, W, H);
 
         // Analysis: the picture scaled down to one sample per smallest cell (the browser averages
         // each cell's pixels); summed-area tables of brightness, its square and color.
@@ -118,8 +144,15 @@
           mosaic = mctx.createImageData(gw, gh);
         }
         actx.clearRect(0, 0, ana.width, ana.height);
-        actx.drawImage(img, 0, 0, W / m, H / m);
+        // A true average of each cell's pixels (high-quality downscale), then eased in time with the
+        // last frames' (60% new), so squares don't pop between sizes on camera noise.
+        actx.imageSmoothingEnabled = true;
+        actx.imageSmoothingQuality = 'high';
+        actx.drawImage(img === out ? out : img, 0, 0, W / m, H / m);
         var d = actx.getImageData(0, 0, gw, gh).data, S = gw + 1;
+        if (!cellPrev || cellPrev.length !== d.length) cellPrev = Float32Array.from(d);
+        else for (var e0 = 0; e0 < d.length; e0++) { cellPrev[e0] += (d[e0] - cellPrev[e0]) * 0.6; }
+        d = cellPrev;
         var lastX = Math.max(0, Math.ceil(W / m) - 1), lastY = Math.max(0, Math.ceil(H / m) - 1);
         // In focus: the same circle of confusion as the shader, per cell (1 = sharp, 0 = fully blurred).
         var depthOn = pass && params.blur > 0 && (person || focus);
@@ -207,7 +240,7 @@
           ctx.stroke();
         }
       },
-      reset: function () { focus = null; zf = 0.35; lastSeg = null; present = 0; gw = gh = 0; }
+      reset: function () { focus = null; zf = 0.35; lastSeg = null; present = 0; gw = gh = 0; smooth = null; cellPrev = null; }
     };
   }
 

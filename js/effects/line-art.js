@@ -14,6 +14,9 @@
 // broken by its own random dash pattern (gaps up to 4× the width, where the bristles skip the
 // paper's tooth), thinned, faded and offset by up to 0.6× the width; 0 is one clean line.
 // Color: far left lime; then the hue wheel. Dim: darkens the camera behind the drawing.
+// Size scales the drawing about each hand's palm center (×0.5–×2). Connect: one tour through both
+// hands plus strands between matching fingertips (sagging when Spikiness is low); off: one tour per
+// hand.
 // Pinch: freezes the drawing until you let go.
 (function () {
   function createLineArt() {
@@ -33,9 +36,30 @@
         var pts = pinched && frozen ? frozen : sample(frame, ix, Math.round(params.points), 1 + params.rate / 100 * 19);
         if (!pinched) frozen = pts.length ? pts : frozen;
         if (pts !== lastPts) { lastPts = pts; seeds = pts.map(function () { return Math.random(); }); }
+        // Size: each point is scaled about the palm center of the hand it's nearest to. Connect on:
+        // one line through both hands, plus strands joining matching fingertips; off: one line per hand.
+        var hs = ix.hands, scale = Math.pow(2, (params.size - 50) / 50), groups = [];
         if (pts.length > 2) {
-          var tour = Magi.nearestTour(pts), s = params.spikiness / 100, n = tour.length;
-          var path = new Path2D();
+          var placed = pts.map(function (q) {
+            if (!hs.length) return { x: q.x, y: q.y, h: 0 };
+            var bi = 0, bd = Infinity;
+            hs.forEach(function (hd, i) { var d = Math.hypot(q.x - hd.center.x, q.y - hd.center.y); if (d < bd) { bd = d; bi = i; } });
+            var c = hs[bi].center;
+            return { x: c.x + (q.x - c.x) * scale, y: c.y + (q.y - c.y) * scale, h: bi };
+          });
+          if (params.connect || hs.length < 2) groups = [placed];
+          else hs.forEach(function (_, i) { var g = placed.filter(function (q) { return q.h === i; }); if (g.length > 2) groups.push(g); });
+        }
+        var links = [];
+        if (params.connect && hs.length >= 2) {
+          [4, 8, 12, 16, 20].forEach(function (k) {
+            var a = hs[0].points[k], b = hs[1].points[k], ca = hs[0].center, cb = hs[1].center;
+            links.push([{ x: ca.x + (a.x - ca.x) * scale, y: ca.y + (a.y - ca.y) * scale }, { x: cb.x + (b.x - cb.x) * scale, y: cb.y + (b.y - cb.y) * scale }]);
+          });
+        }
+        var path = new Path2D(), s = params.spikiness / 100;
+        groups.forEach(function (group) {
+          var tour = Magi.nearestTour(group), n = tour.length;
           if (s <= 0.5) {
             // Cardinal spline: Catmull–Rom tangents scaled by k.
             var k = 1 - s / 0.5;
@@ -54,6 +78,15 @@
               j ? path.lineTo(x, y) : path.moveTo(x, y);
             }
           }
+        });
+        // Strands between the hands: straight, or sagging into a curve when Spikiness is low.
+        links.forEach(function (l) {
+          var mx = (l[0].x + l[1].x) / 2, my = (l[0].y + l[1].y) / 2 + Math.max(0, 0.5 - s) * 0.15 * H;
+          path.moveTo(l[0].x, l[0].y);
+          path.quadraticCurveTo(mx, my, l[1].x, l[1].y);
+        });
+        if (groups.length || links.length) {
+          var n = groups.reduce(function (a, g) { return a + g.length; }, 0) + links.length;
           var ink = params.color ? Magi.fx.inkColor(params.color) : [0.78, 0.94, 0.24];
           var rgb = ink.map(function (v) { return Math.round(v * 255); }).join(',');
           var w = (0.5 + params.thickness / 100 * 7.5) * u, tex = params.texture / 100;

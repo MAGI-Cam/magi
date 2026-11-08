@@ -1,8 +1,9 @@
 // Collage: a source box locks onto your right eye; while your hand is up, numbered snapshots of
 // your face fill a sphere around your head. Lower the hand and they fly back into the source.
 //
-// Face (Face Landmarker): the box sits on your right eye (corners 33/133). Snapshots take your
-// right eye, left eye (362/263), mouth (61/291) and nose (98/327 around the tip, 1) in turn, sized
+// Face (Face Landmarker): the box sits on your right eye (corners 33/133). Modes: Eye copies only
+// that eye; Features takes your right eye, left eye (362/263), mouth (61/291) and nose (98/327
+// around the tip, 1) in turn. Snapshots are sized
 // from those landmark distances; each is a still taken when it spawns (`Rate` per second, up to
 // `Count`).
 //
@@ -174,9 +175,10 @@
         var src = null, box = null, center = null, unitW = 0;
         if (face) {
           var feats = features(face);
-          // The box stays on your right eye; the snapshots take eye, eye, mouth, nose in turn.
+          // The box stays on your right eye. Eye mode: every snapshot is that eye. Features: the
+          // snapshots take eye, eye, mouth, nose in turn.
           box = feats[0];
-          src = feats[featureIndex % 4];
+          src = params.mode === 'eye' ? feats[0] : feats[featureIndex % 4];
           unitW = feats[0].w;
           center = { x: (feats[0].c.x + feats[1].c.x + feats[2].c.x) / 3, y: (feats[0].c.y + feats[1].c.y + feats[2].c.y) / 3 };
         }
