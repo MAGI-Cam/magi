@@ -20,7 +20,7 @@ Decisions from the planning questionnaire. Each item becomes a small release, te
 - **A2 Card structures** (first library effect; done in release 39 as **Cards**): library images as 3D card stacks (ribbon, ring, lattice) with lime 3D text. Pinch-spread zooms and rotates; finger count switches the structure.
 - **A3 Attention graph** (Landmarks mode): a node graph of library thumbnails. A script run on the site computes image embeddings (CLIP) and the Mapper graph and writes them into the feed. MAGI only draws and navigates it: point to select, fist to pull in, open palm to spread out.
 - **A1 Tracking boxes:** library images pop up inside thin red/green/blue boxes that cluster where things move (motion blobs from frame differencing). Later.
-- **A5 Font editor** (Landmarks mode):
+- **A5 Font editor** (Landmarks mode; done in release 41 as **Font**):
   - Glyph outlines come from fonts MAGI already loads, traced instead of parsed. A glyph is drawn on a hidden canvas, its contours are traced with marching squares and resampled evenly. Default face Bodoni Moda; Inter, Silkscreen and VT323 can be chosen in Advanced.
   - Gestures, after the reference: the fingers touching the thumb pick what's adjusted (index: character, index + middle: distortion, all five: smoothness). Turning the hand turns the value like a knob, and the A–Z dial rotates with it.
   - Distortion displaces points through a smooth noise field. Smoothness is iterated Laplacian smoothing.
