@@ -6,11 +6,12 @@
 // integrated with semi-implicit Euler in two substeps a frame. Every fingertip pushes particles
 // away within a radius r (Reach, 4–20% of the frame height) with an acceleration that fades as
 // (1 − d/r)² (Push), so your finger carves a path and the field springs back behind it.
-// Rest shape (Shape): 0 an oval field like the reference (rest points on a jittered grid inside an
-// ellipse, denser toward the middle); 1 a letter (the Letter slider, A–Z), its filled shape sampled
+// Rest shape (Shape): 0 the whole screen (a jittered grid); 2 an oval field like the reference
+// (inside an ellipse, denser toward the middle); 1 a letter (the Letter slider, A–Z), its filled shape sampled
 // from Literata on a hidden canvas.
 // Look: each particle a small ring; moving ones light up white with a streak back along their
-// motion, brighter the faster they go. The index fingertips get a red dot, as in the reference.
+// motion, brighter the faster they go. Hide: resting particles are invisible, so only the reactive
+// ones show. The index fingertips get a red dot, as in the reference.
 (function () {
   var TIPS = [4, 8, 12, 16, 20];
 
@@ -30,11 +31,20 @@
       }
       return pts;
     }
-    // Oval field: a jittered grid inside the ellipse, rejection-sampled toward the middle.
-    while (pts.length < n) {
-      var u = Math.random() * 2 - 1, v = Math.random() * 2 - 1, r2 = u * u + v * v;
-      if (r2 > 1 || Math.random() > 1.15 - 0.5 * r2) continue;
-      pts.push([cx + u * rx, cy + v * ry]);
+    if (shape === 2) {
+      // Oval field: rejection-sampled inside the ellipse, denser toward the middle.
+      while (pts.length < n) {
+        var u = Math.random() * 2 - 1, v = Math.random() * 2 - 1, r2 = u * u + v * v;
+        if (r2 > 1 || Math.random() > 1.15 - 0.5 * r2) continue;
+        pts.push([cx + u * rx, cy + v * ry]);
+      }
+      return pts;
+    }
+    // Screen: a jittered grid over the whole frame (cells of equal area, one particle each, offset
+    // by up to 40% of a cell), so the field is even edge to edge.
+    var cell = Math.sqrt(W * H / n), cols = Math.ceil(W / cell), rows = Math.ceil(H / cell);
+    for (var gy = 0; gy < rows; gy++) for (var gx = 0; gx < cols; gx++) {
+      pts.push([(gx + 0.5 + (Math.random() - 0.5) * 0.8) * cell, (gy + 0.5 + (Math.random() - 0.5) * 0.8) * cell]);
     }
     return pts;
   }
@@ -81,15 +91,19 @@
         ctx.strokeStyle = 'rgba(255,255,255,0.55)';
         ctx.lineWidth = Math.max(0.8, 0.8 * u);
         ctx.beginPath();
-        still.forEach(function (e) { ctx.moveTo(e[0].x + rr, e[0].y); ctx.arc(e[0].x, e[0].y, rr, 0, Math.PI * 2); });
+        // Hide: resting particles are invisible; only the ones your hand sets moving show.
+        if (!params.hide) still.forEach(function (e) { ctx.moveTo(e[0].x + rr, e[0].y); ctx.arc(e[0].x, e[0].y, rr, 0, Math.PI * 2); });
         ctx.stroke();
         ctx.globalCompositeOperation = 'lighter';
         ctx.lineCap = 'round';
-        moving.forEach(function (e) {
-          var q = e[0], b = e[1];
+        // Moving particles in four brightness bands, one path each.
+        [0, 1, 2, 3].forEach(function (band) {
+          var lo = band / 4, hi = (band + 1) / 4, b = (band + 0.5) / 4;
           ctx.strokeStyle = 'rgba(255,255,255,' + (0.35 + 0.65 * b).toFixed(3) + ')';
           ctx.lineWidth = Math.max(1, (1 + 1.6 * b) * u);
-          ctx.beginPath(); ctx.moveTo(q.x - q.vx * dt * 3, q.y - q.vy * dt * 3); ctx.lineTo(q.x, q.y); ctx.stroke();
+          ctx.beginPath();
+          moving.forEach(function (e) { if (e[1] < lo || (e[1] >= hi && band < 3)) return; var q = e[0]; ctx.moveTo(q.x - q.vx * dt * 3, q.y - q.vy * dt * 3); ctx.lineTo(q.x, q.y); });
+          ctx.stroke();
         });
         ctx.globalCompositeOperation = 'source-over';
         ctx.fillStyle = '#ff3b30';

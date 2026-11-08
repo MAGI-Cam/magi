@@ -14,13 +14,14 @@
 // broken by its own random dash pattern (gaps up to 4× the width, where the bristles skip the
 // paper's tooth), thinned, faded and offset by up to 0.6× the width; 0 is one clean line.
 // Color: far left lime; then the hue wheel. Dim: darkens the camera behind the drawing.
-// Size scales the drawing about each hand's palm center (×0.5–×2). Connect: one tour through both
+// Size scales the drawing about each hand's palm center (×0.5–×2); closing your palm shrinks it
+// and opening it expands it (×0.45–×1.6 more). Connect: one tour through both
 // hands plus strands between matching fingertips (sagging when Spikiness is low); off: one tour per
 // hand.
 // Pinch: freezes the drawing until you let go.
 (function () {
   function createLineArt() {
-    var sample = Magi.contourSampler(), frozen = null, seeds = [], lastPts = null;
+    var sample = Magi.contourSampler(), frozen = null, seeds = [], lastPts = null, palmK = 1;
     function rnd(i, k) { var h = Math.sin(i * 127.1 + k * 311.7) * 43758.5453; return h - Math.floor(h); }
 
     return {
@@ -38,7 +39,16 @@
         if (pts !== lastPts) { lastPts = pts; seeds = pts.map(function () { return Math.random(); }); }
         // Size: each point is scaled about the palm center of the hand it's nearest to. Connect on:
         // one line through both hands, plus strands joining matching fingertips; off: one line per hand.
-        var hs = ix.hands, scale = Math.pow(2, (params.size - 50) / 50), groups = [];
+        // Palm: closing your hand shrinks the drawing (to ×0.45), opening it expands it (to ×1.6),
+        // from the fingers' mean curl, eased over 0.15 s; on top of Size.
+        var hs = ix.hands, groups = [];
+        if (hs.length) {
+          var open = 0;
+          hs.forEach(function (hd) { var f = hd.fingers; open += 1 - (f.index.curl + f.middle.curl + f.ring.curl + f.pinky.curl) / 4; });
+          open = Math.max(0, Math.min(1, open / hs.length));
+          palmK += (0.45 + 1.15 * open - palmK) * (1 - Math.exp(-(1 / 60) / 0.15));
+        }
+        var scale = Math.pow(2, (params.size - 50) / 50) * palmK;
         if (pts.length > 2) {
           var placed = pts.map(function (q) {
             if (!hs.length) return { x: q.x, y: q.y, h: 0 };

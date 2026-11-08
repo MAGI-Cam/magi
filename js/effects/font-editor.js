@@ -11,8 +11,8 @@
 // Envelope: the letter grown outward (its shape stroked with a pen 11% of the canvas wide), its
 // outer contour traced the same way and simplified with Douglas–Peucker (tolerance 2.5% of the
 // canvas), so at rest it is a straight-edged polygon that follows the letter at a distance.
-// Distortion: every point moves through a smooth displacement field, two octaves of sine waves per
-// axis drifting in time, by up to 14% of the letter's size; the envelope moves with a lower octave.
+// Distortion: every point moves through a smooth, still displacement field, two octaves of sine
+// waves per axis, by up to 14% of the letter's size (it holds its shape until Distortion changes); the envelope moves with a lower octave.
 // Smoothness: Taubin smoothing (1995): each pass moves a point toward the mean of two neighbors by
 // λ = 0.5, then away by μ = −0.53, which rounds corners without shrinking the shape the way plain
 // Laplacian smoothing does. Smoothness sets the passes (0–30) and how far apart those neighbors
@@ -128,9 +128,10 @@
     return p;
   }
 
+  // A still field: the warp holds its shape (as in the reference); only Distortion changes it.
   function field(x, y, t, f) {
-    return [0.65 * Math.sin(y * 0.045 * f + t * 0.7) + 0.35 * Math.sin(x * 0.11 * f - t * 0.9 + 1.3),
-      0.65 * Math.sin(x * 0.04 * f - t * 0.6 + 2.1) + 0.35 * Math.sin(y * 0.12 * f + t * 0.8 + 0.7)];
+    return [0.65 * Math.sin(y * 0.045 * f) + 0.35 * Math.sin(x * 0.11 * f + 1.3),
+      0.65 * Math.sin(x * 0.04 * f + 2.1) + 0.35 * Math.sin(y * 0.12 * f + 0.7)];
   }
 
   function glyph(letter, face) {
@@ -174,12 +175,18 @@
         mode = active;
         var key = active === 'character' ? 'letter' : active;
         // The knob's angle: the thumb-to-index line (it twists as you turn the grip), unwrapped.
+        // Steadied: the angle is eased (0.25 per frame), changes under 0.8° are ignored as tremor,
+        // and the letter only changes once the knob is 0.7 of a step past the current one.
         var pp = hd.points, ang = Math.atan2(pp[8].y - pp[4].y, pp[8].x - pp[4].x) * 180 / Math.PI;
-        if (!grab || grab.what !== active) grab = { what: active, last: ang, acc: 0, v: vals[key] };
-        var dA = ang - grab.last; dA -= Math.round(dA / 360) * 360; grab.acc += dA; grab.last = ang;
+        if (!grab || grab.what !== active) grab = { what: active, last: ang, smooth: ang, acc: 0, v: vals[key] };
+        var dS = ang - grab.smooth; dS -= Math.round(dS / 360) * 360; grab.smooth += dS * 0.25;
+        var dA = grab.smooth - grab.last; dA -= Math.round(dA / 360) * 360;
+        if (Math.abs(dA) > 0.8) { grab.acc += dA; grab.last = grab.smooth; }
         var turn = grab.acc;
-        if (active === 'character') vals.letter = grab.v + turn / 12;
-        else vals[key] = Math.max(0, Math.min(100, grab.v + turn));
+        if (active === 'character') {
+          var want = grab.v + turn / 12, cur = Math.round(vals.letter);
+          if (Math.abs(want - cur) > 0.7) vals.letter = Math.round(want);
+        } else vals[key] = Math.max(0, Math.min(100, Math.round(grab.v + turn)));
         var rounded = active === 'character' ? ((Math.round(vals.letter) % 26) + 26) % 26 : Math.round(vals[key]);
         if (rounded !== params[key]) frame.setParam(key, rounded);
       } else grab = null;

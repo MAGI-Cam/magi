@@ -551,10 +551,10 @@
   // Turning your hand turns the view. Points that escape (|x|, |y| or |z| > 20) restart near the
   // origin. Each point leaves a pastel trail (hue by height z) added like light, fading by Trail.
   // The equations and α read on the HUD; red squares sit on your fingertips, α at the index tip.
+  // Two hands: two attractors, one per hand, each with its own α and view, beside its hand.
   Magi.landmarkModes.rabinovich = function () {
-    var N = 1400, P = [], trail = document.createElement('canvas'), tctx = trail.getContext('2d'), alpha = 0.6, yaw = 0, pitch = 0.4;
+    var N = 1400, trail = document.createElement('canvas'), tctx = trail.getContext('2d');
     function seed() { return [(Math.random() - 0.5) * 1.6, (Math.random() - 0.5) * 1.6, Math.random() * 0.8 + 0.1]; }
-    for (var i = 0; i < N; i++) P.push(seed());
     function f(p, a, g) { var x = p[0], y = p[1], z = p[2]; return [y * (z - 1 + x * x) + g * x, x * (3 * z + 1 - x * x) + g * y, -2 * z * (a + x * y)]; }
     function rk4(p, a, g, h) {
       var k1 = f(p, a, g), p2 = [p[0] + k1[0] * h / 2, p[1] + k1[1] * h / 2, p[2] + k1[2] * h / 2];
@@ -562,64 +562,79 @@
       var k3 = f(p3, a, g), p4 = [p[0] + k3[0] * h, p[1] + k3[1] * h, p[2] + k3[2] * h], k4 = f(p4, a, g);
       return [p[0] + h / 6 * (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0]), p[1] + h / 6 * (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1]), p[2] + h / 6 * (k1[2] + 2 * k2[2] + 2 * k3[2] + k4[2])];
     }
+    // One attractor per hand (two hands: two attractors, each placed at its hand's side and shaped by
+    // its own thumb–index opening); colors cool for the first, warm for the second.
+    function attractor(x, palette) { var P = []; for (var i = 0; i < N; i++) P.push(seed()); return { P: P, alpha: 0.6, yaw: 0, pitch: 0.4, ox: x, pal: palette, on: 0 }; }
+    var COOL = ['120,200,255', '150,255,220', '190,170,255', '255,170,230', '255,240,200'];
+    var WARM = ['255,150,120', '255,200,140', '255,130,190', '255,230,160', '255,255,220'];
+    var A = [attractor(0.32, COOL), attractor(0.68, WARM)];
     return function (ctx, frame, ix, params) {
       var W = frame.width, H = frame.height, u = frame.pxPerCss, t = frame.time / 1000, hud = frame.hud;
       if (trail.width !== W || trail.height !== H) { trail.width = W; trail.height = H; }
       ctx.fillStyle = 'rgba(0,0,0,' + (params.dim / 100).toFixed(3) + ')';
       ctx.fillRect(0, 0, W, H);
-      var hd = ix.hands[0], target = 0.7 + 0.55 * Math.sin(t * 0.07);
-      if (hd) {
-        target = 0.1 + 1.2 * Math.max(0, Math.min(1, (hd.pinchWith.index.distance - 0.15) / 1.2));
-        yaw += ((hd.rotation * Math.PI / 180) * 1.5 - yaw) * 0.1;
-        pitch += ((hd.center.y / H - 0.5) * 1.2 + 0.4 - pitch) * 0.1;
-      } else yaw += 0.003;
-      alpha += (target - alpha) * 0.08;
+      var hs = ix.pair ? [ix.pair.left, ix.pair.right] : ix.hands.slice(0, 1);
       var steps = Math.max(1, Math.round(params.speed / 100 * 6)), g = 0.1, h = 0.01;
-      var cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch), sc = H * 0.2 * (0.5 + params.size / 100), ox = W * 0.32, oy = H * 0.5;
-      function proj(p) { var x = p[0] * cy - p[1] * sy, y0 = p[0] * sy + p[1] * cy, z = p[2] - 0.6; return [ox + x * sc, oy - (z * cp - y0 * sp) * sc, p[2]]; }
-      // Trails: fade, then draw each point's motion this frame.
       tctx.globalCompositeOperation = 'destination-out';
       tctx.fillStyle = 'rgba(0,0,0,' + (0.04 + (1 - params.trail / 100) * 0.3).toFixed(3) + ')';
       tctx.fillRect(0, 0, W, H);
       tctx.globalCompositeOperation = 'lighter';
       tctx.lineWidth = Math.max(0.6, 0.7 * u);
-      var bins = [[], [], [], [], []];
-      for (var i = 0; i < N; i++) {
-        var a0 = proj(P[i]);
-        for (var s2 = 0; s2 < steps; s2++) P[i] = rk4(P[i], alpha, g, h);
-        var q = P[i];
-        if (!isFinite(q[0]) || Math.abs(q[0]) > 20 || Math.abs(q[1]) > 20 || Math.abs(q[2]) > 20) { P[i] = seed(); continue; }
-        var a1 = proj(q);
-        bins[Math.max(0, Math.min(4, Math.floor(q[2] / 0.5)))].push(a0[0], a0[1], a1[0], a1[1]);
-      }
-      var cols = ['120,200,255', '150,255,220', '190,170,255', '255,170,230', '255,240,200'];
-      bins.forEach(function (b, k) {
-        if (!b.length) return;
-        tctx.strokeStyle = 'rgba(' + cols[k] + ',0.32)';
-        tctx.beginPath();
-        for (var j = 0; j < b.length; j += 4) { tctx.moveTo(b[j], b[j + 1]); tctx.lineTo(b[j + 2], b[j + 3]); }
-        tctx.stroke();
+      A.forEach(function (at, k) {
+        var hd = hs[k], solo = hs.length < 2;
+        // The second attractor fades in with a second hand and out without it.
+        at.on += ((k === 0 || !solo ? 1 : 0) - at.on) * 0.08;
+        if (at.on < 0.02) return;
+        var target = 0.7 + 0.55 * Math.sin(t * 0.07 + k * 2);
+        if (hd) {
+          target = 0.1 + 1.2 * Math.max(0, Math.min(1, (hd.pinchWith.index.distance - 0.15) / 1.2));
+          at.yaw += ((hd.rotation * Math.PI / 180) * 1.5 - at.yaw) * 0.1;
+          at.pitch += ((hd.center.y / H - 0.5) * 1.2 + 0.4 - at.pitch) * 0.1;
+          at.ox += ((solo ? 0.32 : Math.max(0.15, Math.min(0.85, hd.center.x / W))) - at.ox) * 0.1;
+        } else { at.yaw += 0.003; at.ox += ((solo ? 0.32 : 0.32 + k * 0.36) - at.ox) * 0.05; }
+        at.alpha += (target - at.alpha) * 0.08;
+        var cy = Math.cos(at.yaw), sy = Math.sin(at.yaw), cp = Math.cos(at.pitch), sp = Math.sin(at.pitch);
+        var sc = H * (solo ? 0.2 : 0.15) * (0.5 + params.size / 100), ox = W * at.ox, oy = H * 0.5;
+        var proj = function (p) { var x = p[0] * cy - p[1] * sy, y0 = p[0] * sy + p[1] * cy, z = p[2] - 0.6; return [ox + x * sc, oy - (z * cp - y0 * sp) * sc]; };
+        var bins = [[], [], [], [], []], P = at.P;
+        for (var i = 0; i < N; i++) {
+          var a0 = proj(P[i]);
+          for (var s2 = 0; s2 < steps; s2++) P[i] = rk4(P[i], at.alpha, g, h);
+          var q = P[i];
+          if (!isFinite(q[0]) || Math.abs(q[0]) > 20 || Math.abs(q[1]) > 20 || Math.abs(q[2]) > 20) { P[i] = seed(); continue; }
+          var a1 = proj(q);
+          bins[Math.max(0, Math.min(4, Math.floor(q[2] / 0.5)))].push(a0[0], a0[1], a1[0], a1[1]);
+        }
+        bins.forEach(function (b, kb) {
+          if (!b.length) return;
+          tctx.strokeStyle = 'rgba(' + at.pal[kb] + ',' + (0.32 * at.on).toFixed(3) + ')';
+          tctx.beginPath();
+          for (var j = 0; j < b.length; j += 4) { tctx.moveTo(b[j], b[j + 1]); tctx.lineTo(b[j + 2], b[j + 3]); }
+          tctx.stroke();
+        });
       });
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
       ctx.drawImage(trail, 0, 0);
       ctx.restore();
-      // Fingertip squares and the α readout.
-      if (hd) {
+      // Fingertip squares and each hand's α.
+      hs.forEach(function (hd, k) {
         ctx.save();
-        ctx.strokeStyle = '#ff3b30'; ctx.lineWidth = Math.max(1, 1.2 * u);
-        [4, 8, 12, 16, 20].forEach(function (k) { var pt = hd.points[k]; ctx.strokeRect(pt.x - 4 * u, pt.y - 4 * u, 8 * u, 8 * u); });
+        ctx.strokeStyle = k ? '#ff9f43' : '#ff3b30'; ctx.lineWidth = Math.max(1, 1.2 * u);
+        [4, 8, 12, 16, 20].forEach(function (k2) { var pt = hd.points[k2]; ctx.strokeRect(pt.x - 4 * u, pt.y - 4 * u, 8 * u, 8 * u); });
         ctx.beginPath(); ctx.moveTo(hd.points[4].x, hd.points[4].y); ctx.lineTo(hd.points[8].x, hd.points[8].y); ctx.stroke();
         ctx.restore();
         hud.save(); hud.fillStyle = '#fff'; hud.font = '400 ' + Math.round(9 * u) + 'px ' + Magi.fx.MONO;
-        hud.fillText('α:' + alpha.toFixed(4), hd.points[8].x + 8 * u, hd.points[8].y); hud.restore();
-      }
+        hud.fillText('α' + (hs.length > 1 ? k + 1 : '') + ':' + A[k].alpha.toFixed(4), hd.points[8].x + 8 * u, hd.points[8].y); hud.restore();
+      });
       hud.save();
       hud.fillStyle = '#fff';
       hud.font = '300 ' + Math.round(15 * u) + 'px Inter, sans-serif';
       hud.fillText('Rabinovich–Fabrikant equations', W * 0.18, H * 0.08);
       hud.font = '300 ' + Math.round(9 * u) + 'px Inter, sans-serif';
-      ['Δx = y(z − 1 + x²) + γx', 'Δy = x(3z + 1 − x²) + γy', 'Δz = −2z(α + xy)', 'α = ' + alpha.toFixed(4)].forEach(function (l, k) { hud.fillText(l, W * 0.66, H * 0.05 + k * 13 * u); });
+      var lines = ['Δx = y(z − 1 + x²) + γx', 'Δy = x(3z + 1 − x²) + γy', 'Δz = −2z(α + xy)', (hs.length > 1 ? 'α₁ = ' : 'α = ') + A[0].alpha.toFixed(4)];
+      if (hs.length > 1) lines.push('α₂ = ' + A[1].alpha.toFixed(4));
+      lines.forEach(function (l, k) { hud.fillText(l, W * 0.66, H * 0.05 + k * 13 * u); });
       hud.restore();
     };
   };
@@ -631,68 +646,222 @@
   // c > 0.15 is joined by a chord (a quadratic curve through the middle) in its landmark's hue, as
   // opaque as its cohesion, so a fist fills the circle and spread fingers thin it out. A white line
   // drawing of your hand (bones and joint rings) and a strip chart of the level's last 8 s go with it.
+  // Two hands: 42 landmarks around the circle, the left hand on one half and the right on the other;
+  // pairs across the hands are joined in white as the hands come together, and the HUD reads each
+  // hand's level and the hands' cohesion with each other.
   var LM_NAMES = ['WRIST', 'THUMB CMC', 'THUMB MCP', 'THUMB IP', 'THUMB TIP', 'INDEX FINGER MCP', 'INDEX FINGER PIP', 'INDEX FINGER DIP', 'INDEX FINGER TIP',
     'MIDDLE FINGER MCP', 'MIDDLE FINGER PIP', 'MIDDLE FINGER DIP', 'MIDDLE FINGER TIP', 'RING FINGER MCP', 'RING FINGER PIP', 'RING FINGER DIP', 'RING FINGER TIP',
     'PINKY MCP', 'PINKY PIP', 'PINKY DIP', 'PINKY TIP'];
   Magi.landmarkModes.cohesion = function () {
-    var level = 0, hist = [], lastSample = 0, FIST = 0.42;
+    var levels = [0, 0], between = 0, hist = [[], []], lastSample = 0, FIST = 0.42, L = 0.9;
     return function (ctx, frame, ix, params) {
       var W = frame.width, H = frame.height, u = frame.pxPerCss, t = frame.time / 1000, hud = frame.hud;
       ctx.fillStyle = 'rgba(0,0,0,' + (params.dim / 100).toFixed(3) + ')';
       ctx.fillRect(0, 0, W, H);
-      var hd = ix.hands[0], pairs = [];
-      if (hd) {
-        var p = hd.points, palm = hd.size || 1, sum = 0;
-        for (var i = 0; i < 21; i++) for (var j = i + 1; j < 21; j++) {
-          var c = Math.max(0, 1 - Math.hypot(p[i].x - p[j].x, p[i].y - p[j].y) / (0.9 * palm));
-          sum += c; if (c > 0.15) pairs.push([i, j, c]);
-        }
-        level += (Math.min(1, sum / 210 / FIST) - level) * 0.25;
-        // The hand as a white line drawing.
-        var C = (Magi.tracking.connections && Magi.tracking.connections.hand) || [];
-        ctx.save();
-        ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(1, 1.2 * u);
-        ctx.beginPath(); C.forEach(function (e) { ctx.moveTo(p[e.start].x, p[e.start].y); ctx.lineTo(p[e.end].x, p[e.end].y); });
-        p.forEach(function (q) { ctx.moveTo(q.x + 5 * u, q.y); ctx.arc(q.x, q.y, 5 * u, 0, Math.PI * 2); });
-        ctx.stroke(); ctx.restore();
+      var hs = ix.pair ? [ix.pair.left, ix.pair.right] : ix.hands.slice(0, 1), two = hs.length === 2;
+      var nodes = [], pairs = [], C = (Magi.tracking.connections && Magi.tracking.connections.hand) || [];
+      hs.forEach(function (hd, hI) { hd.points.forEach(function (q, k) { nodes.push({ q: q, hand: hI, k: k }); }); });
+      // Pair cohesion c = max(0, 1 − d / (L · palm)); within each hand, and across the two hands.
+      var palm = hs.length ? hs.reduce(function (a, h) { return a + (h.size || 1); }, 0) / hs.length : 1, sums = [0, 0], cross = 0, ncross = 0;
+      for (var i = 0; i < nodes.length; i++) for (var j = i + 1; j < nodes.length; j++) {
+        var a = nodes[i], b = nodes[j], c = Math.max(0, 1 - Math.hypot(a.q.x - b.q.x, a.q.y - b.q.y) / (L * palm));
+        if (a.hand === b.hand) sums[a.hand] += c; else { cross += c; ncross++; }
+        if (c > 0.15) pairs.push([i, j, c, a.hand !== b.hand]);
       }
-      if (t - lastSample > 0.1) { lastSample = t; hist.push(level); if (hist.length > 80) hist.shift(); }
-      // Chord diagram.
-      var R = Math.min(W, H) * 0.3, cx = W - R * 1.55, cy = H * 0.5;
-      var at = function (k) { var a = -Math.PI / 2 + (k - 10) * (Math.PI * 2 / 21); return [cx + Math.cos(a) * R, cy + Math.sin(a) * R, a]; };
+      hs.forEach(function (h, k) { levels[k] += (Math.min(1, sums[k] / 210 / FIST) - levels[k]) * 0.25; });
+      between += ((two ? Math.min(1, cross / ncross / FIST) : 0) - between) * 0.25;
+      // Each hand as a white line drawing.
+      ctx.save();
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(1, 1.2 * u);
+      ctx.beginPath();
+      hs.forEach(function (hd) {
+        var p = hd.points;
+        C.forEach(function (e) { ctx.moveTo(p[e.start].x, p[e.start].y); ctx.lineTo(p[e.end].x, p[e.end].y); });
+        p.forEach(function (q) { ctx.moveTo(q.x + 5 * u, q.y); ctx.arc(q.x, q.y, 5 * u, 0, Math.PI * 2); });
+      });
+      ctx.stroke(); ctx.restore();
+      if (t - lastSample > 0.1) {
+        lastSample = t;
+        [0, 1].forEach(function (k) { hist[k].push(k < hs.length ? levels[k] : null); if (hist[k].length > 80) hist[k].shift(); });
+      }
+      // Chord diagram: one hand's 21 landmarks around the circle, or both hands' 42, each on its half.
+      var n = Math.max(21, nodes.length), R = Math.min(W, H) * 0.3, cx = W - R * 1.55, cy = H * 0.5;
+      var at = function (k) { var a = -Math.PI / 2 + (k - n / 2 + 0.5) * (Math.PI * 2 / n); return [cx + Math.cos(a) * R, cy + Math.sin(a) * R, a]; };
       ctx.save();
       ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = Math.max(1, u);
       ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.stroke();
       ctx.globalCompositeOperation = 'lighter';
-      ctx.lineWidth = Math.max(1, 1.3 * u);
+      ctx.lineWidth = Math.max(1, (two ? 1 : 1.3) * u);
       pairs.forEach(function (pr) {
         var a = at(pr[0]), b = at(pr[1]);
-        ctx.strokeStyle = 'hsla(' + Math.round(pr[0] / 21 * 360) + ',100%,62%,' + (pr[2] * 0.9).toFixed(3) + ')';
+        ctx.strokeStyle = pr[3] ? 'rgba(255,255,255,' + (pr[2] * 0.9).toFixed(3) + ')' : 'hsla(' + Math.round((pr[0] % 21) / 21 * 360) + ',100%,62%,' + (pr[2] * 0.9).toFixed(3) + ')';
         ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.quadraticCurveTo(cx, cy, b[0], b[1]); ctx.stroke();
       });
       ctx.globalCompositeOperation = 'source-over';
-      ctx.fillStyle = '#000'; ctx.strokeStyle = '#ccff66';
-      for (var k = 0; k < 21; k++) { var q2 = at(k); ctx.beginPath(); ctx.arc(q2[0], q2[1], 3.5 * u, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+      ctx.fillStyle = '#000';
+      for (var k = 0; k < n; k++) { var q2 = at(k); ctx.strokeStyle = two && k >= 21 ? '#ff9f43' : '#ccff66'; ctx.beginPath(); ctx.arc(q2[0], q2[1], 3.5 * u, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
       ctx.restore();
       hud.save();
       hud.fillStyle = '#fff';
-      hud.font = '500 ' + Math.round(7 * u) + 'px ' + Magi.fx.MONO;
-      for (var k2 = 0; k2 < 21; k2++) {
+      hud.font = '500 ' + Math.round((two ? 5.5 : 7) * u) + 'px ' + Magi.fx.MONO;
+      for (var k2 = 0; k2 < n; k2++) {
         var q3 = at(k2), right = Math.cos(q3[2]) >= 0;
         hud.textAlign = right ? 'left' : 'right';
-        hud.fillText(LM_NAMES[k2], q3[0] + Math.cos(q3[2]) * 8 * u, q3[1] + Math.sin(q3[2]) * 8 * u);
+        hud.fillText((two ? (k2 < 21 ? 'L ' : 'R ') : '') + LM_NAMES[k2 % 21], q3[0] + Math.cos(q3[2]) * 8 * u, q3[1] + Math.sin(q3[2]) * 8 * u);
       }
       hud.textAlign = 'left';
       hud.font = '500 ' + Math.round(11 * u) + 'px ' + Magi.fx.MONO;
-      hud.fillText('landmarks cohesion level:' + Math.round(level * 100) + '%', W * 0.03, H * 0.06);
+      if (two) {
+        hud.fillText('left hand cohesion level:' + Math.round(levels[0] * 100) + '%', W * 0.03, H * 0.06);
+        hud.fillText('right hand cohesion level:' + Math.round(levels[1] * 100) + '%', W * 0.03, H * 0.06 + 15 * u);
+        hud.fillText('hands cohesion level:' + Math.round(between * 100) + '%', W * 0.03, H * 0.06 + 30 * u);
+      } else hud.fillText('landmarks cohesion level:' + Math.round(levels[0] * 100) + '%', W * 0.03, H * 0.06);
       hud.restore();
-      // Strip chart of the level.
+      // Strip chart of the levels (second hand in orange).
       ctx.save();
-      ctx.strokeStyle = '#5b8cff'; ctx.lineWidth = Math.max(1, 1.2 * u);
+      ctx.lineWidth = Math.max(1, 1.2 * u);
       var x0 = W * 0.45, x1 = W * 0.6, y0 = H * 0.09;
+      hist.forEach(function (hh, kk) {
+        ctx.strokeStyle = kk ? '#ff9f43' : '#5b8cff';
+        ctx.beginPath();
+        var pen = false;
+        hh.forEach(function (v, k3) { if (v === null) { pen = false; return; } var x = x0 + (x1 - x0) * k3 / 79, y = y0 - v * H * 0.05; pen ? ctx.lineTo(x, y) : ctx.moveTo(x, y); pen = true; });
+        ctx.stroke();
+      });
+      ctx.restore();
+    };
+  };
+
+  // Pollinate (after an idea generator by gesture): concepts orbit in a spiral galaxy, and a small
+  // pad by your hand cross-pollinates them. Point with your index finger: the pad follows your hand
+  // and your fingertip's place on it picks two concepts — across for the first, down for the
+  // second. Hold still on a cell for 0.5 s and the pair pollinates: "A + B = ?" and an idea for a
+  // work appear on the right, decoding from scrambled symbols into words. Pinch: pins the cell (a red
+  // dot stays on the pad). Fist: clears the pins. Open palm: the galaxy spins faster.
+  // Galaxy: each concept and 220 unnamed particles orbit the center with differential rotation, the
+  // angular speed falling with radius as ω ∝ r^(−1/2), so the inner arms lead and the spiral winds
+  // like a galaxy; each leaves a short comet arc, orange or blue. The chosen pair is named in large
+  // type, a few others small.
+  // Ideas: a small context-free grammar (after Kate Compton's Tracery): sentence slots filled from
+  // word lists by a random generator seeded with the pair, so the same pair always grows the same
+  // idea.
+  var POLLEN = ['media theory', 'language as landscape', 'evolutionary algorithms', 'dubstep', 'glsl shaders', 'generative art', 'projection mapping',
+    'oracular language', 'real-time interaction', 'pattern formation', 'spatial memory', 'future archaeology', 'gesture-driven world builder',
+    'sound sculpture', 'machine dreams', 'soft robotics', 'tidal data', 'ritual computing', 'bioluminescence', 'swarm intelligence', 'urban noise',
+    'folk tales', 'cellular automata', 'light fields', 'ASCII cinema', 'haptic poetry', 'weather systems', 'mycelium networks', 'typography', 'None'];
+  var GRAMMAR = {
+    form: ['A sonic sculpture', 'An augmented reality app', 'A kinetic sculpture', 'A dynamic projection mapping installation', 'An interactive light installation', 'A generative score', 'A wearable instrument', 'A browser-based ritual', 'A tactile archive', 'A responsive LED wall'],
+    verb: ['that translates', 'that entangles', 'that maps', 'that slowly dissolves', 'that grows', 'that tunes', 'that remixes', 'that buries'],
+    where: ['on ancient ruins', 'in a flooded parking garage', 'across a city at night', 'inside a dormant greenhouse', 'on the surface of a lake', 'in an empty concert hall', 'along a subway line', 'in a library after closing'],
+    how: ['Visitors navigate it with their hands', 'The interaction involves removing objects from a sensor field', 'Audience proximity activates it', 'Each gesture leaves a trace that decays', 'It listens for silence rather than sound', 'Breathing near it changes its tempo'],
+    result: ['triggering silent voids that bloom into visual and auditory echoes', 'so its patterns shift with every passerby', 'generating evolving geometric patterns', 'collapsing grammar trees into glitching sculptures', 'evolving through simulated selection for visual complexity', 'delivered in a pseudo-ancient tongue']
+  };
+  function rng(seed) { return function () { seed |= 0; seed = seed + 0x6D2B79F5 | 0; var r = Math.imul(seed ^ seed >>> 15, 1 | seed); r = r + Math.imul(r ^ r >>> 7, 61 | r) ^ r; return ((r ^ r >>> 14) >>> 0) / 4294967296; }; }
+  function hashStr(s) { var h = 2166136261; for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h; }
+  function idea(a, b) {
+    var r = rng(hashStr(a + '|' + b)), pick = function (k) { return GRAMMAR[k][Math.floor(r() * GRAMMAR[k].length)]; };
+    var B = b === 'None' ? 'the absence of ' + a : b;
+    return pick('form') + ' ' + pick('verb') + ' ' + a + ' into ' + B + ', ' + pick('where') + '. ' + pick('how') + ', ' + pick('result') + '.';
+  }
+  function wrap(hud, text, width) {
+    var words = text.split(' '), lines = [], cur = '';
+    words.forEach(function (w) { var tryL = cur ? cur + ' ' + w : w; if (hud.measureText(tryL).width > width && cur) { lines.push(cur); cur = w; } else cur = tryL; });
+    if (cur) lines.push(cur);
+    return lines;
+  }
+  Magi.landmarkModes.pollinate = function () {
+    var dust = [], pad = null, cell = null, cellSince = 0, pair = null, text = '', textAt = 0, pins = [], wasPinched = false, spin = 1, lastT = null;
+    for (var i = 0; i < 220; i++) dust.push({ r: 0.12 + Math.random() * 0.95, a: Math.random() * Math.PI * 2, c: Math.random() < 0.3 });
+    var nodes = POLLEN.map(function (w, k) { return { w: w, r: 0.2 + 0.78 * ((k * 0.618) % 1), a: k * 2.39996, c: k % 3 === 0 }; });
+    var GLYPHS = '+*:;[]()=-~^%#@!?<>/\\|{}0123456789';
+    return function (ctx, frame, ix, params) {
+      var W = frame.width, H = frame.height, u = frame.pxPerCss, t = frame.time / 1000, hud = frame.hud;
+      var dt = lastT === null ? 1 / 60 : Math.max(0, Math.min(0.1, t - lastT));
+      lastT = t;
+      ctx.fillStyle = 'rgba(0,0,0,' + (params.dim / 100).toFixed(3) + ')';
+      ctx.fillRect(0, 0, W, H);
+      var hd = ix.hands[0], K = POLLEN.length, ps = H * 0.16;
+      spin += ((hd && hd.count >= 5 ? 4 : 1) - spin) * (1 - Math.exp(-dt / 0.5));
+      // Pad: follows the index fingertip, and holds still while you point so the finger moves in it.
+      if (hd) {
+        var tip = hd.points[8];
+        if (!pad) pad = { x: tip.x - ps / 2, y: tip.y - ps / 2 };
+        if (!hd.pointing) { pad.x += (tip.x - ps / 2 - pad.x) * 0.2; pad.y += (tip.y - ps / 2 - pad.y) * 0.2; }
+        else {
+          if (tip.x < pad.x) pad.x = tip.x; if (tip.x > pad.x + ps) pad.x = tip.x - ps;
+          if (tip.y < pad.y) pad.y = tip.y; if (tip.y > pad.y + ps) pad.y = tip.y - ps;
+          var gx = Math.min(K - 1, Math.floor((tip.x - pad.x) / ps * K)), gy = Math.min(K - 1, Math.floor((tip.y - pad.y) / ps * K)), key = gx + ',' + gy;
+          if (key !== cell) { cell = key; cellSince = t; }
+          else if (t - cellSince > 0.5 && (!pair || pair.key !== key)) {
+            pair = { a: POLLEN[gx], b: POLLEN[gy === gx ? (gy + 1) % K : gy], key: key, gx: gx, gy: gy };
+            text = idea(pair.a, pair.b); textAt = t;
+          }
+        }
+        if (hd.pinched && !wasPinched && pair) pins.push([pair.gx, pair.gy]);
+        if (hd.fist) pins = [];
+        wasPinched = hd.pinched;
+      } else wasPinched = false;
+      // Galaxy.
+      var R = Math.min(W * 0.32, H * 0.42), cx = W * 0.3, cy = H * 0.5;
+      var step = function (o) { var w = 0.35 * spin / Math.sqrt(o.r); o.a += w * dt; return w; };
+      ctx.save();
+      ctx.lineWidth = Math.max(0.8, 0.9 * u);
+      [false, true].forEach(function (blue) {
+        ctx.strokeStyle = blue ? 'rgba(90,110,255,0.75)' : 'rgba(255,140,60,0.75)';
+        ctx.beginPath();
+        dust.concat(nodes).forEach(function (o) {
+          if (o.c !== blue) return;
+          var len = Math.min(1.2, 0.5 * spin / Math.sqrt(o.r)) * 0.6;
+          ctx.moveTo(cx + Math.cos(o.a - len) * o.r * R, cy + Math.sin(o.a - len) * o.r * R);
+          ctx.arc(cx, cy, o.r * R, o.a - len, o.a);
+        });
+        ctx.stroke();
+      });
+      dust.forEach(step); nodes.forEach(step);
+      ctx.strokeStyle = 'rgba(255,255,255,0.75)';
       ctx.beginPath();
-      hist.forEach(function (v, k3) { var x = x0 + (x1 - x0) * k3 / 79, y = y0 - v * H * 0.05; k3 ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
-      ctx.stroke(); ctx.restore();
+      nodes.forEach(function (o) { var x = cx + Math.cos(o.a) * o.r * R, y = cy + Math.sin(o.a) * o.r * R; ctx.moveTo(x + 4 * u, y); ctx.arc(x, y, 4 * u, 0, Math.PI * 2); });
+      ctx.stroke();
+      ctx.restore();
+      hud.save();
+      hud.fillStyle = '#fff';
+      nodes.forEach(function (o, k) {
+        var chosen = pair && (o.w === pair.a || o.w === pair.b), small = k % 6 === 0;
+        if (!chosen && !small) return;
+        var x = cx + Math.cos(o.a) * o.r * R, y = cy + Math.sin(o.a) * o.r * R;
+        hud.font = '500 ' + Math.round((chosen ? (o.w === pair.a ? 15 : 10) : 6.5) * u) + 'px ' + Magi.fx.MONO;
+        hud.fillText(o.w, x + 6 * u, y);
+      });
+      hud.restore();
+      // The pad: a grid of dots, pins in red, the fingertip as a cross.
+      if (hd && pad) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = Math.max(1, u);
+        ctx.strokeRect(pad.x, pad.y, ps, ps);
+        ctx.fillStyle = 'rgba(255,255,255,0.35)';
+        for (var gy2 = 0; gy2 < 10; gy2++) for (var gx2 = 0; gx2 < 10; gx2++) ctx.fillRect(pad.x + (gx2 + 0.5) * ps / 10 - u * 0.6, pad.y + (gy2 + 0.5) * ps / 10 - u * 0.6, u * 1.2, u * 1.2);
+        ctx.fillStyle = '#ff5a1f';
+        pins.forEach(function (pn) { ctx.fillRect(pad.x + (pn[0] + 0.5) * ps / K - 2.5 * u, pad.y + (pn[1] + 0.5) * ps / K - 2.5 * u, 5 * u, 5 * u); });
+        var tp = hd.points[8];
+        ctx.strokeStyle = '#fff';
+        ctx.beginPath(); ctx.moveTo(tp.x - 10 * u, tp.y); ctx.lineTo(tp.x + 10 * u, tp.y); ctx.moveTo(tp.x, tp.y - 10 * u); ctx.lineTo(tp.x, tp.y + 10 * u); ctx.stroke();
+        ctx.fillStyle = '#fff'; ctx.fillRect(tp.x - 3 * u, tp.y - 3 * u, 6 * u, 6 * u);
+        ctx.restore();
+      }
+      // The idea, decoding: each character shows a random symbol until its turn (30 a second).
+      if (pair) {
+        hud.save();
+        hud.fillStyle = '#fff';
+        var fs = Math.round(9 * u), x0 = W * 0.64, y0 = H * 0.1, wdt = W * 0.33;
+        hud.font = '400 ' + fs + 'px ' + Magi.fx.MONO;
+        var lines = wrap(hud, pair.a + ' + ' + pair.b + ' = ?', wdt).concat(['']).concat(wrap(hud, text, wdt)), shown = Math.floor((t - textAt) * 30), n2 = 0;
+        lines.forEach(function (l, li) {
+          var out = '';
+          for (var c = 0; c < l.length; c++, n2++) out += n2 < shown ? l[c] : n2 < shown + 40 && l[c] !== ' ' ? GLYPHS[Math.floor(Math.random() * GLYPHS.length)] : ' ';
+          hud.fillText(out, x0, y0 + li * fs * 1.35);
+        });
+        hud.restore();
+      } else if (!hd) frame.say('Point with your index finger: the pad by your hand picks two ideas to cross.');
     };
   };
 })();
