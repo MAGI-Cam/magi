@@ -105,4 +105,82 @@
       ctx.restore();
     };
   };
+
+  // Filaments (after "Tactile perception of digital vines"): bundles of glowing strands strung
+  // between your joints. Every edge (the hand's bones, neighboring fingertips, a fixed handful of
+  // extra joint pairs, and with two hands matching fingertips and each fingertip to the other palm)
+  // is drawn as Strands quadratic curves. A strand's control point sits at the edge's midpoint,
+  // pushed sideways by 0.35 × the edge's length × sin(ωt + φ), ω and φ its own, and its ends are
+  // spread by ±2% of the length, so each bundle is thin at the joints and full in the middle and
+  // flexes like fibers. Strands blend green to cyan (a few violet) and are added like light (Glow
+  // adds a soft wide pass). Rings mark the fingertips. Bio-signals: one bright pulse per edge runs
+  // from end to end at its own speed.
+  var FIL_TIPS = [4, 8, 12, 16, 20];
+  Magi.landmarkModes.filaments = function () {
+    var extras = [];
+    for (var e = 0; e < 10; e++) { var a = Math.floor(Math.random() * 21), b = Math.floor(Math.random() * 21); if (a !== b) extras.push([a, b]); }
+    var phases = {};
+    function phase(key, k) { var id = key + ':' + k; return phases[id] || (phases[id] = [Math.random() * 6.28, 0.6 + Math.random() * 1.6, Math.random()]); }
+    return function (ctx, frame, ix, params) {
+      var W = frame.width, H = frame.height, u = frame.pxPerCss, t = frame.time / 1000;
+      ctx.fillStyle = 'rgba(0,0,0,' + (params.dim / 100).toFixed(3) + ')';
+      ctx.fillRect(0, 0, W, H);
+      var C = (Magi.tracking.connections && Magi.tracking.connections.hand) || [];
+      var hs = ix.pair ? [ix.pair.left, ix.pair.right] : ix.hands, edges = [];
+      hs.forEach(function (h, hi) {
+        var p = h.points;
+        C.forEach(function (c) { edges.push(['b' + hi + c.start + '-' + c.end, p[c.start], p[c.end]]); });
+        for (var k = 0; k < 4; k++) edges.push(['t' + hi + k, p[FIL_TIPS[k]], p[FIL_TIPS[k + 1]]]);
+        extras.forEach(function (x, k) { edges.push(['x' + hi + k, p[x[0]], p[x[1]]]); });
+      });
+      if (hs.length === 2) {
+        FIL_TIPS.forEach(function (tp, k) {
+          edges.push(['m' + k, hs[0].points[tp], hs[1].points[tp]]);
+          edges.push(['c0' + k, hs[0].points[tp], hs[1].center]);
+          edges.push(['c1' + k, hs[1].points[tp], hs[0].center]);
+        });
+      }
+      var n = Math.round(params.strands), bins = [[], [], []], pulses = [];
+      edges.forEach(function (ed) {
+        var A = ed[1], B = ed[2], dx = B.x - A.x, dy = B.y - A.y, L = Math.hypot(dx, dy) || 1, nx = -dy / L, ny = dx / L;
+        for (var k = 0; k < n; k++) {
+          var ph = phase(ed[0], k), sw = 0.35 * L * Math.sin(t * ph[1] + ph[0]), sp = (k / Math.max(1, n - 1) - 0.5) * 0.04 * L;
+          var mx = (A.x + B.x) / 2 + nx * sw, my = (A.y + B.y) / 2 + ny * sw;
+          bins[ph[2] < 0.12 ? 2 : ph[2] < 0.55 ? 0 : 1].push([A.x + nx * sp, A.y + ny * sp, mx, my, B.x + nx * sp, B.y + ny * sp]);
+        }
+        var pp = phase(ed[0], 'p'), f = (t * 0.35 * pp[1] + pp[0]) % 1, s0 = phase(ed[0], 0), sw0 = 0.35 * L * Math.sin(t * s0[1] + s0[0]);
+        var cx = (A.x + B.x) / 2 + nx * sw0, cy = (A.y + B.y) / 2 + ny * sw0;
+        pulses.push([(1 - f) * (1 - f) * A.x + 2 * (1 - f) * f * cx + f * f * B.x, (1 - f) * (1 - f) * A.y + 2 * (1 - f) * f * cy + f * f * B.y]);
+      });
+      var cols = ['61,255,122', '95,216,255', '190,120,255'], glow = params.glow / 100;
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.lineCap = 'round';
+      bins.forEach(function (list, bi) {
+        if (!list.length) return;
+        ctx.beginPath();
+        list.forEach(function (q) { ctx.moveTo(q[0], q[1]); ctx.quadraticCurveTo(q[2], q[3], q[4], q[5]); });
+        if (glow > 0) { ctx.strokeStyle = 'rgba(' + cols[bi] + ',' + (0.05 * glow).toFixed(3) + ')'; ctx.lineWidth = 5 * u; ctx.stroke(); }
+        ctx.strokeStyle = 'rgba(' + cols[bi] + ',0.32)';
+        ctx.lineWidth = Math.max(0.6, 0.7 * u);
+        ctx.stroke();
+      });
+      // Bio-signal pulses.
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      ctx.beginPath();
+      pulses.forEach(function (q) { ctx.moveTo(q[0] + 1.6 * u, q[1]); ctx.arc(q[0], q[1], 1.6 * u, 0, Math.PI * 2); });
+      ctx.fill();
+      ctx.restore();
+      // Node rings at the fingertips; a pink spot on each index tip.
+      ctx.save();
+      ctx.strokeStyle = 'rgba(160,255,190,0.85)';
+      ctx.lineWidth = Math.max(1, u);
+      ctx.beginPath();
+      hs.forEach(function (h) { FIL_TIPS.forEach(function (tp) { var q = h.points[tp]; ctx.moveTo(q.x + 7 * u, q.y); ctx.arc(q.x, q.y, 7 * u, 0, Math.PI * 2); }); });
+      ctx.stroke();
+      ctx.fillStyle = 'rgb(255,120,220)';
+      hs.forEach(function (h) { var q = h.points[8]; ctx.beginPath(); ctx.arc(q.x, q.y, 2.6 * u, 0, Math.PI * 2); ctx.fill(); });
+      ctx.restore();
+    };
+  };
 })();

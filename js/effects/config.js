@@ -103,7 +103,8 @@ Magi.effectConfig = [
       { id: 'skeleton', name: 'Skeleton' },
       { id: 'controller', name: 'Controller' },
       { id: 'link', name: 'Link' },
-      { id: 'contour', name: 'Contour' }
+      { id: 'contour', name: 'Contour' },
+      { id: 'filaments', name: 'Filaments' }
     ],
     params: [
       { id: 'readouts', label: 'Readouts', type: 'toggle', default: true, modes: ['skeleton'], hint: 'Show which hand it is, the tracking score and rotation.' },
@@ -116,7 +117,10 @@ Magi.effectConfig = [
       { id: 'style', label: 'Style', min: 0, max: 2, step: 1, default: 0, modes: ['contour'] },
       { id: 'points', label: 'Points', min: 40, max: 600, step: 1, default: 260, modes: ['contour'] },
       { id: 'rate', label: 'Rate', min: 0, max: 100, step: 1, default: 40, modes: ['contour'] },
-      { id: 'labels', label: 'Labels', type: 'toggle', default: true, modes: ['contour'], hint: 'Edge-strength readouts beside the points.' }
+      { id: 'labels', label: 'Labels', type: 'toggle', default: true, modes: ['contour'], hint: 'Edge-strength readouts beside the points.' },
+      { id: 'strands', label: 'Strands', min: 2, max: 14, step: 1, default: 7, modes: ['filaments'] },
+      { id: 'glow', label: 'Glow', min: 0, max: 100, step: 1, default: 60, modes: ['filaments'] },
+      { id: 'dim', label: 'Dim', min: 0, max: 100, step: 1, default: 45, modes: ['filaments'] }
     ]
   },
   {
@@ -541,7 +545,8 @@ Magi.effectGuides = {
     'Controller, index only (thumb tucked): the circle shrinks to a pointer dot on your fingertip and keeps sliding. Two hands: the second hand gets its own circle, value and ring stack on the right.',
     'Controller: rings swell as thumb and index open. Node map: your hand redrawn small, fingertips trailing smooth curves. Graph: the value held every quarter second, scrolling down as a staircase (hand 2 in gray, to the left).',
     'Link: two hands; a line joins your index fingertips with their distance at the green midpoint; the scope shows your fingertips around the palm.',
-    'Contour: points gather on the outlines of your hands and arms (drawn where the picture’s edges are strongest). Style 0 Points with readouts, 1 Path (a nearest-neighbor tour through them), 2 Fill (that path as a flat lime shape). Pinch to step through the styles. Points: how many. Rate: how often they’re redrawn. Labels: the readouts.'
+    'Contour: points gather on the outlines of your hands and arms (drawn where the picture’s edges are strongest). Style 0 Points with readouts, 1 Path (a nearest-neighbor tour through them), 2 Fill (that path as a flat lime shape). Pinch to step through the styles. Points: how many. Rate: how often they’re redrawn. Labels: the readouts.',
+    'Filaments: bundles of glowing strands strung along your bones, between fingertips and across both hands; they flex as you move, with bright pulses running along them. Strands: per bundle. Glow, Dim: light and background.'
   ],
   font: [
     'How it works: a letter traced from a typeface (marching squares), drawn as evenly spaced points inside an A–Z dial.',
