@@ -2,7 +2,7 @@
 
 Decisions from the planning questionnaire. Each item becomes a small release, tested in a browser before shipping.
 
-## App
+## App (done in release 38)
 
 - **Camera picker:** a camera icon in the bottom toolbar, shown only when more than one camera exists. It lists cameras by name (`enumerateDevices`, `deviceId`). The choice is remembered per device. A newly plugged-in camera is switched to (`devicechange`), and an unplugged one falls back to the previous camera.
 - **Microphone:** a mic toggle next to the video button, off by default. Permission is asked the first time it's turned on. Its audio track is added to the recorded stream.

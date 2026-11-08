@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#000000">
   <title>Magi</title>
   <!-- Release number: keep equal to version.json and the ?v= on every CSS/JS link. -->
-  <meta name="magi-version" content="37">
+  <meta name="magi-version" content="38">
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" type="image/png" href="icons/icon-32.png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400&display=swap">
   <!-- Glyph typefaces for Binary and X's and O's; the canvas waits for each before drawing it. -->
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:wght@400&family=Silkscreen&family=VT323&display=swap">
-  <link rel="stylesheet" href="css/magi.css?v=37">
+  <link rel="stylesheet" href="css/magi.css?v=38">
 </head>
 <body>
   <div class="app" id="app" data-phase="live" data-mode="photo">
@@ -75,6 +75,13 @@
       </button>
 
       <div class="tb-right">
+        <button class="icon-btn" id="mic" type="button" aria-label="Record sound" aria-pressed="false" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0"/><path d="M12 18v3"/></svg>
+        </button>
+        <button class="icon-btn" id="cams" type="button" aria-label="Choose camera" aria-haspopup="menu" aria-expanded="false" aria-controls="cam-menu" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="7" width="17" height="12"/><path d="M9 7l1.5-2.5h3L15 7"/><path d="M9 13h6"/><path d="M13 11l2 2-2 2"/></svg>
+        </button>
+        <div class="cam-menu" id="cam-menu" role="menu" aria-label="Cameras" hidden></div>
         <button class="icon-btn caret" id="caret" type="button" aria-label="Show effects" aria-expanded="false" aria-controls="tray">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg>
         </button>
@@ -84,33 +91,33 @@
     <input type="file" id="file" accept="image/*,video/*" hidden>
   </div>
 
-  <script src="js/effects/config.js?v=37"></script>
-  <script src="js/effects/shared.js?v=37"></script>
-  <script src="js/effects/bitmap.js?v=37"></script>
-  <script src="js/effects/ascii.js?v=37"></script>
-  <script src="js/effects/binary.js?v=37"></script>
-  <script src="js/effects/xs-and-os.js?v=37"></script>
-  <script src="js/effects/quadtree.js?v=37"></script>
-  <script src="js/tracking.js?v=37"></script>
-  <script src="js/interaction.js?v=37"></script>
-  <script src="js/effects/landmarks.js?v=37"></script>
-  <script src="js/effects/mosh.js?v=37"></script>
-  <script src="js/effects/pinch-frame.js?v=37"></script>
-  <script src="js/effects/wisp.js?v=37"></script>
-  <script src="js/effects/bubbles.js?v=37"></script>
-  <script src="js/effects/web.js?v=37"></script>
-  <script src="js/effects/claw.js?v=37"></script>
-  <script src="js/effects/fluid-cube.js?v=37"></script>
-  <script src="js/effects/accordion.js?v=37"></script>
-  <script src="js/effects/tutting.js?v=37"></script>
-  <script src="js/effects/color-names.js?v=37"></script>
-  <script src="js/effects/chromatic.js?v=37"></script>
-  <script src="js/effects/tendrils.js?v=37"></script>
-  <script src="js/effects/datamosh.js?v=37"></script>
-  <script src="js/effects/token-cry.js?v=37"></script>
-  <script src="js/effects/collage.js?v=37"></script>
-  <script src="js/effects/glitch.js?v=37"></script>
-  <script src="js/effects/facades.js?v=37"></script>
-  <script src="js/app.js?v=37"></script>
+  <script src="js/effects/config.js?v=38"></script>
+  <script src="js/effects/shared.js?v=38"></script>
+  <script src="js/effects/bitmap.js?v=38"></script>
+  <script src="js/effects/ascii.js?v=38"></script>
+  <script src="js/effects/binary.js?v=38"></script>
+  <script src="js/effects/xs-and-os.js?v=38"></script>
+  <script src="js/effects/quadtree.js?v=38"></script>
+  <script src="js/tracking.js?v=38"></script>
+  <script src="js/interaction.js?v=38"></script>
+  <script src="js/effects/landmarks.js?v=38"></script>
+  <script src="js/effects/mosh.js?v=38"></script>
+  <script src="js/effects/pinch-frame.js?v=38"></script>
+  <script src="js/effects/wisp.js?v=38"></script>
+  <script src="js/effects/bubbles.js?v=38"></script>
+  <script src="js/effects/web.js?v=38"></script>
+  <script src="js/effects/claw.js?v=38"></script>
+  <script src="js/effects/fluid-cube.js?v=38"></script>
+  <script src="js/effects/accordion.js?v=38"></script>
+  <script src="js/effects/tutting.js?v=38"></script>
+  <script src="js/effects/color-names.js?v=38"></script>
+  <script src="js/effects/chromatic.js?v=38"></script>
+  <script src="js/effects/tendrils.js?v=38"></script>
+  <script src="js/effects/datamosh.js?v=38"></script>
+  <script src="js/effects/token-cry.js?v=38"></script>
+  <script src="js/effects/collage.js?v=38"></script>
+  <script src="js/effects/glitch.js?v=38"></script>
+  <script src="js/effects/facades.js?v=38"></script>
+  <script src="js/app.js?v=38"></script>
 </body>
 </html>

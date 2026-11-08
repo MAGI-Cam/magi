@@ -12,6 +12,7 @@
   var shutter = $('shutter'), saveBtn = $('save'), timer = $('timer');
   var caret = $('caret'), tray = $('tray'), tiles = $('tiles'), controls = $('controls'), hint = $('hint');
   var uploadBtn = $('upload'), cameraBtn = $('camera'), fileInput = $('file');
+  var camsBtn = $('cams'), camMenu = $('cam-menu'), micBtn = $('mic');
   var modeButtons = Array.prototype.slice.call(document.querySelectorAll('[data-mode-option]'));
   var ctx = view.getContext('2d');
 
@@ -37,6 +38,12 @@
   var renderers = {};
   var dirty = true;         // a still image only re-renders when something changed
   var recordStart = 0, timerId = 0;
+  // Camera choice: a remembered deviceId (from the camera menu), or a facing direction (phones).
+  var camId = load('magi.camera'), facing = 'user', camMirror = true, cams = [], knownCams = null;
+  var micOn = false, micStream = null;
+
+  function load(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function store(k, v) { try { if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} }
   var preferShare = window.matchMedia && matchMedia('(pointer: coarse)').matches;
 
   /* ---------- Sources ---------- */
@@ -44,7 +51,7 @@
   function currentSource() {
     if (state.input === 'camera') {
       if (!stream || camera.readyState < 2) return null;
-      return { el: camera, w: camera.videoWidth, h: camera.videoHeight, moving: true, mirror: true };
+      return { el: camera, w: camera.videoWidth, h: camera.videoHeight, moving: true, mirror: camMirror };
     }
     if (!upload) return null;
     if (upload.kind === 'image') {
@@ -65,16 +72,23 @@
       return;
     }
     showNotice('asking');
-    navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'user', width: { ideal: 1920 }, height: { ideal: 1080 } },
-      audio: false
-    }).then(function (s) {
+    var size = { width: { ideal: 1920 }, height: { ideal: 1080 } };
+    var video = camId ? Object.assign({ deviceId: { exact: camId } }, size) : Object.assign({ facingMode: facing }, size);
+    navigator.mediaDevices.getUserMedia({ video: video, audio: false }).then(function (s) {
       if (state.input !== 'camera') { s.getTracks().forEach(function (t) { t.stop(); }); return; }
       stream = s;
       camera.srcObject = s;
+      // A camera facing away from you isn't mirrored; front and USB cameras are.
+      var set = s.getVideoTracks()[0] && s.getVideoTracks()[0].getSettings ? s.getVideoTracks()[0].getSettings() : {};
+      camMirror = set.facingMode !== 'environment';
+      refreshCams();
       return camera.play().then(function () { hideNotice(); dirty = true; });
     }).catch(function (err) {
       if (state.input !== 'camera') return;
+      // A remembered camera that's gone: forget it and open the default one.
+      if (camId && err && (err.name === 'OverconstrainedError' || err.name === 'NotFoundError' || err.name === 'NotReadableError')) {
+        camId = null; store('magi.camera', null); startCamera(); return;
+      }
       stopCamera();
       var blocked = err && (err.name === 'NotAllowedError' || err.name === 'SecurityError');
       showNotice(blocked ? 'denied' : 'unavailable');
@@ -135,6 +149,77 @@
   function syncSourceButtons() {
     uploadBtn.hidden = state.input !== 'camera';
     cameraBtn.hidden = state.input === 'camera';
+    camsBtn.hidden = state.input !== 'camera' || cams.length < 2;
+    micBtn.hidden = state.input !== 'camera' || state.mode !== 'video' || !window.MediaRecorder;
+    if (camsBtn.hidden) closeCamMenu();
+  }
+
+  /* ---------- Camera choice and microphone ---------- */
+
+  // Cameras by name (labels appear once camera permission is granted). A camera that appears while
+  // MAGI is open (plugged in) is switched to; if the one in use disappears, the default returns.
+  function refreshCams() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+    navigator.mediaDevices.enumerateDevices().then(function (list) {
+      cams = list.filter(function (d) { return d.kind === 'videoinput'; });
+      var ids = cams.map(function (d) { return d.deviceId; });
+      var added = knownCams ? ids.filter(function (id) { return id && knownCams.indexOf(id) < 0; }) : [];
+      var lost = camId && ids.indexOf(camId) < 0 && ids.some(Boolean);
+      knownCams = ids;
+      syncSourceButtons();
+      if (state.input !== 'camera' || state.phase === 'recording') return;
+      if (added.length) switchCam(added[added.length - 1]);
+      else if (lost) { camId = null; store('magi.camera', null); stopCamera(); startCamera(); }
+    }).catch(function () {});
+  }
+
+  function switchCam(id) {
+    camId = id;
+    store('magi.camera', id);
+    stopCamera();
+    startCamera();
+  }
+
+  function activeCamId() {
+    var t = stream && stream.getVideoTracks()[0];
+    return t && t.getSettings ? t.getSettings().deviceId : camId;
+  }
+
+  function openCamMenu() {
+    camMenu.textContent = '';
+    var current = activeCamId();
+    cams.forEach(function (d, i) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.setAttribute('role', 'menuitemradio');
+      b.setAttribute('aria-checked', String(d.deviceId === current));
+      b.textContent = d.label || 'Camera ' + (i + 1);
+      b.addEventListener('click', function () { closeCamMenu(); if (d.deviceId !== current) switchCam(d.deviceId); });
+      camMenu.appendChild(b);
+    });
+    camMenu.hidden = false;
+    camsBtn.setAttribute('aria-expanded', 'true');
+  }
+
+  function closeCamMenu() {
+    camMenu.hidden = true;
+    camsBtn.setAttribute('aria-expanded', 'false');
+  }
+
+  // Microphone: off by default; permission is asked the first time it's turned on.
+  function setMic(on) {
+    if (!on) {
+      micOn = false;
+      if (micStream) micStream.getTracks().forEach(function (t) { t.stop(); });
+      micStream = null;
+      micBtn.setAttribute('aria-pressed', 'false');
+      return;
+    }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+    navigator.mediaDevices.getUserMedia({ audio: true, video: false }).then(function (s) {
+      micStream = s; micOn = true;
+      micBtn.setAttribute('aria-pressed', 'true');
+    }).catch(function () { setMic(false); });
   }
 
   /* ---------- Rendering ---------- */
@@ -640,6 +725,7 @@
     modeButtons.forEach(function (b) {
       b.setAttribute('aria-checked', String(b.dataset.modeOption === mode));
     });
+    syncSourceButtons();
     updateShutterLabel();
   }
 
@@ -670,8 +756,10 @@
     });
   }
 
-  function videoType() {
-    var types = ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
+  function videoType(withAudio) {
+    var types = withAudio
+      ? ['video/mp4;codecs=avc1,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm']
+      : ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm'];
     for (var i = 0; i < types.length; i++) {
       if (MediaRecorder.isTypeSupported(types[i])) return types[i];
     }
@@ -682,11 +770,14 @@
 
   function startRecording() {
     var out = view.captureStream(30);
-    var type = videoType();
+    // With the mic on, the canvas's video and the microphone's audio go into one stream.
+    var withAudio = !!(micOn && micStream && micStream.getAudioTracks().length && state.input === 'camera');
+    var rec = withAudio ? new MediaStream(out.getVideoTracks().concat(micStream.getAudioTracks())) : out;
+    var type = videoType(withAudio);
     try {
-      recorder = new MediaRecorder(out, type ? { mimeType: type, videoBitsPerSecond: 8000000 } : undefined);
+      recorder = new MediaRecorder(rec, type ? { mimeType: type, videoBitsPerSecond: 8000000 } : undefined);
     } catch (e) {
-      recorder = new MediaRecorder(out);
+      recorder = new MediaRecorder(rec);
     }
     var chunks = [];
     recorder.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
@@ -796,6 +887,27 @@
   });
 
   caret.addEventListener('click', function () { setTray(!state.trayOpen); });
+  camsBtn.addEventListener('click', function (e) { e.stopPropagation(); if (camMenu.hidden) openCamMenu(); else closeCamMenu(); });
+  document.addEventListener('click', function (e) { if (!camMenu.hidden && !camMenu.contains(e.target)) closeCamMenu(); });
+  micBtn.addEventListener('click', function () { setMic(!micOn); });
+  if (navigator.mediaDevices && navigator.mediaDevices.addEventListener) navigator.mediaDevices.addEventListener('devicechange', refreshCams);
+
+  // Phones: double-tap the preview to flip between the front and back cameras.
+  var lastTap = null;
+  stage.addEventListener('touchend', function (e) {
+    if (!preferShare || state.input !== 'camera' || state.phase !== 'live' || state.trayOpen) { lastTap = null; return; }
+    if (e.changedTouches.length !== 1 || e.touches.length || notice.contains(e.target)) { lastTap = null; return; }
+    var t = e.changedTouches[0], now = performance.now();
+    if (lastTap && now - lastTap.t < 320 && Math.hypot(t.clientX - lastTap.x, t.clientY - lastTap.y) < 40) {
+      lastTap = null;
+      e.preventDefault();
+      facing = facing === 'user' ? 'environment' : 'user';
+      camId = null; store('magi.camera', null);
+      stopCamera(); startCamera();
+      return;
+    }
+    lastTap = { t: now, x: t.clientX, y: t.clientY };
+  }, { passive: false });
   stage.addEventListener('click', function (e) {
     if (state.trayOpen && !notice.contains(e.target)) setTray(false);
   });

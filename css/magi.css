@@ -233,7 +233,34 @@ svg {
   gap: 16px;
 }
 
-.tb-right { justify-self: end; }
+.tb-right { justify-self: end; display: flex; align-items: center; gap: 4px; position: relative; }
+
+.icon-btn[aria-pressed="true"] { background: var(--paper); color: var(--ink); }
+
+/* Camera menu: a plain list above the toolbar. */
+.cam-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  min-width: 220px;
+  max-width: calc(100vw - 2 * var(--edge));
+  background: var(--ink);
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+}
+.cam-menu[hidden] { display: none; }
+.cam-menu button {
+  text-align: left;
+  padding: 12px 14px;
+  font: 400 13px/1.3 var(--font);
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cam-menu button + button { border-top: 1px solid var(--line); }
+.cam-menu button[aria-checked="true"] { color: var(--paper); }
 
 .app:not([data-phase="live"]) .tb-left,
 .app:not([data-phase="live"]) .tb-right {

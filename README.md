@@ -83,6 +83,8 @@ To try it on a phone, the page has to be served over https (for example from Git
 
 - **Live camera** opens by default. The upload icon (bottom-left) switches to a photo or video. The camera icon in the same spot switches back.
 - **Photo / Video** toggle (bottom-left) picks the capture mode.
+- **Camera menu** (bottom-right, shown when more than one camera is connected): pick a camera by name. MAGI remembers it, switches to a camera you plug in, and falls back to the default when one is unplugged. On phones, **double-tap the preview** to flip between front and back cameras.
+- **Microphone** (bottom-right, video mode): off by default; turn it on to record sound with the video. MAGI asks for the microphone the first time.
 - **Shutter** (center): photo mode captures a still. Video mode starts recording on the first tap and stops on the second.
 - **Effects tray** (caret, bottom-right; or swipe up with two fingers on a trackpad, and down to close; on a phone, swipe down on the tray to close it): pick an effect and adjust its sliders. The circular arrow resets the sliders to defaults (an ASCII mode stays as chosen). Tapping the active ASCII tile switches mode. **Normal** shows the camera without an effect.
 - **Review**: after capture the preview freezes. The shutter becomes Retake. The download icon (top-right) saves the result.
