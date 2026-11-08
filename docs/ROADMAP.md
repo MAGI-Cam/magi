@@ -11,13 +11,13 @@ Decisions from the planning questionnaire. Each item becomes a small release, te
 ## Media library
 
 - **Source:** a JSON feed published on Allen's own sites. The media lives on GitHub and Cloudflare. GitHub Pages already sends CORS headers; Cloudflare (R2 or Pages) needs one rule. Images must be served with CORS, or the canvas is tainted and photos and videos can't be saved.
-- **Discovery:** MAGI ships with the feed URL built in. An Advanced field accepts another feed or a public Are.na channel. CLAUDE.md's external-host list grows by these hosts when this lands.
+- **Discovery:** MAGI will ship with the feed URL built in once it exists (waiting on the URL); for now the Cards effect's Feed field takes any feed or Are.na channel. An Advanced field accepts another feed or a public Are.na channel. CLAUDE.md's external-host list grows by these hosts when this lands.
 - **Feed format (draft):** `{ "items": [ { "src": "https://…/image.jpg", "title": "…", "w": 1200, "h": 800 } ] }`. A3 adds `embedding`/`graph` fields.
 - **Open:** Cargo and Are.na are still being weighed for the sites. Are.na channels are read through its open API, without a login.
 
 ## Effects
 
-- **A2 Card structures** (first library effect): library images as 3D card stacks (ribbon, ring, lattice) with lime 3D text. Pinch-spread zooms and rotates; finger count switches the structure.
+- **A2 Card structures** (first library effect; done in release 39 as **Cards**): library images as 3D card stacks (ribbon, ring, lattice) with lime 3D text. Pinch-spread zooms and rotates; finger count switches the structure.
 - **A3 Attention graph** (Landmarks mode): a node graph of library thumbnails. A script run on the site computes image embeddings (CLIP) and the Mapper graph and writes them into the feed. MAGI only draws and navigates it: point to select, fist to pull in, open palm to spread out.
 - **A1 Tracking boxes:** library images pop up inside thin red/green/blue boxes that cluster where things move (motion blobs from frame differencing). Later.
 - **A5 Font editor** (Landmarks mode):

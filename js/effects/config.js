@@ -346,6 +346,27 @@ Magi.effectConfig = [
       { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' }
     ]
   },
+  {
+    id: 'cards',
+    name: 'Cards',
+    group: 'hand',
+    ready: true,
+    photoType: 'image/jpeg',
+    modes: [
+      { id: 'ribbon', name: 'Ribbon' },
+      { id: 'ring', name: 'Ring' },
+      { id: 'lattice', name: 'Lattice' }
+    ],
+    params: [
+      range('count', 'Count', 12, 120, 60),
+      range('size', 'Size', 0, 100, 50),
+      range('spin', 'Spin', 0, 100, 30),
+      toggle('inset', 'Inset', true, 'Flat background with the camera in a small window.'),
+      { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
+      { id: 'text', label: 'Text', type: 'text', default: '', placeholder: 'Words along the structure', maxLength: 60 },
+      { id: 'feed', label: 'Feed', type: 'text', default: '', placeholder: 'Feed URL or Are.na channel', maxLength: 300 }
+    ]
+  },
 
   {
     id: 'face-landmarks',
@@ -604,6 +625,13 @@ Magi.effectGuides = {
     'Flick: the web lets go of your fingers and floats away, and a new one forms.',
     'Threads sag and swing as you move: real rope physics, pinned to your fingers.',
     'Rings: how many rings. Sag: how much threads droop. Particles: how many specks flow along the threads. Glow, Color: light and color.'
+  ],
+  cards: [
+    'How it works: a collection of images built into 3D structures. Without a feed, the cards are snapshots of the camera.',
+    'Thumb and index: the line between them zooms (its length) and turns the structure (its angle); your hand’s height tips it.',
+    'Hold up 1, 2 or 3 fingers, still: Ribbon, Ring or Lattice (tapping the tile does too).',
+    'Count, Size, Spin: how many cards, how big, turning with no hand. Inset: flat background (Color) with the camera in a window. Text: words along the structure.',
+    'Feed: a JSON feed URL (items with src) or a public Are.na channel URL. Images must be served with CORS; ones that aren’t are skipped.'
   ],
   tendrils: [
     'How it works: moving fingertips release particles that follow a curl-noise flow (swirls with no sources or sinks); each draws a thread that tapers to a fine tail.',
