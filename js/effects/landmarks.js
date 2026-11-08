@@ -4,8 +4,7 @@
 // rotation (wrist → middle knuckle, 0° = pointing up) and the distance between two hands.
 // Modes: Skeleton (the readouts below), Controller (each hand as a control surface: thumb–index
 // circle and value, ruler, ring stacks, fingertip constellation, value bars) and Link (index-to-index line,
-// h1/h2 tags, a radial scope of fingertip angles and distances) and Font (a gestural font editor,
-// js/effects/font-editor.js).
+// h1/h2 tags, a radial scope of fingertip angles and distances).
 // Fingers: the gap between each pair of neighboring fingertips, in palm lengths. Pairs: lines
 // between matching fingertips of the left and right hands, as a share of the frame width.
 // Signals: what the Interaction Engine (js/interaction.js) reads from each hand: finger count and
@@ -53,7 +52,7 @@
   }
 
   function createHands() {
-    var fontEditor = null, lastEvent = {}, trails = [[], []], joints = [null, null], values = [[], []], radius = [0, 0], holdAt = 0, lastT = null, box = null, lastIx = null;
+    var lastEvent = {}, trails = [[], []], joints = [null, null], values = [[], []], radius = [0, 0], holdAt = 0, lastT = null, box = null, lastIx = null;
 
     // Controller (after the VCV Rack reference): each hand read as a control surface. A circle
     // spans the thumb and index fingertips (its diameter is their distance, so it grows as they
@@ -275,14 +274,6 @@
         var ix = Magi.interaction.read(frame), basic = !params.mode || params.mode === 'skeleton';
         if (params.signals) ix.events.forEach(function (e) { lastEvent[e.hand] = e; });
 
-        if (params.mode === 'font') {
-          // Font: the room darkened behind the letter; no skeleton, only the fingertip rings.
-          ctx.fillStyle = 'rgba(0,0,0,0.55)';
-          ctx.fillRect(0, 0, w, h);
-          (fontEditor || (fontEditor = Magi.fontEditor()))(ctx, frame, ix, u, params);
-          if (tracker.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, tracker, 'hand');
-          return;
-        }
         hands.forEach(function (p, i) {
           if (C) {
             ctx.strokeStyle = 'rgb(48,255,48)';

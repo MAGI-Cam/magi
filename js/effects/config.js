@@ -102,8 +102,7 @@ Magi.effectConfig = [
     modes: [
       { id: 'skeleton', name: 'Skeleton' },
       { id: 'controller', name: 'Controller' },
-      { id: 'link', name: 'Link' },
-      { id: 'font', name: 'Font' }
+      { id: 'link', name: 'Link' }
     ],
     params: [
       { id: 'readouts', label: 'Readouts', type: 'toggle', default: true, modes: ['skeleton'], hint: 'Show which hand it is, the tracking score and rotation.' },
@@ -112,11 +111,21 @@ Magi.effectConfig = [
       { id: 'fingers', label: 'Fingers', type: 'toggle', default: false, modes: ['skeleton'], hint: 'Show the gaps between neighboring fingertips on each hand.' },
       { id: 'pairs', label: 'Pairs', type: 'toggle', default: false, modes: ['skeleton'], hint: 'Show the distances between matching fingertips of your left and right hands.' },
       { id: 'signals', label: 'Signals', type: 'toggle', default: false, modes: ['skeleton'], hint: 'Show what MAGI reads from each hand: fingers, curl, spread, pinches, speed and motions.' },
-      { id: 'opacity', label: 'Opacity', min: 0, max: 100, step: 1, default: 85, modes: ['controller'] },
-      { id: 'letter', label: 'Letter', min: 0, max: 25, step: 1, default: 10, modes: ['font'] },
-      { id: 'distortion', label: 'Distortion', min: 0, max: 100, step: 1, default: 0, modes: ['font'] },
-      { id: 'smoothness', label: 'Smoothness', min: 0, max: 100, step: 1, default: 0, modes: ['font'] },
-      { id: 'face', label: 'Face', min: 0, max: 3, step: 1, default: 0, modes: ['font'] }
+      { id: 'opacity', label: 'Opacity', min: 0, max: 100, step: 1, default: 85, modes: ['controller'] }
+    ]
+  },
+  {
+    id: 'font',
+    name: 'Font',
+    group: 'hand',
+    ready: true,
+    photoType: 'image/jpeg',
+    params: [
+      range('letter', 'Letter', 0, 25, 10),
+      range('distortion', 'Distortion', 0, 100, 0),
+      range('smoothness', 'Smoothness', 0, 100, 0),
+      range('face', 'Face', 0, 3, 0),
+      range('dim', 'Dim', 0, 100, 55)
     ]
   },
   {
@@ -201,7 +210,8 @@ Magi.effectConfig = [
       range('swirl', 'Swirl', 0, 100, 45),
       { id: 'rise', label: 'Rise', min: 0, max: 100, step: 1, default: 30, modes: ['smoke'] },
       { id: 'colors', label: 'Colors', min: 0, max: 5, step: 1, default: 1, modes: ['watercolor'] },
-      { id: 'edges', label: 'Edges', min: 0, max: 100, step: 1, default: 50, modes: ['watercolor'] }
+      { id: 'edges', label: 'Edges', min: 0, max: 100, step: 1, default: 50, modes: ['watercolor'] },
+      { id: 'dark', label: 'Dark', type: 'toggle', default: false, modes: ['watercolor'], hint: 'Paint on black paper instead of white.' }
     ]
   },
   {
@@ -425,15 +435,14 @@ Magi.effectConfig = [
     modes: [
       { id: 'split', name: 'Split' },
       { id: 'blocks', name: 'Blocks' },
-      { id: 'dissolve', name: 'Dissolve' },
-      { id: 'slip', name: 'Slip' }
+      { id: 'dissolve', name: 'Dissolve' }
     ],
     params: [
       range('amount', 'Amount', 0, 100, 70),
-      { id: 'block', label: 'Block', min: 1, max: 9, step: 1, default: 3, modes: ['split', 'blocks', 'dissolve'] },
+      range('block', 'Block', 1, 9, 3),
       range('speed', 'Speed', 0, 100, 40),
       { id: 'spread', label: 'Spread', min: 0, max: 100, step: 1, default: 40, modes: ['dissolve'] },
-      { id: 'profile', label: 'Profile', min: 0, max: 5, step: 1, default: 0, modes: ['split', 'blocks', 'dissolve'] },
+      range('profile', 'Profile', 0, 5, 0),
       { id: 'depth', label: 'Depth', type: 'toggle', default: false, modes: ['blocks', 'dissolve'], hint: 'Bigger blocks the closer you are to the camera.' },
       { id: 'neon', label: 'Overexposed', type: 'toggle', default: true, modes: ['blocks'], hint: 'Include blown-out blocks decoded at 1 bit per channel.' },
       toggle('hand', 'Hand', true, 'Your hand controls the glitch; a fist stops it. Off: a steady glitch at Amount.')
@@ -526,9 +535,13 @@ Magi.effectGuides = {
     'Controller: a circle spans your thumb and index fingertips and grows as they open; it slides along the ruler, and its value is your position across the frame. It’s an outline while your hand is open and fills as you pinch; Opacity: the fullest fill.',
     'Controller, index only (thumb tucked): the circle shrinks to a pointer dot on your fingertip and keeps sliding. Two hands: the second hand gets its own circle, value and ring stack on the right.',
     'Controller: rings swell as thumb and index open. Node map: your hand redrawn small, fingertips trailing smooth curves. Graph: the value held every quarter second, scrolling down as a staircase (hand 2 in gray, to the left).',
-    'Link: two hands; a line joins your index fingertips with their distance at the green midpoint; the scope shows your fingertips around the palm.',
-    'Font: a letter traced from a typeface, edited in the air. Touch thumb and index and turn your hand like a knob: the letter (the A–Z dial turns). Thumb, index and middle: Distortion, the outline warped by a smooth field. All four fingers: Smoothness, the outline rounded. The sliders move with your hand.',
-    'Font: Face picks the typeface: 0 Bodoni, 1 Inter, 2 Silkscreen, 3 VT323.'
+    'Link: two hands; a line joins your index fingertips with their distance at the green midpoint; the scope shows your fingertips around the palm.'
+  ],
+  font: [
+    'How it works: a letter traced from a typeface (marching squares), drawn as evenly spaced points inside an A–Z dial.',
+    'Touch thumb and index, and turn your hand like a knob: picks the letter; the dial turns.',
+    'Thumb, index and middle: Distortion, the outline warped by a smooth field. All four fingers to the thumb: Smoothness, the outline rounded (Taubin smoothing). The sliders move with your hand.',
+    'Face: 0 Bodoni, 1 Inter, 2 Silkscreen, 3 VT323. Dim: darkens the camera behind the letter.'
   ],
   mosh: [
     'Spread thumb and index: the zone between them moshes; spreading wider makes it bigger.',
@@ -555,7 +568,7 @@ Magi.effectGuides = {
     'Trail: how long the swirl lasts. Flow: how strongly your motion drags the picture.',
     'Swirl: extra curling where you’ve moved. Rise: how much the disturbance drifts upward, like smoke.',
     'Watercolor (tap the tile): your fingers paint pigment that the same flow carries and bleeds, on paper. Colors mix like glazes and pool darker at their edges.',
-    'Colors: 0 takes colors from the camera; 1 Rothko, 2 Indigo, 3 Spring, 4 Sunset, 5 Earth. Edges: how much pigment pools at the edges. Trail: how long the painting lasts. Pinch: washes it away.'
+    'Colors: 0 takes colors from the camera; 1 Rothko, 2 Indigo, 3 Spring, 4 Sunset, 5 Earth. Edges: how much pigment pools at the edges. Dark: black paper instead of white. Trail: how long the painting lasts. Pinch: washes it away.'
   ],
   bubbles: [
     'Wave your fingers: faster fingers blow more bubbles.',
@@ -615,8 +628,7 @@ Magi.effectGuides = {
     'Split: two seams cross at your hand; each tile slips and splits its colors.',
     'Blocks, Dissolve: raise your hand higher to glitch harder. Spread (Dissolve): how far pieces scatter. Overexposed (Blocks): blown-out neon blocks.',
     'Profile: 0 natural, 1 neon, 2–5 two-ink looks (red/cyan, magenta/green, gold/blue, black/white). Depth: bigger blocks the closer you are.',
-    'Amount, Block, Speed: strength, damage size, how often it changes. Hand: off for a steady glitch.',
-    'Slip: pure black and white at an automatic threshold (Otsu’s), the mouth-and-jaw block of your face slipping out of place (Amount: how far, Speed: how often), and a mirrored ripple through your body below it. Needs your face in view.'
+    'Amount, Block, Speed: strength, damage size, how often it changes. Hand: off for a steady glitch.'
   ],
   'facade-interactive': [
     'How it works: the camera is the sun behind a building skin; louvers turn face-on where something moves.',

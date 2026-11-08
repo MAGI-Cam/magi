@@ -1,4 +1,4 @@
-// Font editor (Landmarks mode "Font"): edit a letter in the air with one hand.
+// Font: edit a letter in the air with one hand (its own tile in Hand Tracking).
 //
 // Glyph: the letter is drawn in a web font MAGI already loads (Face: Bodoni Moda, Inter,
 // Silkscreen, VT323) on a hidden 256 px canvas, and its outline is traced with marching squares:
@@ -225,6 +225,26 @@
       lines.forEach(function (l, i) { hud.fillText(l, W * 0.74, H * 0.5 + i * 14 * u); });
       hud.restore();
       if (!loops.length) frame.say('Loading the typeface…');
+    };
+  };
+
+  // The tile: the room darkened behind the letter; no skeleton, only the fingertip rings.
+  Magi.renderers.font = function () {
+    var editor = Magi.fontEditor();
+    return {
+      animated: true,
+      render: function (frame, out, params) {
+        var W = frame.width, H = frame.height;
+        if (out.width !== W || out.height !== H) { out.width = W; out.height = H; }
+        var ctx = out.getContext('2d');
+        frame.draw(ctx, W, H);
+        ctx.fillStyle = 'rgba(0,0,0,' + (params.dim / 100).toFixed(3) + ')';
+        ctx.fillRect(0, 0, W, H);
+        editor(ctx, frame, Magi.interaction.read(frame), frame.pxPerCss, params);
+        var tracker = Magi.tracking.hands;
+        if (tracker.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, tracker, 'hand');
+      },
+      reset: function () {}
     };
   };
 })();

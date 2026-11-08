@@ -131,69 +131,8 @@
     '}'
   ].join('\n');
 
-  // Slip (after a black-and-white music-video edit): the picture crushed to black and white, the
-  // mouth-and-jaw block of your face slipping out of place, and a mirrored ripple through the body.
-  //   Threshold: Otsu's method (1979) on a 128-px-wide copy: the threshold t that maximizes the
-  //     between-class variance σ²(t) = ω₀ω₁(μ₀ − μ₁)² of the brightness histogram, so the split
-  //     adapts to the light; the picture goes through a steep curve there (±0.05).
-  //   Block: from the face mesh, under the nose (landmark 2) to the chin (152), jaw to jaw (58,
-  //     172, 61 / 288, 397, 291). Speed times a second it jumps to a new offset, mostly down and
-  //     sideways, up to Amount × (0.6 × its height, 0.3 × its width); one jump in five snaps back.
-  //     It is drawn from where it was, with a thin black seam on its edge, like a cut-and-paste.
-  //   Ripple: under the chin, for 1.6 face heights and only inside the body mask, x is mirrored
-  //     about the face's center line, x′ = cx − |x − cx|, and shifted by a·sin(0.045y + 5t),
-  //     a = Amount × 0.12 × the face height, faded in and out across the band (sin πk).
-  var SLIP_FRAG = [
-    'precision highp float;',
-    'uniform sampler2D cam, mask;',
-    'uniform vec2 size, r0, r1, d, band;',
-    'uniform float thr, cx, amp, t, face;',
-    'varying vec2 uv;',
-    'void main() {',
-    '  vec2 px = uv * size, src = px;',
-    '  float body = smoothstep(0.35, 0.65, texture2D(mask, uv).r);',
-    '  if (face > 0.5 && px.y > band.x && px.y < band.y && body > 0.5) {',
-    '    float k = (px.y - band.x) / (band.y - band.x);',
-    '    src.x = cx - abs(px.x - cx) + amp * sin(px.y * 0.045 + t * 5.0) * sin(k * 3.14159);',
-    '  }',
-    '  float seamLine = 0.0;',
-    '  if (face > 0.5) {',
-    '    vec2 q = px - d;',
-    '    if (q.x > r0.x && q.x < r1.x && q.y > r0.y && q.y < r1.y) {',
-    '      src = q;',
-    '      vec2 e = min(q - r0, r1 - q);',
-    '      if (min(e.x, e.y) < 1.5 && length(d) > 1.0) seamLine = 1.0;',
-    '    }',
-    '  }',
-    '  float L = dot(texture2D(cam, clamp(src / size, 0.0, 1.0)).rgb, vec3(0.2126, 0.7152, 0.0722));',
-    '  float v = smoothstep(thr - 0.05, thr + 0.05, L) * (1.0 - seamLine);',
-    '  gl_FragColor = vec4(vec3(v), 1.0);',
-    '}'
-  ].join('\n');
-
-  // Otsu's threshold of the frame's brightness, 0…1.
-  function otsu(ctx2, w, h) {
-    var d = ctx2.getImageData(0, 0, w, h).data, hist = new Float64Array(256), n = w * h, i;
-    for (i = 0; i < n; i++) hist[Math.round(0.2126 * d[i * 4] + 0.7152 * d[i * 4 + 1] + 0.0722 * d[i * 4 + 2])]++;
-    var sum = 0;
-    for (i = 0; i < 256; i++) sum += i * hist[i];
-    var w0 = 0, s0 = 0, best = 0, at = 128;
-    for (i = 0; i < 256; i++) {
-      w0 += hist[i];
-      if (!w0) continue;
-      var w1 = n - w0;
-      if (!w1) break;
-      s0 += i * hist[i];
-      var m0 = s0 / w0, m1 = (sum - s0) / w1, between = w0 * w1 * (m0 - m1) * (m0 - m1);
-      if (between > best) { best = between; at = i; }
-    }
-    return at / 255;
-  }
-
   function createGlitch() {
     var pass, maskBytes = null, burst = 0, lastT = null, seenEvent = 0, seam = null, held = null;
-    var slipPass, small = document.createElement('canvas'), sctx = small.getContext('2d', { willReadFrequently: true });
-    var thr = 0.5, lastId = null, slip = { d: [0, 0], epoch: -1 };
     return {
       animated: true,
       render: function (frame, out, params) {
@@ -238,48 +177,6 @@
         if (pinched && held) { ctx.drawImage(held, 0, 0); return; }
         var amount = Math.min(1, params.amount / 100 * level + burst);
 
-        if (params.mode === 'slip') {
-          if (slipPass === undefined) slipPass = Magi.fx.shaderPass(SLIP_FRAG, ['cam', 'mask']);
-          if (!slipPass) { frame.say('Slip needs WebGL, which this browser has turned off.'); return; }
-          // Otsu threshold once per camera frame.
-          var id = Magi.tracking.frameId(frame.source) + W;
-          if (id !== lastId) {
-            lastId = id;
-            var sw = 128, sh = Math.max(8, Math.round(128 * H / W));
-            if (small.width !== sw || small.height !== sh) { small.width = sw; small.height = sh; }
-            sctx.drawImage(out, 0, 0, sw, sh);
-            thr = otsu(sctx, sw, sh);
-          }
-          var faces = Magi.tracking.face.detect(frame), f = faces[0], u0 = { r0: [0, 0], r1: [0, 0], band: [0, 0], cx: 0, fh: 1 };
-          if (f) {
-            var xs = function (ids, fn) { return fn.apply(null, ids.map(function (k) { return f[k].x; })); };
-            var fh = Math.abs(f[152].y - f[10].y) || 1;
-            u0 = { r0: [xs([58, 172, 61], Math.min), f[2].y], r1: [xs([288, 397, 291], Math.max), f[152].y], cx: f[1].x, fh: fh };
-            u0.band = [f[152].y + 0.05 * fh, f[152].y + 1.6 * fh];
-          }
-          // The block's offset jumps Speed times a second.
-          var rate = 2 + params.speed / 100 * 10, ep = Math.floor(t * rate);
-          if (ep !== slip.epoch) {
-            slip.epoch = ep;
-            var bw = u0.r1[0] - u0.r0[0], bh = u0.r1[1] - u0.r0[1];
-            slip.d = Math.random() < 0.2 ? [0, 0] : [(Math.random() - 0.5) * 0.6 * bw * amount, Math.random() * 0.6 * bh * amount];
-          }
-          if (seg) {
-            var nn = seg.width * seg.height;
-            if (!maskBytes || maskBytes.length !== nn * 4) maskBytes = new Uint8Array(nn * 4);
-            for (var q = 0; q < nn; q++) { var mv = seg.mask[q] * 255; maskBytes[q * 4] = maskBytes[q * 4 + 1] = maskBytes[q * 4 + 2] = mv; maskBytes[q * 4 + 3] = 255; }
-            slipPass.data('mask', seg.width, seg.height, maskBytes);
-          } else slipPass.data('mask', 1, 1, new Uint8Array([0, 0, 0, 255]));
-          slipPass.texture('cam', out);
-          slipPass.run(W, H, { size: [W, H], r0: u0.r0, r1: u0.r1, d: slip.d, band: u0.band, thr: thr, cx: u0.cx, amp: amount * 0.12 * u0.fh, t: t, face: f ? 1 : 0 });
-          ctx.drawImage(slipPass.canvas, 0, 0);
-          if (!held || held.width !== W || held.height !== H) { held = document.createElement('canvas'); held.width = W; held.height = H; }
-          held.getContext('2d').drawImage(out, 0, 0);
-          var faceT = Magi.tracking.face;
-          if (faceT.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, faceT, 'face');
-          else if (!f) frame.say('Face the camera.');
-          return;
-        }
 
         if (seg) {
           var n = seg.width * seg.height, m = seg.mask, present = 0;

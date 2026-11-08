@@ -88,8 +88,11 @@
     // Paper: reflectance = paper × e^(−D·edge·grain) (Beer–Lambert). Edge darkening: pigment
     // collects where the wash's density changes fast (Curtis et al. 1997), so the density is
     // raised by its gradient magnitude. Granulation: paper grain (two octaves of value noise)
-    // modulates how much pigment shows, more in the dense areas.
-    paint: 'uniform sampler2D pig; uniform vec2 size; uniform float edges;\n' +
+    // modulates how much pigment shows, more in the dense areas. Dark: black paper can't show a
+    // transparent wash, so each pigment shows as its own color at full strength (its reflectance
+    // e^(−D) scaled so its brightest channel is 1), laid over the black by its coverage
+    // 1 − e^(−mean D·1.5), like gouache on black paper.
+    paint: 'uniform sampler2D pig; uniform vec2 size; uniform float edges, dark;\n' +
       'float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }\n' +
       'float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);\n' +
       '  return mix(mix(h(i), h(i + vec2(1, 0)), f.x), mix(h(i + vec2(0, 1)), h(i + vec2(1, 1)), f.x), f.y); }\n' +
@@ -99,7 +102,11 @@
       '  float grain = 0.6 * vn(uv * size / 3.0) + 0.4 * vn(uv * size / 1.2);\n' +
       '  float k = (1.0 + edges * clamp(g * 6.0, 0.0, 1.5)) * (0.8 + 0.4 * grain);\n' +
       '  vec3 paper = vec3(0.965, 0.95, 0.915) * (0.97 + 0.03 * grain);\n' +
-      '  o = vec4(paper * exp(-d * k), 1.0); }'
+      '  if (dark > 0.5) {\n' +
+      '    vec3 hue = exp(-d * k); hue /= max(max(hue.r, hue.g), max(hue.b, 1e-3));\n' +
+      '    float cover = 1.0 - exp(-dot(d * k, vec3(0.5)));\n' +
+      '    o = vec4(mix(vec3(0.045, 0.045, 0.05) * (0.9 + 0.2 * grain), hue * 0.92, cover), 1.0);\n' +
+      '  } else o = vec4(paper * exp(-d * k), 1.0); }'
   };
   // Watercolor profiles (Colors): 0 takes colors from the camera; the rest are four pigments each.
   var PALETTES = [
@@ -294,7 +301,7 @@
           pig.swap();
           run('bleed', { pig: pig.read, k: 0.12 }, pig.write, pt);
           pig.swap();
-          run('paint', { pig: pig.read, size: [pig.read.w, pig.read.h], edges: params.edges / 100 * 2.5 }, null, pt);
+          run('paint', { pig: pig.read, size: [pig.read.w, pig.read.h], edges: params.edges / 100 * 2.5, dark: params.dark ? 1 : 0 }, null, pt);
         } else {
           run('warp', { vel: vel.read, map: map.read, velTexel: vt, dt: dt, keep: keep }, map.write, [1 / map.read.w, 1 / map.read.h]);
           map.swap();
