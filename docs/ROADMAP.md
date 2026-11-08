@@ -25,7 +25,7 @@ Decisions from the planning questionnaire. Each item becomes a small release, te
   - Gestures, after the reference: the fingers touching the thumb pick what's adjusted (index: character, index + middle: distortion, all five: smoothness). Turning the hand turns the value like a knob, and the A–Z dial rotates with it.
   - Distortion displaces points through a smooth noise field. Smoothness is iterated Laplacian smoothing.
   - On screen: dotted outline points, a wobbly envelope, a crosshair, and a HUD reading ADJUSTING, CHARACTER, DISTORTION and SMOOTHNESS.
-- **A4 "Slip"** (a Glitch mode):
+- **A4 "Slip"** (a Glitch mode; done in release 40):
   - Pure black and white by Otsu's threshold.
   - The mouth-and-jaw block from the face mesh slides out of place in jumps.
   - A mirrored ripple band runs through the body below it.

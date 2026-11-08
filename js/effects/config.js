@@ -420,14 +420,15 @@ Magi.effectConfig = [
     modes: [
       { id: 'split', name: 'Split' },
       { id: 'blocks', name: 'Blocks' },
-      { id: 'dissolve', name: 'Dissolve' }
+      { id: 'dissolve', name: 'Dissolve' },
+      { id: 'slip', name: 'Slip' }
     ],
     params: [
       range('amount', 'Amount', 0, 100, 70),
-      range('block', 'Block', 1, 9, 3),
+      { id: 'block', label: 'Block', min: 1, max: 9, step: 1, default: 3, modes: ['split', 'blocks', 'dissolve'] },
       range('speed', 'Speed', 0, 100, 40),
       { id: 'spread', label: 'Spread', min: 0, max: 100, step: 1, default: 40, modes: ['dissolve'] },
-      range('profile', 'Profile', 0, 5, 0),
+      { id: 'profile', label: 'Profile', min: 0, max: 5, step: 1, default: 0, modes: ['split', 'blocks', 'dissolve'] },
       { id: 'depth', label: 'Depth', type: 'toggle', default: false, modes: ['blocks', 'dissolve'], hint: 'Bigger blocks the closer you are to the camera.' },
       { id: 'neon', label: 'Overexposed', type: 'toggle', default: true, modes: ['blocks'], hint: 'Include blown-out blocks decoded at 1 bit per channel.' },
       toggle('hand', 'Hand', true, 'Your hand controls the glitch; a fist stops it. Off: a steady glitch at Amount.')
@@ -607,7 +608,8 @@ Magi.effectGuides = {
     'Split: two seams cross at your hand; each tile slips and splits its colors.',
     'Blocks, Dissolve: raise your hand higher to glitch harder. Spread (Dissolve): how far pieces scatter. Overexposed (Blocks): blown-out neon blocks.',
     'Profile: 0 natural, 1 neon, 2–5 two-ink looks (red/cyan, magenta/green, gold/blue, black/white). Depth: bigger blocks the closer you are.',
-    'Amount, Block, Speed: strength, damage size, how often it changes. Hand: off for a steady glitch.'
+    'Amount, Block, Speed: strength, damage size, how often it changes. Hand: off for a steady glitch.',
+    'Slip: pure black and white at an automatic threshold (Otsu’s), the mouth-and-jaw block of your face slipping out of place (Amount: how far, Speed: how often), and a mirrored ripple through your body below it. Needs your face in view.'
   ],
   'facade-interactive': [
     'How it works: the camera is the sun behind a building skin; louvers turn face-on where something moves.',
