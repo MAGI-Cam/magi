@@ -92,21 +92,6 @@ Magi.effectConfig = [
     ],
     params: halftoneParams()
   },
-  {
-    id: 'quadtree',
-    name: 'Quadtree',
-    group: 'halftone',
-    ready: true,
-    photoType: 'image/jpeg',
-    params: [
-      range('detail', 'Detail', 0, 100, 60),
-      range('min', 'Min', 2, 24, 4),
-      range('max', 'Max', 8, 256, 128),
-      range('blur', 'Blur', 0, 100, 50),
-      range('lines', 'Lines', 0, 100, 30),
-      COLOR
-    ]
-  },
 
   {
     id: 'hand-landmarks',
@@ -439,6 +424,21 @@ Magi.effectConfig = [
     // Pixel glazing displays the image: by default pixels spread where it is bright, in its own
     // colors. Here Saturation scales the colors' saturation and Color rotates their hues.
     params: facadeParams(false, 12, 6).concat(tintParams(100))
+  },
+  {
+    id: 'quadtree',
+    name: 'Quadtree',
+    group: 'facade',
+    ready: true,
+    photoType: 'image/jpeg',
+    params: [
+      range('detail', 'Detail', 0, 100, 60),
+      range('min', 'Min', 2, 24, 4),
+      range('max', 'Max', 8, 256, 128),
+      range('blur', 'Blur', 0, 100, 50),
+      range('lines', 'Lines', 0, 100, 20),
+      COLOR
+    ]
   }
 ];
 
@@ -471,7 +471,7 @@ Magi.effectGuides = {
     'Scale, Intensity, Saturation, Color: as in Bitmap.'
   ],
   quadtree: [
-    'How it works: a quadtree. Squares split into four while their brightness varies too much, and always where the lens is in focus, so what’s sharp breaks into fine cells that keep the picture, and soft, out-of-focus areas stay big flat squares of their average color.',
+    'How it works: a quadtree. Squares split into four while their brightness varies too much; in focus they split readily, out of focus only at strong edges, so sharp detail breaks into fine cells that keep the picture and the bokeh stays in big flat squares of its average color.',
     'Bokeh: a lens blur. You stay in focus and the room blurs, by the thin-lens circle of confusion (needs a person in view).',
     'Pinch: focus moves to what’s under your pinch, and blur grows with distance from it. Make a fist: focus goes back to you.',
     'Detail: how readily squares split. Min, Max: smallest and largest square. Blur: bokeh strength. Lines: outline opacity. Color: line tint (far left: white).'
@@ -485,9 +485,9 @@ Magi.effectGuides = {
     'Pairs: distances between matching fingertips of your two hands.',
     'Signals: what MAGI reads from your hand: finger count, curl, spread, pinches, speed, last swipe, flick or shake.',
     'Modes: tap the tile. Skeleton (the toggles above), Controller, Link.',
-    'Controller: a circle spans your thumb and index fingertips and grows as they open; it slides along the ruler, and its value is your position across the frame. Opacity: the circle’s fill.',
+    'Controller: a circle spans your thumb and index fingertips and grows as they open; it slides along the ruler, and its value is your position across the frame. It’s an outline while your hand is open and fills as you pinch; Opacity: the fullest fill.',
     'Controller, index only (thumb tucked): the circle shrinks to a pointer dot on your fingertip and keeps sliding. Two hands: the second hand gets its own circle, value and ring stack on the right.',
-    'Controller: rings swell as thumb and index open; the dots trace your index fingertips, the bars recent values (hand 2 in gray).',
+    'Controller: rings swell as thumb and index open. Node map: your hand redrawn small, fingertips trailing smooth curves. Graph: the value held every quarter second, scrolling down as a staircase (hand 2 in gray, to the left).',
     'Link: two hands; a line joins your index fingertips with their distance at the green midpoint; the scope shows your fingertips around the palm.'
   ],
   mosh: [

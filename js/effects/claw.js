@@ -12,11 +12,12 @@
 // lies in the plane perpendicular to the bone, turned by the palm's normal n = (p5 − p0) × (p17 − p0),
 // and is projected orthographically, so bones turn with the hand.
 //
-// Each last finger segment wears a wireframe cylinder, a sleeve about a finger wide (radius 40% of
-// the segment, held between 7% and 12% of the palm) and 60% of the segment long, centered on it
-// along its 3D axis â, with the bone running through it. A circle of radius r perpendicular to â
+// Each last finger segment is a wireframe cylinder instead of a bone: a sleeve about a finger wide
+// (radius 40% of the segment, held between 7% and 12% of the palm), from 10% to 80% along the
+// segment on its 3D axis â; the bone chain ends at the last joint and the talon leaves from the
+// sleeve's front cap. A circle of radius r perpendicular to â
 // projects to an ellipse with radii r and r·|â_z|, so a finger pointing at the camera shows its
-// cylinder as overlapping circles. Out of each fingertip a talon continues the finger (`claw` ×
+// cylinder as overlapping circles. Out of each sleeve a talon continues the finger (`claw` ×
 // the last bone's length), a thin spike, with a small crosshair at its point (arms 6.5% of the
 // palm); it retracts as the
 // finger curls, by (1 − curl)^1.5, curl from the Interaction Engine. Lines glow: each path is stroked
@@ -154,7 +155,8 @@
           ctx.beginPath();
           FINGERS.forEach(function (f, fi) {
             bone(ctx, root, P[f[0]], 0.07, normal, 0.3);
-            for (var k = 0; k < 3; k++) bone(ctx, P[f[k]], P[f[k + 1]], 0.14, normal, 0.33);
+            // Bones up to the last joint; the last segment is the sleeve, with no bone inside it.
+            for (var k = 0; k < 2; k++) bone(ctx, P[f[k]], P[f[k + 1]], 0.14, normal, 0.33);
             var a = P[f[2]], b = P[f[3]], d = sub(b, a);
             // The talon points along the last two bones (middle joint → tip): a longer baseline
             // than the last bone alone, so its direction is steadier. It is as long as the last
@@ -162,7 +164,9 @@
             var dir = unit(sub(b, P[f[1]])), curl = sig ? sig.fingers[NAMES[fi]].curl : 0;
             var len = len3(d) * reach * Math.pow(1 - curl, 1.5);
             var end = [b[0] + dir[0] * len, b[1] + dir[1] * len, b[2] + dir[2] * len];
-            if (len > 1) bone(ctx, b, end, 0.07, normal, 0.2);
+            // The talon leaves from the sleeve's front cap (80% along the last segment).
+            var front = [a[0] + d[0] * 0.8, a[1] + d[1] * 0.8, a[2] + d[2] * 0.8];
+            if (len > 1) bone(ctx, front, end, 0.07, normal, 0.2);
             tips.push({ a: a, b: b, d: d, end: end, out: len > 1 });
           });
           glowStroke(ctx, white, Math.max(1, 1.3 * u), glow);
@@ -172,8 +176,8 @@
           tips.forEach(function (tp) {
             var L = len3(tp.d) || 1, ax = unit(tp.d);
             // A sleeve on the last segment, centered just past its middle.
-            var c = [tp.a[0] + tp.d[0] * 0.55, tp.a[1] + tp.d[1] * 0.55, tp.a[2] + tp.d[2] * 0.55];
-            cylinder(ctx, c, ax, L * 0.6, Math.min(palm * 0.12, Math.max(L * 0.4, palm * 0.07)));
+            var c = [tp.a[0] + tp.d[0] * 0.45, tp.a[1] + tp.d[1] * 0.45, tp.a[2] + tp.d[2] * 0.45];
+            cylinder(ctx, c, ax, L * 0.7, Math.min(palm * 0.12, Math.max(L * 0.4, palm * 0.07)));
             if (tp.out) cross(ctx, tp.end[0], tp.end[1], palm * 0.065);
           });
           glowStroke(ctx, accent, Math.max(1, 1.4 * u), glow * 0.8);

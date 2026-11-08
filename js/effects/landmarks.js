@@ -52,22 +52,42 @@
   }
 
   function createHands() {
-    var lastEvent = {}, trails = [[], []], values = [[], []], radius = [0, 0], lastSample = 0, lastIx = null;
+    var lastEvent = {}, trails = [[], []], joints = [null, null], values = [[], []], radius = [0, 0], holdAt = 0, lastT = null, box = null, lastIx = null;
 
-    // Controller (after the VCV Rack reference): each hand read as a control surface. A flat circle
+    // Controller (after the VCV Rack reference): each hand read as a control surface. A circle
     // spans the thumb and index fingertips (its diameter is their distance, so it grows as they
     // open) and carries its value, x as a share of the frame width, printed at full precision on
     // a leader line; a ruler along the bottom takes a drop line from it like a slider's handle.
-    // Opacity sets the circle's fill. Only the index up (thumb tucked): the circle shrinks to a
-    // pointer dot on the fingertip and keeps sliding; it grows back when the thumb comes out.
+    // The circle is a thin outline while the hand is open and fills as the pinch closes:
+    // fill alpha = Opacity × pinch (the Interaction Engine's 0 open … 1 touching). Only the index
+    // up (thumb tucked): it shrinks to a solid pointer dot on the fingertip and keeps sliding.
     // A second hand gets its own controller (on screen, the left hand is 1, the right hand 2),
     // with its leader and ring stack on the right. Ring stacks swell with each hand's openness,
-    // a traveling wave like a level meter; the constellation traces each index fingertip (last 40
-    // positions, every 80 ms); top right, bars chart the last 16 values of each.
+    // a traveling wave like a level meter.
+    // Node map (right): the hand redrawn small, its 21 joints and bones, with each fingertip's
+    // last 1.5 s of positions (every camera frame) trailing behind as a smooth Catmull-Rom curve.
+    // The map's frame follows the points' bounding box with easing (time constant 0.4 s), so it
+    // drifts instead of jumping.
+    // Graph (top right): the value as a sample-and-hold signal, like an oscilloscope on its side:
+    // held every 0.25 s, each hold a step whose width is the value, scrolling down from the top
+    // past a vertical axis with ticks, so the steps form one solid staircase. Hand 2 grows to the
+    // left of the axis.
+    var HOLD = 0.25, TRAIL = 45;
+    function catmull(ctx, pts) {
+      // Catmull-Rom through the points, as cubic Béziers: c1 = p1 + (p2 − p0)/6, c2 = p2 − (p3 − p1)/6.
+      ctx.moveTo(pts[0][0], pts[0][1]);
+      for (var i = 0; i < pts.length - 1; i++) {
+        var p0 = pts[Math.max(0, i - 1)], p1 = pts[i], p2 = pts[i + 1], p3 = pts[Math.min(pts.length - 1, i + 2)];
+        ctx.bezierCurveTo(p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6, p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6, p2[0], p2[1]);
+      }
+    }
     function controller(ctx, frame, ix, u, params) {
       var W = frame.width, H = frame.height, t = frame.time / 1000, hud = frame.hud;
+      var dt = lastT === null ? 1 / 60 : Math.max(0, Math.min(0.1, t - lastT));
+      lastT = t;
       var hs = ix.pair ? [ix.pair.left, ix.pair.right] : ix.hands.slice(0, 1);
-      var lw = Math.max(1, u), fs = Math.round(11 * u), ry = H * 0.9, sample = ix !== lastIx && t - lastSample > 0.08;
+      var lw = Math.max(1, u), fs = Math.round(11 * u), ry = H * 0.9, fresh = ix !== lastIx, hold = t - holdAt >= HOLD;
+      if (hold) holdAt = t;
       ctx.save();
       ctx.strokeStyle = 'rgba(255,255,255,0.9)';
       ctx.fillStyle = 'rgba(255,255,255,0.9)';
@@ -80,7 +100,7 @@
       hud.font = '600 ' + fs + 'px ' + Magi.fx.MONO;
       hud.fillStyle = '#fff';
       hud.textBaseline = 'bottom';
-      var open = [0, 0];
+      var open = [0, 0], live = [null, null];
       hs.forEach(function (hd, slot) {
         var p = hd.points, ti = p[THUMB_TIP], ii = p[INDEX_TIP], right = slot === 1;
         var pointer = hd.pointing && !hd.fingers.thumb.extended;
@@ -88,6 +108,7 @@
         var target = pointer ? 3.5 * u : Math.max(3.5 * u, dist(ti, ii) / 2);
         radius[slot] = radius[slot] ? radius[slot] + (target - radius[slot]) * 0.35 : target;
         var br = radius[slot], value = bx / W;
+        live[slot] = value;
         open[slot] = pointer ? 0 : Math.min(1, hd.pinchWith.index.distance / 1.2);
         // Drop line and ruler marker, leader line from the side, value.
         ctx.strokeStyle = 'rgba(255,255,255,0.9)';
@@ -96,21 +117,24 @@
         ctx.fillRect(bx - 3 * u, ry - 3 * u, 6 * u, 6 * u);
         var lx = right ? W * 0.92 : W * 0.08;
         ctx.beginPath(); ctx.moveTo(lx, by); ctx.lineTo(right ? bx + br : bx - br, by); ctx.stroke();
-        // The circle: flat fill at Opacity, with a fine outline so it shows at any opacity.
-        ctx.fillStyle = 'rgba(255,255,255,' + (params.opacity / 100).toFixed(3) + ')';
+        // The circle: outline always, fill growing with the pinch up to Opacity.
+        var fill = (params.opacity / 100) * (pointer ? 1 : hd.pinch);
+        ctx.fillStyle = 'rgba(255,255,255,' + fill.toFixed(3) + ')';
         ctx.beginPath(); ctx.arc(bx, by, br, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
         hud.textAlign = right ? 'right' : 'left';
         hud.fillText(String(value), lx, by - 4 * u);
-        if (sample) {
-          var tr = trails[slot], vs = values[slot];
-          tr.push({ x: ii.x, y: ii.y }); vs.push(value);
-          if (tr.length > 40) tr.shift();
-          if (vs.length > 16) vs.shift();
+        if (fresh) {
+          [4, 8, 12, 16, 20].forEach(function (tp, j) {
+            var tr = trails[slot][j] || (trails[slot][j] = []);
+            tr.push([p[tp].x, p[tp].y]);
+            if (tr.length > TRAIL) tr.shift();
+          });
+          joints[slot] = p.map(function (q) { return [q.x, q.y]; });
         }
+        if (hold) { values[slot].push(value); if (values[slot].length > 16) values[slot].shift(); }
       });
-      if (sample) lastSample = t;
-      if (hs.length < 2) { trails[1] = []; values[1] = []; radius[1] = 0; }
-      if (!hs.length) radius[0] = 0;
+      if (hs.length < 2) { trails[1] = []; values[1] = []; radius[1] = 0; joints[1] = null; }
+      if (!hs.length) { radius[0] = 0; }
       lastIx = ix;
       // Ring stacks: 26 ellipses down the edge, widths a traveling wave scaled by openness.
       ctx.strokeStyle = 'rgba(255,255,255,0.85)';
@@ -126,32 +150,69 @@
         }
       });
       ctx.stroke();
-      // Constellation: each fingertip's recent path, scaled together into a box on the right.
-      var all = trails[0].concat(trails[1]);
+      // Node map: eased frame around every trail point and joint.
+      var all = [];
+      trails.forEach(function (ts) { ts.forEach(function (tr) { all = all.concat(tr); }); });
+      joints.forEach(function (js) { if (js) all = all.concat(js); });
       if (all.length > 1) {
-        var x0 = Math.min.apply(null, all.map(function (q) { return q.x; })), x1 = Math.max.apply(null, all.map(function (q) { return q.x; }));
-        var y0 = Math.min.apply(null, all.map(function (q) { return q.y; })), y1 = Math.max.apply(null, all.map(function (q) { return q.y; }));
-        var bw = W * 0.18, bh = H * 0.35, ox = W * 0.72, oy = H * 0.3, sc = Math.min(bw / Math.max(1, x1 - x0), bh / Math.max(1, y1 - y0));
-        trails.forEach(function (tr, slot) {
-          if (tr.length < 2) return;
-          var pts = tr.map(function (q) { return [ox + (q.x - x0) * sc, oy + (q.y - y0) * sc]; });
-          ctx.strokeStyle = slot ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.85)';
+        var x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+        all.forEach(function (q) { x0 = Math.min(x0, q[0]); x1 = Math.max(x1, q[0]); y0 = Math.min(y0, q[1]); y1 = Math.max(y1, q[1]); });
+        var e = box ? 1 - Math.exp(-dt / 0.4) : 1;
+        box = box || { x0: x0, x1: x1, y0: y0, y1: y1 };
+        box.x0 += (x0 - box.x0) * e; box.x1 += (x1 - box.x1) * e; box.y0 += (y0 - box.y0) * e; box.y1 += (y1 - box.y1) * e;
+        var bw = W * 0.18, bh = H * 0.42, ox = W * 0.73, oy = H * 0.3;
+        var sc = Math.min(bw / Math.max(1, box.x1 - box.x0), bh / Math.max(1, box.y1 - box.y0));
+        var map = function (q) { return [ox + (q[0] - box.x0) * sc, oy + (q[1] - box.y0) * sc]; };
+        var dot = Math.max(1.5, 2.2 * u), C = (Magi.tracking.connections || {}).hand || [];
+        [0, 1].forEach(function (slot) {
+          var alpha = slot ? 0.55 : 0.9;
+          ctx.strokeStyle = 'rgba(255,255,255,' + alpha + ')';
+          ctx.fillStyle = 'rgba(255,255,255,' + alpha + ')';
+          // Fingertip trails as smooth curves, with a dot every third sample.
           ctx.beginPath();
-          pts.forEach(function (q, j) { j ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]); });
-          for (var j2 = 0; j2 + 7 < pts.length; j2 += 5) { ctx.moveTo(pts[j2][0], pts[j2][1]); ctx.lineTo(pts[j2 + 7][0], pts[j2 + 7][1]); }
+          trails[slot].forEach(function (tr) { if (tr.length > 2) catmull(ctx, tr.map(map)); });
           ctx.stroke();
-          ctx.fillStyle = slot ? 'rgba(255,255,255,0.6)' : '#fff';
-          pts.forEach(function (q) { ctx.beginPath(); ctx.arc(q[0], q[1], Math.max(1.5, 2.6 * u), 0, Math.PI * 2); ctx.fill(); });
+          ctx.beginPath();
+          trails[slot].forEach(function (tr) {
+            for (var j = tr.length - 1; j >= 0; j -= 3) { var q = map(tr[j]); ctx.moveTo(q[0] + dot * 0.7, q[1]); ctx.arc(q[0], q[1], dot * 0.7, 0, Math.PI * 2); }
+          });
+          ctx.fill();
+          // The hand itself: bones and joints.
+          var js = joints[slot];
+          if (!js) return;
+          var m = js.map(map);
+          ctx.beginPath();
+          C.forEach(function (c) { ctx.moveTo(m[c.start][0], m[c.start][1]); ctx.lineTo(m[c.end][0], m[c.end][1]); });
+          ctx.stroke();
+          ctx.beginPath();
+          m.forEach(function (q) { ctx.moveTo(q[0] + dot, q[1]); ctx.arc(q[0], q[1], dot, 0, Math.PI * 2); });
+          ctx.fill();
         });
-      }
-      // Bars: recent values, hand 2 in gray beside hand 1.
-      var px0 = W * 0.72, py0 = H * 0.04, pw = W * 0.2, ph = H * 0.16, bwid = pw / 34;
-      ctx.fillStyle = 'rgba(255,255,255,0.22)';
+      } else box = null;
+      // Graph: sample-and-hold staircase scrolling down past a vertical axis.
+      var px0 = W * 0.73, py0 = H * 0.04, pw = W * 0.22, ph = H * 0.2, axis = px0 + pw * 0.5, rows = 8, rowH = ph / rows;
+      var f = Math.min(1, (t - holdAt) / HOLD);
+      ctx.fillStyle = 'rgba(255,255,255,0.18)';
       ctx.fillRect(px0, py0, pw, ph);
+      ctx.save();
+      ctx.beginPath(); ctx.rect(px0, py0, pw, ph); ctx.clip();
       values.forEach(function (vs, slot) {
         ctx.fillStyle = slot ? 'rgba(255,255,255,0.55)' : 'rgba(255,255,255,0.95)';
-        vs.forEach(function (v, j) { var bh2 = ph * v; ctx.fillRect(px0 + pw * 0.04 + j * 2 * bwid + slot * bwid, py0 + ph - bh2, bwid - 1, bh2); });
+        var dir = slot ? -1 : 1, steps = live[slot] === null ? vs.slice() : vs.concat([live[slot]]);
+        // Newest at the top: the live value fills the top band as it grows; held steps below.
+        for (var i = 0; i < steps.length; i++) {
+          var v = steps[steps.length - 1 - i], top = i === 0 ? py0 : py0 + (i - 1 + f) * rowH, bot = py0 + (i + f) * rowH;
+          if (top > py0 + ph) break;
+          var wv = v * pw * 0.48;
+          ctx.fillRect(dir > 0 ? axis : axis - wv, top, wv, bot - top + 0.5);
+        }
       });
+      ctx.restore();
+      ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+      ctx.beginPath();
+      ctx.moveTo(axis, py0 + 2 * u); ctx.lineTo(axis, py0 + ph - 2 * u);
+      for (var tk = 0; tk <= rows; tk++) { var tyk = py0 + tk * rowH; ctx.moveTo(axis - 3 * u, tyk); ctx.lineTo(axis + 3 * u, tyk); }
+      ctx.stroke();
       ctx.restore();
     }
 

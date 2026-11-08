@@ -13,11 +13,11 @@
 // into the blur around them, and bright taps weigh more, as highlights bloom into discs.
 // Quadtree (Finkel & Bentley 1974; as in quadtree image coding): the frame is tiled with
 // squares of Max size; a square splits into four while the standard deviation of its brightness
-// is above a threshold (Detail) and it is larger than Min. A sharp edge stays high-variance at
+// is above a threshold (Detail), scaled by focus (×0.35 in focus, ×2.5 out of focus), and it is
+// larger than Min. A sharp edge stays high-variance at
 // every scale, so it divides down to the smallest cells; a blurred transition stops splitting at
 // about its blur width; flat bokeh stays in big squares. Squares are filled with their mean
-// color; the smallest cells keep the picture itself. Where the lens is in focus squares always
-// split to the smallest size, so what's sharp stays the picture and only the bokeh turns to squares. Faint lines outline every square (Lines,
+// color; the smallest cells keep the picture itself. Lines are 1 px. Faint lines outline every square (Lines,
 // tinted by Color). Means and variances come from summed-area tables (Crow 1984), O(1) per square.
 (function () {
   var FRAG = [
@@ -152,8 +152,10 @@
           if (x >= gw || y >= gh) return;
           var nsub = (x1 - x) * (y1 - y), sumY = box(satY, x, y, x1, y1);
           var mean = sumY / nsub, std = Math.sqrt(Math.max(0, box(satY2, x, y, x1, y1) / nsub - mean * mean));
-          // Split on detail, or where the lens is in focus (over a third of the square sharp).
-          if (s > 1 && (std > thr || (depthOn && box(satF, x, y, x1, y1) / nsub > 0.35))) {
+          // The threshold scales with focus: ×0.35 where the square is all in focus, ×2.5 where it is
+          // all blurred, so detail splits readily in focus and the bokeh only at strong edges.
+          var kf = depthOn ? 2.5 + (0.35 - 2.5) * (box(satF, x, y, x1, y1) / nsub) : 1;
+          if (s > 1 && std > thr * kf) {
             var h = s / 2;
             node(x, y, h); node(x + h, y, h); node(x, y + h, h); node(x + h, y + h, h);
             return;
@@ -178,7 +180,7 @@
         if (params.lines > 0) {
           var ink = params.color ? Magi.fx.inkColor(params.color) : [1, 1, 1];
           var css = 'rgba(' + ink.map(function (v) { return Math.round(v * 255); }).join(',') + ',' + (params.lines / 100).toFixed(3) + ')';
-          var lw = Math.max(1, Math.round(0.5 * u)), pk = m + ':' + css + ':' + lw;
+          var lw = 1, pk = m + ':' + css + ':' + lw;
           if (pk !== patternKey) {
             patternKey = pk;
             var tile = document.createElement('canvas'), tc = tile.getContext('2d');
