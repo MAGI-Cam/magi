@@ -183,4 +183,226 @@
       ctx.restore();
     };
   };
+
+  // Attention (after "the topology of attention"): your image library as a Mapper graph, the
+  // topological summary used in topological data analysis (Singh, Mémoli & Carlsson 2007).
+  // Features: the feed's own embedding for each image if it carries one (see docs/ROADMAP.md);
+  // otherwise color: mean brightness, two opponent channels (R − G, (R + G)/2 − B), mean
+  // saturation and a saturation-weighted 6-bin hue histogram, from a 16×16 copy; standardized.
+  // Lens: the first principal component (power iteration on the covariance). Cover: six intervals
+  // of the lens overlapping by 30%. In each, images closer than ε (1.5 × the median
+  // nearest-neighbor distance) are joined by single linkage (union–find); each cluster is a node,
+  // and nodes that share an image are joined by an edge. Layout: force-directed (Fruchterman–
+  // Reingold: repulsion k²/d, attraction d²/k along edges, a pull to the center, kept inside the
+  // frame), started from the
+  // nodes' positions on the first two principal components. View: 0 Graph, 1 PCA (each image at
+  // its first two principal components).
+  // Gestures, after the reference's recognizer: Pointing_Up (only the index up) selects the node
+  // under your fingertip and fans its images out; Closed_Fist pulls the graph in; Open_Palm spreads
+  // it out. Without a feed, snapshots of the camera stand in. The camera sits in an inset.
+  Magi.landmarkModes.attention = function () {
+    var feats = new WeakMap(), model = null, modelKey = '', snaps = [], lastSnap = -9, scale = 1, sel = -1, lastT = null;
+    var probe = document.createElement('canvas'), pctx = probe.getContext('2d', { willReadFrequently: true });
+    probe.width = probe.height = 16;
+
+    function feature(c) {
+      if (feats.has(c)) return feats.get(c);
+      var f;
+      if (c.meta && Array.isArray(c.meta.embedding) && c.meta.embedding.length) f = c.meta.embedding.slice();
+      else {
+        pctx.clearRect(0, 0, 16, 16);
+        pctx.drawImage(c, 0, 0, 16, 16);
+        var d = pctx.getImageData(0, 0, 16, 16).data, L = 0, A = 0, B = 0, S = 0, hist = [0, 0, 0, 0, 0, 0];
+        for (var i = 0; i < 256; i++) {
+          var r = d[i * 4] / 255, g = d[i * 4 + 1] / 255, b = d[i * 4 + 2] / 255, mx = Math.max(r, g, b), mn = Math.min(r, g, b), sat = mx ? (mx - mn) / mx : 0;
+          L += (0.2126 * r + 0.7152 * g + 0.0722 * b) / 256; A += (r - g) / 256; B += ((r + g) / 2 - b) / 256; S += sat / 256;
+          if (mx > mn) {
+            var h = mx === r ? ((g - b) / (mx - mn) + 6) % 6 : mx === g ? (b - r) / (mx - mn) + 2 : (r - g) / (mx - mn) + 4;
+            hist[Math.floor(h) % 6] += sat / 256;
+          }
+        }
+        f = [L, A, B, S].concat(hist);
+      }
+      feats.set(c, f);
+      return f;
+    }
+
+    function pcs(X) {
+      var n = X.length, d = X[0].length, mean = new Array(d).fill(0), sd = new Array(d).fill(0);
+      X.forEach(function (x) { x.forEach(function (v, j) { mean[j] += v / n; }); });
+      X.forEach(function (x) { x.forEach(function (v, j) { sd[j] += (v - mean[j]) * (v - mean[j]) / n; }); });
+      var Z = X.map(function (x) { return x.map(function (v, j) { return (v - mean[j]) / (Math.sqrt(sd[j]) || 1); }); });
+      function power(deflate) {
+        var v = new Array(d).fill(0).map(function () { return Math.random() - 0.5; });
+        for (var it = 0; it < 40; it++) {
+          var w = new Array(d).fill(0);
+          Z.forEach(function (z) {
+            var dot = 0; for (var j = 0; j < d; j++) dot += z[j] * v[j];
+            for (j = 0; j < d; j++) w[j] += dot * z[j];
+          });
+          if (deflate) { var p = 0; for (var j2 = 0; j2 < d; j2++) p += w[j2] * deflate[j2]; for (j2 = 0; j2 < d; j2++) w[j2] -= p * deflate[j2]; }
+          var len = Math.hypot.apply(null, w) || 1; v = w.map(function (x) { return x / len; });
+        }
+        return v;
+      }
+      var v1 = power(null), v2 = power(v1);
+      var proj = function (v) { return Z.map(function (z) { var s2 = 0; for (var j = 0; j < d; j++) s2 += z[j] * v[j]; return s2; }); };
+      return { Z: Z, p1: proj(v1), p2: proj(v2) };
+    }
+
+    function mapper(items) {
+      var X = items.map(feature), P = pcs(X), Z = P.Z, n = Z.length;
+      var dist = function (a, b) { var s2 = 0; for (var j = 0; j < Z[a].length; j++) s2 += (Z[a][j] - Z[b][j]) * (Z[a][j] - Z[b][j]); return Math.sqrt(s2); };
+      var nn = [];
+      for (var i = 0; i < n; i++) { var m = Infinity; for (var k = 0; k < n; k++) if (k !== i) m = Math.min(m, dist(i, k)); nn.push(m); }
+      var eps = 1.5 * (nn.slice().sort(function (a, b) { return a - b; })[n >> 1] || 1);
+      var lo = Math.min.apply(null, P.p1), hi = Math.max.apply(null, P.p1), M = 6, ov = 0.3;
+      var len = (hi - lo) / (M - (M - 1) * ov) || 1, nodes = [];
+      for (var c = 0; c < M; c++) {
+        var a0 = lo + c * len * (1 - ov), a1 = a0 + len, idx = [];
+        for (i = 0; i < n; i++) if (P.p1[i] >= a0 - 1e-9 && P.p1[i] <= a1 + 1e-9) idx.push(i);
+        var parent = {}; idx.forEach(function (q) { parent[q] = q; });
+        var find = function (q) { while (parent[q] !== q) { parent[q] = parent[parent[q]]; q = parent[q]; } return q; };
+        for (var x = 0; x < idx.length; x++) for (var y = x + 1; y < idx.length; y++) if (dist(idx[x], idx[y]) < eps) parent[find(idx[x])] = find(idx[y]);
+        var groups = {};
+        idx.forEach(function (q) { (groups[find(q)] = groups[find(q)] || []).push(q); });
+        Object.keys(groups).forEach(function (g) { nodes.push({ members: groups[g] }); });
+      }
+      var edges = [];
+      for (i = 0; i < nodes.length; i++) for (k = i + 1; k < nodes.length; k++) {
+        if (nodes[i].members.some(function (q) { return nodes[k].members.indexOf(q) >= 0; })) edges.push([i, k]);
+      }
+      var s1 = Math.max(1e-6, hi - lo), lo2 = Math.min.apply(null, P.p2), s2 = Math.max(1e-6, Math.max.apply(null, P.p2) - lo2);
+      nodes.forEach(function (nd) {
+        var mx = 0, my = 0;
+        nd.members.forEach(function (q) { mx += ((P.p1[q] - lo) / s1 * 2 - 1) / nd.members.length; my += ((P.p2[q] - lo2) / s2 * 2 - 1) / nd.members.length; });
+        nd.x = mx * 0.8; nd.y = my * 0.8;
+      });
+      var pca = items.map(function (_, q) { return [(P.p1[q] - lo) / s1 * 2 - 1, (P.p2[q] - lo2) / s2 * 2 - 1]; });
+      return { nodes: nodes, edges: edges, pca: pca, items: items };
+    }
+
+    function layout(m, dt) {
+      var N = m.nodes.length, k = 1.1 / Math.sqrt(Math.max(1, N)), step = Math.min(0.05, dt * 0.6);
+      for (var it = 0; it < 2; it++) {
+        var dx = new Array(N).fill(0), dy = new Array(N).fill(0);
+        for (var i = 0; i < N; i++) for (var j = i + 1; j < N; j++) {
+          var ex = m.nodes[i].x - m.nodes[j].x, ey = m.nodes[i].y - m.nodes[j].y, d = Math.hypot(ex, ey) || 1e-3, f = k * k / d;
+          dx[i] += ex / d * f; dy[i] += ey / d * f; dx[j] -= ex / d * f; dy[j] -= ey / d * f;
+        }
+        m.edges.forEach(function (e) {
+          var a = m.nodes[e[0]], b = m.nodes[e[1]], ex = a.x - b.x, ey = a.y - b.y, d = Math.hypot(ex, ey) || 1e-3, f = d * d / k;
+          dx[e[0]] -= ex / d * f; dy[e[0]] -= ey / d * f; dx[e[1]] += ex / d * f; dy[e[1]] += ey / d * f;
+        });
+        m.nodes.forEach(function (nd, i2) {
+          dx[i2] -= nd.x * 0.6; dy[i2] -= nd.y * 0.6;
+          var l = Math.hypot(dx[i2], dy[i2]) || 1, mv = Math.min(l, 1) * step;
+          nd.x = Math.max(-0.85, Math.min(0.85, nd.x + dx[i2] / l * mv)); nd.y = Math.max(-0.8, Math.min(0.8, nd.y + dy[i2] / l * mv));
+        });
+      }
+    }
+
+    return function (ctx, frame, ix, params) {
+      var W = frame.width, H = frame.height, u = frame.pxPerCss, t = frame.time / 1000, hud = frame.hud;
+      var dt = lastT === null ? 1 / 60 : Math.max(0, Math.min(0.1, t - lastT));
+      lastT = t;
+      var cam = document.createElement('canvas');
+      var lib = Magi.library.get(params.feed), items = lib.items;
+      if (!items.length) {
+        if (t - lastSnap > 0.4 && snaps.length < 60) {
+          lastSnap = t;
+          var sc0 = document.createElement('canvas'), k0 = 160 / Math.max(W, H);
+          sc0.width = Math.round(W * k0); sc0.height = Math.round(H * k0);
+          frame.draw(sc0.getContext('2d'), sc0.width, sc0.height);
+          snaps.push(sc0);
+        }
+        items = snaps;
+      }
+      // Inset camera first (drawn from the frame before the background covers it).
+      var iw = W * 0.28, ih = iw * H / W, ix0 = W - iw - W * 0.03, iy0 = H - ih - H * 0.05;
+      cam.width = Math.round(iw); cam.height = Math.round(ih);
+      frame.draw(cam.getContext('2d'), cam.width, cam.height);
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, W, H);
+
+      var key = items.length + ':' + (params.feed || '');
+      if (items.length >= 4 && (key !== modelKey && (!model || t % 2 < dt * 2 || items.length - model.items.length >= 8 || lib.status === 'ready'))) { model = mapper(items.slice()); modelKey = key; sel = -1; }
+      if (!model) { frame.say(lib.status === 'loading' || lib.status === 'failed' ? lib.message : 'Gathering images…'); }
+
+      // Gestures.
+      var hd = ix.hands[0], gesture = '';
+      if (hd) {
+        if (hd.fist) gesture = 'Closed_Fist';
+        else if (hd.pointing) gesture = 'Pointing_Up';
+        else if (hd.count >= 5) gesture = 'Open_Palm';
+      }
+      var want = gesture === 'Closed_Fist' ? 0.55 : gesture === 'Open_Palm' ? 1.45 : 1;
+      scale += (want - scale) * (1 - Math.exp(-dt / 0.3));
+      var R = Math.min(W, H) * 0.42 * scale, cx = W * 0.42, cy = H * 0.5;
+      if (model) {
+        var graph = (Math.round(params.view) || 0) === 0;
+        if (graph) layout(model, dt);
+        var thumb = Math.max(10, H * 0.035), pos = new Array(model.items.length);
+        if (graph) {
+          model.nodes.forEach(function (nd) {
+            var r0 = thumb * 0.7 * Math.sqrt(nd.members.length);
+            nd.members.forEach(function (q, j) {
+              var a = j / nd.members.length * Math.PI * 2 + t * 0.1;
+              if (!pos[q]) pos[q] = [cx + nd.x * R + Math.cos(a) * r0, cy + nd.y * R + Math.sin(a) * r0];
+            });
+          });
+          ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+          ctx.lineWidth = Math.max(1, 0.6 * u);
+          ctx.beginPath();
+          model.edges.forEach(function (e) { var a = model.nodes[e[0]], b = model.nodes[e[1]]; ctx.moveTo(cx + a.x * R, cy + a.y * R); ctx.lineTo(cx + b.x * R, cy + b.y * R); });
+          model.nodes.forEach(function (nd) { nd.members.forEach(function (q) { ctx.moveTo(cx + nd.x * R, cy + nd.y * R); ctx.lineTo(pos[q][0], pos[q][1]); }); });
+          ctx.stroke();
+        } else {
+          model.pca.forEach(function (p, q) { pos[q] = [cx + p[0] * R, cy + p[1] * R]; });
+        }
+        // Pointing selects the node (or image) nearest the fingertip.
+        if (gesture === 'Pointing_Up') {
+          var tip = hd.points[8], best = -1, bd = Infinity;
+          if (graph) model.nodes.forEach(function (nd, i) { var d = Math.hypot(cx + nd.x * R - tip.x, cy + nd.y * R - tip.y); if (d < bd) { bd = d; best = i; } });
+          else pos.forEach(function (p2, i) { if (p2) { var d = Math.hypot(p2[0] - tip.x, p2[1] - tip.y); if (d < bd) { bd = d; best = i; } } });
+          sel = best;
+        }
+        model.items.forEach(function (img, q) {
+          if (!pos[q]) return;
+          var w = thumb, h2 = thumb * img.height / img.width;
+          ctx.drawImage(img, pos[q][0] - w / 2, pos[q][1] - h2 / 2, w, h2);
+        });
+        hud.save();
+        hud.fillStyle = 'rgba(255,255,255,0.75)';
+        hud.font = '400 ' + Math.round(8 * u) + 'px ' + Magi.fx.MONO;
+        if (graph) model.nodes.forEach(function (nd, i) { hud.fillText('node ' + i + ' · ' + nd.members.length, cx + nd.x * R + 6 * u, cy + nd.y * R - 6 * u); });
+        hud.restore();
+        // The selection fanned out, larger.
+        if (sel >= 0) {
+          var members = graph ? (model.nodes[sel] || { members: [] }).members : [sel], big = H * 0.12;
+          var ax = graph ? cx + model.nodes[sel].x * R : pos[sel][0], ay = graph ? cy + model.nodes[sel].y * R : pos[sel][1];
+          ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(1, 1.2 * u);
+          ctx.beginPath(); ctx.arc(ax, ay, big * 0.35, 0, Math.PI * 2); ctx.stroke();
+          members.slice(0, 6).forEach(function (q, j) {
+            var img = model.items[q], bw = big, bh = big * img.height / img.width, dir = ax > W * 0.5 ? -1 : 1;
+            var x = Math.max(0, Math.min(W - bw, ax + dir * (big * 0.5 + j * bw * 0.55) - (dir < 0 ? bw : 0))), y = Math.max(0, Math.min(H - bh, ay - bh - big * 0.2 + j * 6 * u));
+            ctx.drawImage(img, x, y, bw, bh); ctx.strokeRect(x, y, bw, bh);
+          });
+        }
+      }
+      // The inset, with the hand's joints and the recognized gesture.
+      ctx.drawImage(cam, ix0, iy0, iw, ih);
+      ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 1; ctx.strokeRect(ix0 + 0.5, iy0 + 0.5, iw, ih);
+      if (hd) {
+        ctx.fillStyle = '#fff';
+        hd.points.forEach(function (q) { ctx.beginPath(); ctx.arc(ix0 + q.x / W * iw, iy0 + q.y / H * ih, Math.max(1.2, 1.6 * u), 0, Math.PI * 2); ctx.fill(); });
+        if (gesture) { hud.save(); hud.fillStyle = '#fff'; hud.font = '500 ' + Math.round(9 * u) + 'px ' + Magi.fx.MONO; hud.fillText(gesture, ix0 + 6 * u, iy0 + 14 * u); hud.restore(); }
+      }
+      hud.save();
+      hud.fillStyle = 'rgba(255,255,255,0.8)';
+      hud.font = '500 ' + Math.round(9 * u) + 'px ' + Magi.fx.MONO;
+      hud.fillText(((Math.round(params.view) || 0) === 0 ? 'MAPPER' : 'PCA') + ' · ' + (model ? model.items.length : 0) + ' IMAGES' + (params.feed ? '' : ' (CAMERA)'), W * 0.03, H * 0.95);
+      hud.restore();
+    };
+  };
 })();

@@ -1,7 +1,8 @@
 // Media library: images from a feed the user names, for effects that lay out a collection.
 //
 //   Magi.library.get(source) → { status: 'idle' | 'loading' | 'ready' | 'failed', items: [canvas],
-//                                 message }  (the same object fills in as images arrive)
+//                                 message }  (the same object fills in as images arrive). Each item
+//   canvas carries .meta, its feed entry (src, title, and `embedding`, an array, if the feed has one).
 //
 // A source is either
 //   - a JSON feed URL: { "items": [ { "src": "https://…" }, … ] }, or an array of URLs or of
@@ -27,17 +28,18 @@
         .then(function (r) { if (!r.ok) throw new Error('Are.na channel not found'); return r.json(); })
         .then(function (j) {
           return (j.contents || []).filter(function (b) { return b.image; }).map(function (b) {
-            return (b.image.display || b.image.large || b.image.thumb || b.image.original || {}).url;
-          }).filter(Boolean);
+            return { src: (b.image.display || b.image.large || b.image.thumb || b.image.original || {}).url, title: b.title || '' };
+          }).filter(function (it) { return it.src; });
         });
     }
     return fetch(src).then(function (r) { if (!r.ok) throw new Error('Feed not found'); return r.json(); }).then(function (j) {
       var items = Array.isArray(j) ? j : (j.items || []);
-      return items.map(function (it) { return typeof it === 'string' ? it : it && it.src; }).filter(Boolean);
+      return items.map(function (it) { return typeof it === 'string' ? { src: it } : it; }).filter(function (it) { return it && it.src; });
     });
   }
 
-  function thumb(url) {
+  function thumb(item) {
+    var url = item.src;
     return new Promise(function (resolve) {
       var img = new Image();
       img.crossOrigin = 'anonymous';
@@ -46,6 +48,7 @@
         var c = document.createElement('canvas');
         c.width = Math.max(1, Math.round(img.naturalWidth * k)); c.height = Math.max(1, Math.round(img.naturalHeight * k));
         c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+        c.meta = item; // the feed entry: src, title, and an embedding if the feed carries one
         resolve(c);
       };
       img.onerror = function () { resolve(null); };
@@ -62,6 +65,7 @@
       list(source).then(function (urls) {
         urls = urls.slice(0, MAX);
         if (!urls.length) { entry.status = 'failed'; entry.message = 'No images in that feed.'; return; }
+        entry.total = urls.length;
         var next = 0, done = 0;
         function work() {
           if (next >= urls.length) return Promise.resolve();

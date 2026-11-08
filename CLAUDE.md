@@ -21,7 +21,8 @@ Source of truth for scope is the PRD in `docs/`. This file guides implementation
 - `docs/` — PRD, design file and original guidance (v0.1 PDFs).
 - Data: `js/effects/color-names.js` is the xkcd color survey (949 names, CC0), extracted as text from matplotlib's `_color_data.py`.
 - External: Google Fonts (Inter and glyph faces) and MediaPipe Tasks Vision 0.10.14 from jsDelivr with models (hand, face, selfie segmenter) from storage.googleapis.com, plus image feeds the user names in an effect (`js/library.js`: a JSON feed or a public Are.na channel through api.are.na; images load with CORS or are skipped, so the canvas is never tainted). Nothing else.
-- `js/library.js` — `Magi.library.get(source)` returns `{ status, items: [thumbnail canvases], message }`, filling in as images arrive; cached per source for the session.
+- `js/library.js` — `Magi.library.get(source)` returns `{ status, items: [thumbnail canvases], message }`, filling in as images arrive; cached per source for the session. Each canvas carries `.meta`, its feed entry (with `embedding` when the feed has one).
+- `js/effects/landmark-modes.js` — Landmarks' Contour, Filaments and Attention modes (`Magi.landmarkModes`); `js/effects/font-editor.js` — the Font tile.
 
 To add an effect: add its entry in `config.js` with `ready: true`, create its renderer file, add a `<script>` tag in `index.html`.
 

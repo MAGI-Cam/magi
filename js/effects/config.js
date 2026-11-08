@@ -104,7 +104,8 @@ Magi.effectConfig = [
       { id: 'controller', name: 'Controller' },
       { id: 'link', name: 'Link' },
       { id: 'contour', name: 'Contour' },
-      { id: 'filaments', name: 'Filaments' }
+      { id: 'filaments', name: 'Filaments' },
+      { id: 'attention', name: 'Attention' }
     ],
     params: [
       { id: 'readouts', label: 'Readouts', type: 'toggle', default: true, modes: ['skeleton'], hint: 'Show which hand it is, the tracking score and rotation.' },
@@ -120,7 +121,9 @@ Magi.effectConfig = [
       { id: 'labels', label: 'Labels', type: 'toggle', default: true, modes: ['contour'], hint: 'Edge-strength readouts beside the points.' },
       { id: 'strands', label: 'Strands', min: 2, max: 14, step: 1, default: 7, modes: ['filaments'] },
       { id: 'glow', label: 'Glow', min: 0, max: 100, step: 1, default: 60, modes: ['filaments'] },
-      { id: 'dim', label: 'Dim', min: 0, max: 100, step: 1, default: 45, modes: ['filaments'] }
+      { id: 'dim', label: 'Dim', min: 0, max: 100, step: 1, default: 45, modes: ['filaments'] },
+      { id: 'view', label: 'View', min: 0, max: 1, step: 1, default: 0, modes: ['attention'] },
+      { id: 'feed', label: 'Feed', type: 'text', default: '', placeholder: 'Feed URL or Are.na channel', maxLength: 300, modes: ['attention'] }
     ]
   },
   {
@@ -546,7 +549,9 @@ Magi.effectGuides = {
     'Controller: rings swell as thumb and index open. Node map: your hand redrawn small, fingertips trailing smooth curves. Graph: the value held every quarter second, scrolling down as a staircase (hand 2 in gray, to the left).',
     'Link: two hands; a line joins your index fingertips with their distance at the green midpoint; the scope shows your fingertips around the palm.',
     'Contour: points gather on the outlines of your hands and arms (drawn where the picture’s edges are strongest). Style 0 Points with readouts, 1 Path (a nearest-neighbor tour through them), 2 Fill (that path as a flat lime shape). Pinch to step through the styles. Points: how many. Rate: how often they’re redrawn. Labels: the readouts.',
-    'Filaments: bundles of glowing strands strung along your bones, between fingertips and across both hands; they flex as you move, with bright pulses running along them. Strands: per bundle. Glow, Dim: light and background.'
+    'Filaments: bundles of glowing strands strung along your bones, between fingertips and across both hands; they flex as you move, with bright pulses running along them. Strands: per bundle. Glow, Dim: light and background.',
+    'Attention: your image library as a Mapper graph: images that look alike gather into nodes, and nodes that share images are linked. View 0 Graph, 1 PCA (each image by its two main directions of variation). Feed: a JSON feed or Are.na channel; images with an embedding in the feed are grouped by it, others by color. Without a feed, camera snapshots stand in.',
+    'Attention gestures: point (only the index up) to select the node under your fingertip and fan out its images; a fist pulls the graph in; an open palm spreads it out.'
   ],
   font: [
     'How it works: a letter traced from a typeface (marching squares), drawn as evenly spaced points inside an A–Z dial.',

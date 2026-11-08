@@ -18,7 +18,7 @@ Decisions from the planning questionnaire. Each item becomes a small release, te
 ## Effects
 
 - **A2 Card structures** (first library effect; done in release 39 as **Cards**): library images as 3D card stacks (ribbon, ring, lattice) with lime 3D text. Pinch-spread zooms and rotates; finger count switches the structure.
-- **A3 Attention graph** (Landmarks mode): a node graph of library thumbnails. A script run on the site computes image embeddings (CLIP) and the Mapper graph and writes them into the feed. MAGI only draws and navigates it: point to select, fist to pull in, open palm to spread out.
+- **A3 Attention graph** (Landmarks mode; built in release 45 as **Attention**, a Mapper graph grouped by color until the feed carries embeddings; the site-side embedding script is still to write): a node graph of library thumbnails. A script run on the site computes image embeddings (CLIP) and the Mapper graph and writes them into the feed. MAGI only draws and navigates it: point to select, fist to pull in, open palm to spread out.
 - **A1 Tracking boxes:** library images pop up inside thin red/green/blue boxes that cluster where things move (motion blobs from frame differencing). Later.
 - **A5 Font editor** (done in release 41; its own **Font** tile since release 42):
   - Glyph outlines come from fonts MAGI already loads, traced instead of parsed. A glyph is drawn on a hidden canvas, its contours are traced with marching squares and resampled evenly. Default face Bodoni Moda; Inter, Silkscreen and VT323 can be chosen in Advanced.
