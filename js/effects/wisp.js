@@ -20,6 +20,9 @@
 // offset D = C − x, one step is D(x) ← D(x − v·dt) − v·dt. The offset then relaxes toward zero
 // with the same half-life, so the video settles back; while you pinch it relaxes in 0.12 s and the
 // flow is damped, sucking the picture back to normal. The output is the live camera sampled at C.
+//
+// Watercolor mode: the same flow carries pigment instead of the picture, painted on paper (see the
+// deposit, bleed and paint shaders): an abstract painting made by moving through the air.
 (function () {
   var WRIST = 0, MIDDLE_MCP = 9;
   // Capsules that fill the palm, on top of MediaPipe's bone connections.
@@ -65,8 +68,49 @@
     // The image map: D(x) ← D(x − v·dt) − v·dt, then relaxed toward zero.
     warp: 'uniform sampler2D vel, map; uniform vec2 velTexel; uniform float dt, keep;\n' +
       'void main() { vec2 st = dt * texture(vel, uv).xy * velTexel; o = vec4((texture(map, uv - st).xy - st) * keep, 0.0, 1.0); }',
-    show: 'uniform sampler2D cam, map;\nvoid main() { o = vec4(texture(cam, clamp(uv + texture(map, uv).xy, 0.0, 1.0)).rgb, 1.0); }'
+    show: 'uniform sampler2D cam, map;\nvoid main() { o = vec4(texture(cam, clamp(uv + texture(map, uv).xy, 0.0, 1.0)).rgb, 1.0); }',
+    // Watercolor. Pigment is stored as optical density per channel, D = −ln(reflectance).
+    // Deposit: where a hand moves (the mask's activity), add the density of a palette color, up to
+    // a density of 2.2 per channel (about 11% reflectance, a full wash). The
+    // color drifts across the four palette colors by a slow noise of position and time, or is the
+    // camera's own color there (Camera profile).
+    deposit: 'uniform sampler2D pig, mask, cam; uniform vec3 c0, c1, c2, c3; uniform float amount, t, useCam;\n' +
+      'void main() { float a = texture(mask, uv).x; vec4 p = texture(pig, uv);\n' +
+      '  float n = fract(0.5 + 0.5 * sin(uv.x * 3.1 + t * 0.21) * cos(uv.y * 2.3 - t * 0.17) + 0.25 * sin((uv.x + uv.y) * 5.7 + t * 0.13)) * 4.0;\n' +
+      '  vec3 c = n < 1.0 ? mix(c0, c1, n) : n < 2.0 ? mix(c1, c2, n - 1.0) : n < 3.0 ? mix(c2, c3, n - 2.0) : mix(c3, c0, n - 3.0);\n' +
+      '  if (useCam > 0.5) c = texture(cam, uv).rgb;\n' +
+      '  vec3 dens = -log(clamp(c, 0.04, 0.98));\n' +
+      '  o = vec4(min(p.rgb + dens * a * amount, vec3(2.2)), 1.0); }',
+    // Wet bleed: a little diffusion each frame, mixing toward the neighbors' average.
+    bleed: 'uniform sampler2D pig; uniform float k;\n' +
+      'void main() { vec3 c = texture(pig, uv).rgb, m = 0.25 * (texture(pig, vL).rgb + texture(pig, vR).rgb + texture(pig, vT).rgb + texture(pig, vB).rgb);\n' +
+      '  o = vec4(mix(c, m, k), 1.0); }',
+    // Paper: reflectance = paper × e^(−D·edge·grain) (Beer–Lambert). Edge darkening: pigment
+    // collects where the wash's density changes fast (Curtis et al. 1997), so the density is
+    // raised by its gradient magnitude. Granulation: paper grain (two octaves of value noise)
+    // modulates how much pigment shows, more in the dense areas.
+    paint: 'uniform sampler2D pig; uniform vec2 size; uniform float edges;\n' +
+      'float h(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }\n' +
+      'float vn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);\n' +
+      '  return mix(mix(h(i), h(i + vec2(1, 0)), f.x), mix(h(i + vec2(0, 1)), h(i + vec2(1, 1)), f.x), f.y); }\n' +
+      'void main() { vec3 d = texture(pig, uv).rgb;\n' +
+      '  float s = d.r + d.g + d.b, g = abs(texture(pig, vR).r + texture(pig, vR).g + texture(pig, vR).b - (texture(pig, vL).r + texture(pig, vL).g + texture(pig, vL).b))\n' +
+      '    + abs(texture(pig, vT).r + texture(pig, vT).g + texture(pig, vT).b - (texture(pig, vB).r + texture(pig, vB).g + texture(pig, vB).b));\n' +
+      '  float grain = 0.6 * vn(uv * size / 3.0) + 0.4 * vn(uv * size / 1.2);\n' +
+      '  float k = (1.0 + edges * clamp(g * 6.0, 0.0, 1.5)) * (0.8 + 0.4 * grain);\n' +
+      '  vec3 paper = vec3(0.965, 0.95, 0.915) * (0.97 + 0.03 * grain);\n' +
+      '  o = vec4(paper * exp(-d * k), 1.0); }'
   };
+  // Watercolor profiles (Colors): 0 takes colors from the camera; the rest are four pigments each.
+  var PALETTES = [
+    null,
+    ['#8c1c13', '#e36414', '#5f0f40', '#f2a541'], // Rothko: cadmium red, orange, maroon, ochre
+    ['#003153', '#3f51b5', '#2a9d8f', '#1b1b3a'], // Indigo: Prussian blue, indigo, teal, ink
+    ['#507d2a', '#f4e04d', '#e07a9a', '#2a93d5'], // Spring: sap green, lemon, rose, cerulean
+    ['#c2185b', '#ff7f50', '#ffc300', '#6a4c93'], // Sunset: magenta, coral, gold, violet
+    ['#8a3324', '#826644', '#cb9d06', '#536878']  // Earth: burnt sienna, raw umber, yellow ochre, Payne's gray
+  ];
+  function hex(c) { return [parseInt(c.slice(1, 3), 16) / 255, parseInt(c.slice(3, 5), 16) / 255, parseInt(c.slice(5, 7), 16) / 255]; }
 
   function createWisp() {
     var canvas = document.createElement('canvas');
@@ -133,6 +177,7 @@
           gl.bindTexture(gl.TEXTURE_2D, v.tex || v);
           gl.uniform1i(l, unit++);
         } else if (typeof v === 'number') gl.uniform1f(l, v);
+        else if (v.length === 3) gl.uniform3f(l, v[0], v[1], v[2]);
         else gl.uniform2f(l, v[0], v[1]);
       });
       gl.bindFramebuffer(gl.FRAMEBUFFER, out ? out.fbo : null);
@@ -140,11 +185,11 @@
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     }
 
-    var W = 0, H = 0, sw, sh, vel, act, map, prs, div, curl, camTex, maskTex, mask, lastHands = null, prev = {}, lastT = null;
+    var W = 0, H = 0, sw, sh, vel, act, map, pig, prs, div, curl, camTex, maskTex, mask, lastHands = null, prev = {}, lastT = null;
     function alloc(w, h) {
       W = w; H = h;
       sw = Math.max(32, Math.round(w / 4)); sh = Math.max(32, Math.round(h / 4));
-      vel = pair(sw, sh); act = pair(sw, sh); map = pair(Math.round(w / 2), Math.round(h / 2));
+      vel = pair(sw, sh); act = pair(sw, sh); map = pair(Math.round(w / 2), Math.round(h / 2)); pig = pair(Math.round(w / 2), Math.round(h / 2));
       prs = pair(sw, sh); div = target(sw, sh); curl = target(sw, sh);
       camTex = texture(w, h, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE);
       maskTex = texture(sw, sh, gl.RGBA16F, gl.RGBA, gl.FLOAT);
@@ -236,9 +281,25 @@
         vel.swap();
         run('advect', { vel: vel.read, src: act.read, velTexel: vt, dt: dt, keep: keep }, act.write, vt);
         act.swap();
-        run('warp', { vel: vel.read, map: map.read, velTexel: vt, dt: dt, keep: keep }, map.write, [1 / map.read.w, 1 / map.read.h]);
-        map.swap();
-        run('show', { cam: camTex, map: map.read }, null, [1 / W, 1 / H]);
+        if (params.mode === 'watercolor') {
+          // Watercolor: deposit, carry with the flow, bleed, then paint on paper. The painting lasts
+          // (pigment half-life 2·2^(Trail/12) s, about 36 s at the middle); a pinch washes it out
+          // (0.4 s half-life).
+          var pt = [1 / pig.read.w, 1 / pig.read.h], pal = PALETTES[Math.round(params.colors)] || null;
+          var cs = pal ? pal.map(hex) : [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]];
+          run('deposit', { pig: pig.read, mask: maskTex, cam: camTex, c0: cs[0], c1: cs[1], c2: cs[2], c3: cs[3], amount: dt * 2.5, t: t, useCam: pal ? 0 : 1 }, pig.write, pt);
+          pig.swap();
+          var pkeep = Math.pow(2, -dt / (sucking ? 0.4 : 2 * Math.pow(2, params.trail / 12)));
+          run('advect', { vel: vel.read, src: pig.read, velTexel: vt, dt: dt, keep: pkeep }, pig.write, pt);
+          pig.swap();
+          run('bleed', { pig: pig.read, k: 0.12 }, pig.write, pt);
+          pig.swap();
+          run('paint', { pig: pig.read, size: [pig.read.w, pig.read.h], edges: params.edges / 100 * 2.5 }, null, pt);
+        } else {
+          run('warp', { vel: vel.read, map: map.read, velTexel: vt, dt: dt, keep: keep }, map.write, [1 / map.read.w, 1 / map.read.h]);
+          map.swap();
+          run('show', { cam: camTex, map: map.read }, null, [1 / W, 1 / H]);
+        }
         ctx.drawImage(canvas, 0, 0);
 
         if (tracker.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, tracker, 'hand');
@@ -246,7 +307,7 @@
       },
       reset: function () {
         if (!ok || !W) return;
-        [vel.read, vel.write, act.read, act.write, map.read, map.write, prs.read, prs.write].forEach(function (tg) {
+        [vel.read, vel.write, act.read, act.write, map.read, map.write, pig.read, pig.write, prs.read, prs.write].forEach(function (tg) {
           gl.bindFramebuffer(gl.FRAMEBUFFER, tg.fbo);
           gl.clearColor(0, 0, 0, 0);
           gl.clear(gl.COLOR_BUFFER_BIT);

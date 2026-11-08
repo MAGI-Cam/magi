@@ -186,11 +186,17 @@ Magi.effectConfig = [
     group: 'hand',
     ready: true,
     photoType: 'image/jpeg',
+    modes: [
+      { id: 'smoke', name: 'Smoke' },
+      { id: 'watercolor', name: 'Watercolor' }
+    ],
     params: [
       range('trail', 'Trail', 0, 100, 50),
       range('flow', 'Flow', 0, 100, 60),
       range('swirl', 'Swirl', 0, 100, 45),
-      range('rise', 'Rise', 0, 100, 30)
+      { id: 'rise', label: 'Rise', min: 0, max: 100, step: 1, default: 30, modes: ['smoke'] },
+      { id: 'colors', label: 'Colors', min: 0, max: 5, step: 1, default: 1, modes: ['watercolor'] },
+      { id: 'edges', label: 'Edges', min: 0, max: 100, step: 1, default: 50, modes: ['watercolor'] }
     ]
   },
   {
@@ -518,7 +524,9 @@ Magi.effectGuides = {
     'Move your fingers through the picture: the video itself swirls and drags like smoke where they pass, then settles. A still hand does nothing.',
     'Pinch: sucks the picture back to normal quickly.',
     'Trail: how long the swirl lasts. Flow: how strongly your motion drags the picture.',
-    'Swirl: extra curling where you’ve moved. Rise: how much the disturbance drifts upward, like smoke.'
+    'Swirl: extra curling where you’ve moved. Rise: how much the disturbance drifts upward, like smoke.',
+    'Watercolor (tap the tile): your fingers paint pigment that the same flow carries and bleeds, on paper. Colors mix like glazes and pool darker at their edges.',
+    'Colors: 0 takes colors from the camera; 1 Rothko, 2 Indigo, 3 Spring, 4 Sunset, 5 Earth. Edges: how much pigment pools at the edges. Trail: how long the painting lasts. Pinch: washes it away.'
   ],
   bubbles: [
     'Wave your fingers: faster fingers blow more bubbles.',
