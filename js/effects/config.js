@@ -136,8 +136,24 @@ Magi.effectConfig = [
       range('letter', 'Letter', 0, 25, 10),
       range('distortion', 'Distortion', 0, 100, 0),
       range('smoothness', 'Smoothness', 0, 100, 0),
-      range('face', 'Face', 0, 3, 0),
-      range('dim', 'Dim', 0, 100, 55)
+      range('face', 'Face', 0, 4, 0),
+      range('dim', 'Dim', 0, 100, 60)
+    ]
+  },
+  {
+    id: 'line-art',
+    name: 'Line Art',
+    group: 'hand',
+    ready: true,
+    photoType: 'image/jpeg',
+    params: [
+      range('thickness', 'Thickness', 0, 100, 15),
+      range('texture', 'Texture', 0, 100, 0),
+      range('spikiness', 'Spikiness', 0, 100, 30),
+      range('rate', 'Rate', 0, 100, 30),
+      range('points', 'Points', 40, 600, 220),
+      { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
+      range('dim', 'Dim', 0, 100, 0)
     ]
   },
   {
@@ -221,7 +237,7 @@ Magi.effectConfig = [
       range('flow', 'Flow', 0, 100, 60),
       range('swirl', 'Swirl', 0, 100, 45),
       { id: 'rise', label: 'Rise', min: 0, max: 100, step: 1, default: 30, modes: ['smoke'] },
-      { id: 'colors', label: 'Colors', min: 0, max: 5, step: 1, default: 1, modes: ['watercolor'] },
+      { id: 'colors', label: 'Colors', min: 0, max: 15, step: 1, default: 1, modes: ['watercolor'] },
       { id: 'edges', label: 'Edges', min: 0, max: 100, step: 1, default: 50, modes: ['watercolor'] },
       { id: 'dark', label: 'Dark', type: 'toggle', default: false, modes: ['watercolor'], hint: 'Paint on black paper instead of white.' }
     ]
@@ -553,11 +569,15 @@ Magi.effectGuides = {
     'Attention: your image library as a Mapper graph: images that look alike gather into nodes, and nodes that share images are linked. View 0 Graph, 1 PCA (each image by its two main directions of variation). Feed: a JSON feed or Are.na channel; images with an embedding in the feed are grouped by it, others by color. Without a feed, camera snapshots stand in.',
     'Attention gestures: point (only the index up) to select the node under your fingertip and fan out its images; a fist pulls the graph in; an open palm spreads it out.'
   ],
+  'line-art': [
+    'How it works: points gather on the outlines of your hands and arms (where the picture’s edges are strongest) and one continuous line runs through them, always to the nearest point, redrawn as you move.',
+    'Pinch: freezes the drawing until you let go.',
+    'Thickness: line width. Texture: a dry brush, broken and layered. Spikiness: 0 rounded curves, 50 straight lines, 100 sharp spikes. Rate: how often it redraws. Points: how many. Color: far left lime. Dim: darkens the camera.'
+  ],
   font: [
-    'How it works: a letter traced from a typeface (marching squares), drawn as evenly spaced points inside an A–Z dial.',
-    'Touch thumb and index, and turn your hand like a knob: picks the letter; the dial turns.',
-    'Thumb, index and middle: Distortion, the outline warped by a smooth field. All four fingers to the thumb: Smoothness, the outline rounded (Taubin smoothing). The sliders move with your hand.',
-    'Face: 0 Bodoni, 1 Inter, 2 Silkscreen, 3 VT323. Dim: darkens the camera behind the letter.'
+    'How it works: a letter traced from a typeface (marching squares), drawn as a dotted outline inside an A–Z dial, with an envelope around it.',
+    'Grip it like a knob and turn your hand. Thumb and index out (an L): picks the letter. Thumb, index and middle out: Distortion, the outline warped by a smooth field. All five out: Smoothness, the outline rounded (Taubin smoothing). The sliders move with your hand.',
+    'Face: 0 Literata, 1 Bodoni, 2 Inter, 3 Silkscreen, 4 VT323. Dim: darkens the camera behind the letter.'
   ],
   mosh: [
     'Spread thumb and index: the zone between them moshes; spreading wider makes it bigger.',
@@ -584,7 +604,7 @@ Magi.effectGuides = {
     'Trail: how long the swirl lasts. Flow: how strongly your motion drags the picture.',
     'Swirl: extra curling where you’ve moved. Rise: how much the disturbance drifts upward, like smoke.',
     'Watercolor (tap the tile): your fingers paint pigment that the same flow carries and bleeds, on paper. Colors mix like glazes and pool darker at their edges.',
-    'Colors: 0 takes colors from the camera; 1 Rothko, 2 Indigo, 3 Spring, 4 Sunset, 5 Earth. Edges: how much pigment pools at the edges. Dark: black paper instead of white. Trail: how long the painting lasts. Pinch: washes it away.'
+    'Colors: 0 takes colors from the camera; 1 Rothko, 2 Indigo, 3 Spring, 4 Sunset, 5 Earth, 6 Water Lilies, 7 Great Wave, 8 Gold Leaf, 9 Cutouts, 10 Stain, 11 Neon, 12 Ocean, 13 Forest, 14 Desert, 15 Sumi (the name shows on screen). Edges: how much pigment pools at the edges. Dark: black paper instead of white. Trail: how long the painting lasts. Pinch: washes it away.'
   ],
   bubbles: [
     'Wave your fingers: faster fingers blow more bubbles.',

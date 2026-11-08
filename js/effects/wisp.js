@@ -108,14 +108,25 @@
       '    o = vec4(mix(vec3(0.045, 0.045, 0.05) * (0.9 + 0.2 * grain), hue * 0.92, cover), 1.0);\n' +
       '  } else o = vec4(paper * exp(-d * k), 1.0); }'
   };
-  // Watercolor profiles (Colors): 0 takes colors from the camera; the rest are four pigments each.
+  // Watercolor profiles (Colors): 0 takes colors from the camera; the rest are four pigments each,
+  // after painters and places (names show on screen when you change it).
   var PALETTES = [
-    null,
-    ['#8c1c13', '#e36414', '#5f0f40', '#f2a541'], // Rothko: cadmium red, orange, maroon, ochre
-    ['#003153', '#3f51b5', '#2a9d8f', '#1b1b3a'], // Indigo: Prussian blue, indigo, teal, ink
-    ['#507d2a', '#f4e04d', '#e07a9a', '#2a93d5'], // Spring: sap green, lemon, rose, cerulean
-    ['#c2185b', '#ff7f50', '#ffc300', '#6a4c93'], // Sunset: magenta, coral, gold, violet
-    ['#8a3324', '#826644', '#cb9d06', '#536878']  // Earth: burnt sienna, raw umber, yellow ochre, Payne's gray
+    { name: 'Camera', c: null },
+    { name: 'Rothko', c: ['#8c1c13', '#e36414', '#5f0f40', '#f2a541'] },        // cadmium red, orange, maroon, ochre
+    { name: 'Indigo', c: ['#003153', '#3f51b5', '#2a9d8f', '#1b1b3a'] },        // Prussian blue, indigo, teal, ink
+    { name: 'Spring', c: ['#507d2a', '#f4e04d', '#e07a9a', '#2a93d5'] },        // sap green, lemon, rose, cerulean
+    { name: 'Sunset', c: ['#c2185b', '#ff7f50', '#ffc300', '#6a4c93'] },        // magenta, coral, gold, violet
+    { name: 'Earth', c: ['#8a3324', '#826644', '#cb9d06', '#536878'] },         // burnt sienna, raw umber, yellow ochre, Payne's gray
+    { name: 'Water Lilies', c: ['#7b9acc', '#b5a1d6', '#7fa37a', '#e8b4c8'] },  // soft blue, lilac, sage, pink
+    { name: 'Great Wave', c: ['#1f3a5f', '#6c8ebf', '#e9e2cf', '#2b2b2b'] },    // Prussian, pale blue, cream, sumi ink
+    { name: 'Gold Leaf', c: ['#b8860b', '#d4af37', '#2e8b57', '#8b1e3f'] },     // dark gold, gold, emerald, garnet
+    { name: 'Cutouts', c: ['#1d3fbb', '#e63b2e', '#f6c400', '#1f9e4a'] },       // cobalt, vermilion, cadmium yellow, green
+    { name: 'Stain', c: ['#f2a0a1', '#7fb7d9', '#e8c170', '#9e7bb5'] },         // poured pinks, sky, ochre, violet
+    { name: 'Neon', c: ['#ff1fa9', '#00e5ff', '#b6ff00', '#ffe600'] },         // magenta, cyan, lime, yellow
+    { name: 'Ocean', c: ['#023e8a', '#0096c7', '#48cae4', '#03045e'] },         // deep, mid, shallow, abyss
+    { name: 'Forest', c: ['#1b4332', '#40916c', '#95d5b2', '#6b4226'] },        // pine, leaf, mint, bark
+    { name: 'Desert', c: ['#c1440e', '#e9a03b', '#f2d0a4', '#7a4419'] },        // rust, sand, dune, umber
+    { name: 'Sumi', c: ['#111111', '#3a3a3a', '#6b5b4b', '#8c2f1c'] }           // ink, gray wash, sepia, seal red
   ];
   function hex(c) { return [parseInt(c.slice(1, 3), 16) / 255, parseInt(c.slice(3, 5), 16) / 255, parseInt(c.slice(5, 7), 16) / 255]; }
 
@@ -192,7 +203,7 @@
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     }
 
-    var W = 0, H = 0, sw, sh, vel, act, map, pig, prs, div, curl, camTex, maskTex, mask, lastHands = null, prev = {}, lastT = null;
+    var shownPalette = null, paletteAt = -9, W = 0, H = 0, sw, sh, vel, act, map, pig, prs, div, curl, camTex, maskTex, mask, lastHands = null, prev = {}, lastT = null;
     function alloc(w, h) {
       W = w; H = h;
       sw = Math.max(32, Math.round(w / 4)); sh = Math.max(32, Math.round(h / 4));
@@ -292,7 +303,9 @@
           // Watercolor: deposit, carry with the flow, bleed, then paint on paper. The painting lasts
           // (pigment half-life 2·2^(Trail/12) s, about 36 s at the middle); a pinch washes it out
           // (0.4 s half-life).
-          var pt = [1 / pig.read.w, 1 / pig.read.h], pal = PALETTES[Math.round(params.colors)] || null;
+          var pt = [1 / pig.read.w, 1 / pig.read.h], entry = PALETTES[Math.max(0, Math.min(PALETTES.length - 1, Math.round(params.colors)))], pal = entry.c;
+          // The palette's name shows for 2 s after it changes.
+          if (entry !== shownPalette) { shownPalette = entry; paletteAt = t; }
           var cs = pal ? pal.map(hex) : [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]];
           run('deposit', { pig: pig.read, mask: maskTex, cam: camTex, c0: cs[0], c1: cs[1], c2: cs[2], c3: cs[3], amount: dt * 2.5, t: t, useCam: pal ? 0 : 1 }, pig.write, pt);
           pig.swap();
@@ -301,6 +314,7 @@
           pig.swap();
           run('bleed', { pig: pig.read, k: 0.12 }, pig.write, pt);
           pig.swap();
+          if (t - paletteAt < 2) { var hud = frame.hud; hud.save(); hud.fillStyle = params.dark ? '#fff' : '#111'; hud.font = '500 ' + Math.round(11 * frame.pxPerCss) + 'px ' + Magi.fx.MONO; hud.fillText(entry.name.toUpperCase(), W * 0.04, H * 0.07); hud.restore(); }
           run('paint', { pig: pig.read, size: [pig.read.w, pig.read.h], edges: params.edges / 100 * 2.5, dark: params.dark ? 1 : 0 }, null, pt);
         } else {
           run('warp', { vel: vel.read, map: map.read, velTexel: vt, dt: dt, keep: keep }, map.write, [1 / map.read.w, 1 / map.read.h]);

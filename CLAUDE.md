@@ -1,6 +1,6 @@
 # Magi
 
-Minimalist effects tool library: apply a visual effect to live camera input or an uploaded photo/video, adjust it, capture, and save to the device. Tray: **Normal** (no effect), then parent tiles: **Halftone** (Bitmap, ASCII, Binary, XO), **Gesture** (**Hand Tracking**: Landmarks, Font, Mosh, Mosh 2.0, Pinch Frame, Wisp, Web, Bubbles, Claw, Fluid Cube, Accordion, Tutting, Chromatic, Tendrils, Cards; **Face Tracking**: Landmarks, Token Cry, Collage; **Body Tracking**: Glitch), **Facade** (Interactive, Electrokinetic, Quadtree). Groups live in `Magi.effectGroups` and nest with `parent`; an effect joins one with `group`. The tray shows one level at a time with a back row, and reopens at the last level you looked at.
+Minimalist effects tool library: apply a visual effect to live camera input or an uploaded photo/video, adjust it, capture, and save to the device. Tray: **Normal** (no effect), then parent tiles: **Halftone** (Bitmap, ASCII, Binary, XO), **Gesture** (**Hand Tracking**: Landmarks, Font, Line Art, Mosh, Mosh 2.0, Pinch Frame, Wisp, Web, Bubbles, Claw, Fluid Cube, Accordion, Tutting, Chromatic, Tendrils, Cards; **Face Tracking**: Landmarks, Token Cry, Collage; **Body Tracking**: Glitch), **Facade** (Interactive, Electrokinetic, Quadtree). Groups live in `Magi.effectGroups` and nest with `parent`; an effect joins one with `group`. The tray shows one level at a time with a back row, and reopens at the last level you looked at.
 
 Source of truth for scope is the PRD in `docs/`. This file guides implementation. Both are starting points; update them when prototyping proves a better direction.
 
@@ -22,7 +22,7 @@ Source of truth for scope is the PRD in `docs/`. This file guides implementation
 - Data: `js/effects/color-names.js` is the xkcd color survey (949 names, CC0), extracted as text from matplotlib's `_color_data.py`.
 - External: Google Fonts (Inter and glyph faces) and MediaPipe Tasks Vision 0.10.14 from jsDelivr with models (hand, face, selfie segmenter) from storage.googleapis.com, plus image feeds the user names in an effect (`js/library.js`: a JSON feed or a public Are.na channel through api.are.na; images load with CORS or are skipped, so the canvas is never tainted). Nothing else.
 - `js/library.js` — `Magi.library.get(source)` returns `{ status, items: [thumbnail canvases], message }`, filling in as images arrive; cached per source for the session. Each canvas carries `.meta`, its feed entry (with `embedding` when the feed has one).
-- `js/effects/landmark-modes.js` — Landmarks' Contour, Filaments and Attention modes (`Magi.landmarkModes`); `js/effects/font-editor.js` — the Font tile.
+- `js/effects/landmark-modes.js` — Landmarks' Contour, Filaments and Attention modes (`Magi.landmarkModes`), plus `Magi.contourSampler` and `Magi.nearestTour`, shared with Line Art; `js/effects/font-editor.js` — the Font tile.
 
 To add an effect: add its entry in `config.js` with `ready: true`, create its renderer file, add a `<script>` tag in `index.html`.
 
