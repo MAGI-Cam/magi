@@ -38,6 +38,8 @@
 //             the set bits; Solid fills the area with that color instead of code.
 //   Blur    — the L-hand window shows the camera blurred (24-sample golden-angle disc); Frosted
 //             adds frosted glass's random micro-facet offsets, haze and grain.
+//             Mosaic samples each pixel's blur around the center of its cell (up to 8% of the
+//             frame height), so the window becomes glass blocks, each blurred as one.
 (function () {
   var THUMB_TIP = 4, INDEX_TIP = 8;
   var THERMAL = [[0, 0, 4], [40, 11, 84], [101, 21, 110], [159, 42, 99], [212, 72, 66], [245, 125, 21], [250, 193, 39], [252, 255, 164]];
@@ -118,7 +120,8 @@
       }
       var fd = fImg.data, bd = bImg.data;
       var grain = params.grain / 100, shift = Math.round(params.shift / 100 * 6);
-      var cell = 3 + params.dots * 1.5, mx = Math.round(tw * MARGIN), my = Math.round(th * MARGIN);
+      var margin = params.border === false ? 0 : MARGIN;
+      var cell = 3 + params.dots * 1.5, mx = Math.round(tw * margin), my = Math.round(th * margin);
       for (y = 0; y < th; y++) {
         for (x = 0; x < tw; x++) {
           i = y * tw + x;
@@ -159,7 +162,7 @@
       bctx.putImageData(bImg, 0, 0);
     }
 
-    return function (frame, ctx, hands, params) {
+    return function (frame, ctx, hands, params, outline) {
       var W = frame.width, H = frame.height;
       // Left hand (on screen) first.
       var hs = hands.slice(0, 2).sort(function (a, b) { return (a[INDEX_TIP].x + a[THUMB_TIP].x) - (b[INDEX_TIP].x + b[THUMB_TIP].x); });
@@ -190,6 +193,8 @@
         var area = (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y);
         drawTriangle(ctx, area >= 0 ? front : back, T[tri[0]], T[tri[1]], T[tri[2]], a, b, c);
       });
+      // Outline: the sheet's edges and its fold, the P0–P2 diagonal.
+      outline.push(pts, [P0, P2]);
     };
   }
 
@@ -211,11 +216,11 @@
 
     // One ink plate: coverage from luma (shadows, a midtone band, or most tones), screened against
     // static grain; transparent where there's no ink.
-    function plate(t, layer, tw, th, grain) {
+    function plate(t, layer, tw, th, grain, border) {
       var d = sctx.getImageData(0, 0, tw, th).data, img = t.g.createImageData(tw, th), o = img.data;
       var lo = 1, hi = 0, i, L;
       for (i = 0; i < tw * th; i++) { L = (0.2126 * d[i * 4] + 0.7152 * d[i * 4 + 1] + 0.0722 * d[i * 4 + 2]) / 255; if (L < lo) lo = L; if (L > hi) hi = L; }
-      var span = Math.max(0.15, hi - lo), margin = Math.round(tw * 0.03);
+      var span = Math.max(0.15, hi - lo), margin = border ? Math.round(tw * 0.03) : 0;
       for (var y = 0; y < th; y++) {
         for (var x = 0; x < tw; x++) {
           i = y * tw + x;
@@ -229,7 +234,7 @@
       t.g.putImageData(img, 0, 0);
     }
 
-    return function (frame, ctx, ix, params) {
+    return function (frame, ctx, ix, params, outline) {
       var pair = ix.pair;
       if (!pair) return false;
       var Lh = pair.left.points, Rh = pair.right.points, W = frame.width, H = frame.height;
@@ -249,7 +254,7 @@
         sctx.setTransform(tw / sh.bw, 0, 0, th / sh.bh, -sh.x0 * tw / sh.bw, -sh.y0 * th / sh.bh);
         frame.draw(sctx, W, H);
         sctx.setTransform(1, 0, 0, 1, 0, 0);
-        plate(sh.t, sh.layer, tw, th, grain);
+        plate(sh.t, sh.layer, tw, th, grain, params.border !== false);
         sh.tw = tw; sh.th = th;
       });
       function quad(sh, img) {
@@ -267,6 +272,7 @@
       ctx.globalCompositeOperation = 'multiply';
       sheets.forEach(function (sh) { quad(sh, sh.t.c); });
       ctx.restore();
+      sheets.forEach(function (sh) { outline.push(sh.pts); });
       return true;
     };
   }
@@ -405,11 +411,12 @@
     'precision highp float;',
     'uniform sampler2D cam;',
     'uniform vec2 size;',
-    'uniform float radius, frost, seed;',
+    'uniform float radius, frost, seed, cell;',
     'varying vec2 uv;',
     'float hash(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }',
     'void main() {',
     '  vec2 px = uv * size;',
+    '  if (cell > 1.0) px = (floor(px / cell) + 0.5) * cell;',
     '  if (frost > 0.5) px += (vec2(hash(floor(px)), hash(floor(px) + 17.0)) - 0.5) * 1.2 * radius;',
     '  vec3 sum = vec3(0.0); float wsum = 0.0;',
     '  for (int i = 0; i < 24; i++) {',
@@ -456,13 +463,13 @@
         frame.draw(ctx, W, H);
         var tracker = Magi.tracking.hands, hands = tracker.detect(frame);
 
-        var drewCode = false, windowPts = null;
+        var drewCode = false, windowPts = null, outline = [];
         if (params.mode === 'print' && params.sheets >= 2) {
-          drewCode = (drawLayers || (drawLayers = createLayers()))(frame, ctx, Magi.interaction.read(frame), params) !== false;
+          drewCode = (drawLayers || (drawLayers = createLayers()))(frame, ctx, Magi.interaction.read(frame), params, outline) !== false;
         } else if (params.mode === 'code') {
           drewCode = (drawCode || (drawCode = createCode()))(frame, ctx, Magi.interaction.read(frame), params) !== false;
         } else if (hands.length >= 2 && params.mode === 'print') {
-          (drawPrint || (drawPrint = createPrint()))(frame, ctx, hands, params);
+          (drawPrint || (drawPrint = createPrint()))(frame, ctx, hands, params, outline);
         } else if (hands.length >= 2) {
           var pts = [hands[0][THUMB_TIP], hands[0][INDEX_TIP], hands[1][INDEX_TIP], hands[1][THUMB_TIP]];
           var cx = 0, cy = 0;
@@ -479,7 +486,7 @@
             if (blurPass === undefined) blurPass = Magi.fx.shaderPass(BLUR_FRAG, ['cam']);
             if (blurPass) {
               blurPass.texture('cam', out);
-              blurPass.run(W, H, { size: [W, H], radius: (2 + params.blur / 100 * 30) * Math.max(W, H) / 1280, frost: params.frost ? 1 : 0, seed: frame.time % 1000 });
+              blurPass.run(W, H, { size: [W, H], radius: (2 + params.blur / 100 * 30) * Math.max(W, H) / 1280, frost: params.frost ? 1 : 0, seed: frame.time % 1000, cell: params.mosaic / 100 * 0.08 * H });
               ctx.save();
               ctx.beginPath();
               pts.forEach(function (p, k) { k ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y); });
@@ -514,15 +521,18 @@
           }
         }
 
-        // Line: a crisp outline around the filter window.
-        if (params.line && windowPts && ['acid', 'thermal', 'invert', 'blur'].indexOf(params.mode || 'acid') >= 0) {
+        // Line: a crisp outline around the filter window, or around each print sheet (and its fold).
+        if (windowPts) outline.push(windowPts);
+        if (params.line && outline.length && ['acid', 'thermal', 'invert', 'blur', 'print'].indexOf(params.mode || 'acid') >= 0) {
           ctx.save();
-          ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+          ctx.strokeStyle = params.mode === 'print' ? 'rgba(20,20,20,0.9)' : 'rgba(255,255,255,0.95)';
           ctx.lineWidth = Math.max(1, 1.25 * u);
           ctx.lineJoin = 'miter';
           ctx.beginPath();
-          windowPts.forEach(function (p, k) { k ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y); });
-          ctx.closePath();
+          outline.forEach(function (poly) {
+            poly.forEach(function (p, k) { k ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y); });
+            if (poly.length > 2) ctx.closePath();
+          });
           ctx.stroke();
           ctx.restore();
         }

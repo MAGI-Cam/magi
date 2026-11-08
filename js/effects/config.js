@@ -162,8 +162,10 @@ Magi.effectConfig = [
       { id: 'bands', label: 'Bands', min: 1, max: 12, step: 1, default: 1, modes: ['acid', 'thermal'] },
       { id: 'blur', label: 'Blur', min: 0, max: 100, step: 1, default: 40, modes: ['blur'] },
       { id: 'frost', label: 'Frosted', type: 'toggle', default: false, modes: ['blur'], hint: 'Frosted glass: scattered, hazy and grainy.' },
+      { id: 'mosaic', label: 'Mosaic', min: 0, max: 100, step: 1, default: 0, modes: ['blur'] },
       { id: 'speed', label: 'Speed', min: 0, max: 100, step: 1, default: 30, modes: ['acid', 'thermal'] },
-      { id: 'line', label: 'Line', type: 'toggle', default: false, modes: ['acid', 'thermal', 'invert', 'blur'], hint: 'A crisp outline around the window.' },
+      { id: 'line', label: 'Line', type: 'toggle', default: false, modes: ['acid', 'thermal', 'invert', 'blur', 'print'], hint: 'A crisp outline around the window, or around each sheet and its fold.' },
+      { id: 'border', label: 'Border', type: 'toggle', default: true, modes: ['print'], hint: 'A white paper margin around the print. Off: full bleed.' },
       { id: 'sheets', label: 'Sheets', min: 1, max: 4, step: 1, default: 1, modes: ['print'] },
       { id: 'dots', label: 'Dots', min: 1, max: 9, step: 1, default: 4, modes: ['print'] },
       { id: 'grain', label: 'Grain', min: 0, max: 100, step: 1, default: 60, modes: ['print'] },
@@ -376,7 +378,8 @@ Magi.effectConfig = [
       range('posX', 'X', -100, 100, 0),
       range('posY', 'Y', -100, 100, 0),
       toggle('sphere', 'Sphere', true, 'Show the wireframe sphere on your palm.'),
-      toggle('mono', 'Mono', true, 'Gray camera with film grain.')
+      range('mosaic', 'Mosaic', 0, 100, 35),
+      range('mono', 'Mono', 0, 100, 100)
     ]
   },
   {
@@ -497,11 +500,11 @@ Magi.effectGuides = {
   ],
   'pinch-frame': [
     'Acid, Thermal, Invert, Blur: make an L with thumb and index on both hands; the window between them changes. Bands and Speed shape Acid and Thermal.',
-    'Blur: how soft the window is. Frosted: frosted glass, scattered, hazy and grainy.',
-    'Line: a crisp outline around the filter window.',
+    'Blur: how soft the window is. Frosted: frosted glass, scattered, hazy and grainy. Mosaic: cuts the window into glass blocks, each blurred on its own.',
+    'Line: a crisp outline around the filter window, or around each print sheet and its fold.',
     'Print: hold a sheet by its corners, index fingers on top, thumbs below. Twist to fold it; a side that turns over shows its back.',
     'Sheets: 1 is the folding print. 2–4 give each finger its own sheet (index, middle, ring, pinky), in overprinting riso inks.',
-    'Dots, Grain, Shift: halftone size, riso grain, ink misregistration.',
+    'Dots, Grain, Shift: halftone size, riso grain, ink misregistration. Border: the white paper margin (off: full bleed).',
     'Code: pinch with both hands to span a box, read out as 1-bit code. Cells: block size. Color: ink.',
     'Lock: on, corners stay where you let go; a fist frees that hand’s corner until your next pinch. Off: the box follows your pinches.',
     'Outside: codes everything outside the box instead. Solid: fills the area with one flat color.',
@@ -564,7 +567,7 @@ Magi.effectGuides = {
     'Face the camera and raise a hand: snapshots of your eyes, mouth and nose pile onto a sphere around your head. The source box stays on your right eye. Lower your hand and they fly back.',
     'Pinch: sphere size. Spread fingers: spacing between copies.',
     'Orbit: palm square to the camera, nothing turns; turn your hand and hold, and the sphere keeps turning that way.',
-    'Rate, Count, Size: how fast, how many, how big. Sphere: shows the wireframe sphere on your palm; X, Y move it from your hand. Mono: gray with grain.'
+    'Rate, Count, Size: how fast, how many, how big. Sphere: shows the wireframe sphere on your palm; X, Y move it from your hand. Mosaic: the camera behind in flat blocks (snapshots stay sharp). Mono: how gray, with film grain.'
   ],
   glitch: [
     'Your body glitches inside its outline. A fist stops the glitch; a pinch freezes it until you let go; a swipe bursts.',

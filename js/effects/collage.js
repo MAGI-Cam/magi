@@ -15,7 +15,8 @@
 // way, faster the further you turn (the knuckle line's angle in depth spins it about the
 // vertical axis, the palm's tilt about the horizontal one, past a 12° dead zone, eased over 0.3 s).
 // A wireframe sphere on the palm (Sphere switch; X and Y move it relative to the hand) shows the
-// readings. The camera is turned gray with film grain (a WebGL pass; canvas fallback).
+// readings. The camera behind is turned gray with film grain (Mono) and cut into flat blocks
+// (Mosaic) in one WebGL pass (canvas fallback); snapshots come from the clean camera.
 (function () {
   var GREEN = 'rgb(80,255,90)';
 
@@ -28,18 +29,25 @@
     return [r * Math.cos(phi), y, r * Math.sin(phi)];
   }
 
-  // Gray and grain in one GPU pass: Rec. 709 luma plus ±9% of per-pixel noise that changes every
-  // frame, like film grain. (The canvas fallback blends with gray, then overlays a noise tile.)
+  // Mosaic, gray and grain in one GPU pass. Mosaic: each pixel samples the center of its cell
+  // (cell = Mosaic × 6% of the frame height), the camera as a coarse grid of flat blocks. Mono:
+  // a mix toward Rec. 709 luma by the Mono amount, plus up to ±9% of per-pixel noise that changes
+  // every frame, like film grain, scaled the same. (The canvas fallback scales down and up with
+  // smoothing off for the mosaic, blends with gray, then overlays a noise tile.)
   var MONO_FRAG = [
     'precision highp float;',
     'uniform sampler2D cam;',
-    'uniform float seed;',
+    'uniform vec2 size;',
+    'uniform float seed, cell, mono;',
     'varying vec2 uv;',
     'float hash(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }',
     'void main() {',
-    '  float l = dot(texture2D(cam, uv).rgb, vec3(0.2126, 0.7152, 0.0722));',
-    '  l += (hash(gl_FragCoord.xy + seed) - 0.5) * 0.18;',
-    '  gl_FragColor = vec4(vec3(clamp(l, 0.0, 1.0)), 1.0);',
+    '  vec2 px = uv * size;',
+    '  if (cell > 1.0) px = (floor(px / cell) + 0.5) * cell;',
+    '  vec3 c = texture2D(cam, clamp(px / size, 0.0, 1.0)).rgb;',
+    '  float l = dot(c, vec3(0.2126, 0.7152, 0.0722));',
+    '  c = mix(c, vec3(l), mono) + (hash(gl_FragCoord.xy + seed) - 0.5) * 0.18 * mono;',
+    '  gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);',
     '}'
   ].join('\n');
 
@@ -77,7 +85,7 @@
   function createCollage() {
     var tiles = [], count = 0, lastSpawn = 0, lastT = null, featureIndex = 0, grain = null, collapsing = false;
     var size = 1, spin = 0, spinV = 0, tip = 0, tipV = 0, gap = 1; // eased hand readings
-    var monoPass;
+    var monoPass, cam = document.createElement('canvas'), small = document.createElement('canvas');
 
     function sphere(ctx, c, R, yaw, roll, u) {
       var cr = Math.cos(roll), sr = Math.sin(roll), cy = Math.cos(yaw), sy = Math.sin(yaw);
@@ -117,24 +125,38 @@
         var W = frame.width, H = frame.height, u = frame.pxPerCss;
         if (out.width !== W || out.height !== H) { out.width = W; out.height = H; }
         var ctx = out.getContext('2d');
-        frame.draw(ctx, W, H);
+        // The clean camera, kept for snapshots; the background gets mosaic and mono.
+        if (cam.width !== W || cam.height !== H) { cam.width = W; cam.height = H; }
+        frame.draw(cam.getContext('2d'), W, H);
+        ctx.drawImage(cam, 0, 0);
         var t = frame.time / 1000;
+        var monoAmt = (params.mono === true ? 100 : +params.mono || 0) / 100, cell = params.mosaic / 100 * 0.06 * H;
         var dt = lastT === null ? 1 / 30 : Math.max(1 / 120, Math.min(0.1, t - lastT));
         lastT = t;
 
-        if (params.mono && monoPass === undefined) monoPass = Magi.fx.shaderPass(MONO_FRAG, ['cam']);
-        if (params.mono && monoPass) {
-          monoPass.texture('cam', out);
-          monoPass.run(W, H, { seed: Math.random() * 1000 });
+        var treat = monoAmt > 0 || cell > 1;
+        if (treat && monoPass === undefined) monoPass = Magi.fx.shaderPass(MONO_FRAG, ['cam']);
+        if (treat && monoPass) {
+          monoPass.texture('cam', cam);
+          monoPass.run(W, H, { size: [W, H], seed: Math.random() * 1000, cell: cell, mono: monoAmt });
           ctx.drawImage(monoPass.canvas, 0, 0);
-        } else if (params.mono) {
+        } else if (treat) {
           ctx.save();
+          if (cell > 1) {
+            var mw = Math.max(1, Math.round(W / cell)), mh = Math.max(1, Math.round(H / cell));
+            if (small.width !== mw || small.height !== mh) { small.width = mw; small.height = mh; }
+            small.getContext('2d').drawImage(cam, 0, 0, mw, mh);
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(small, 0, 0, W, H);
+            ctx.imageSmoothingEnabled = true;
+          }
           ctx.globalCompositeOperation = 'saturation'; // keep luminosity, take gray's zero saturation
+          ctx.globalAlpha = monoAmt;
           ctx.fillStyle = '#808080';
           ctx.fillRect(0, 0, W, H);
           if (!grain) grain = ctx.createPattern(noiseCanvas(), 'repeat');
           ctx.globalCompositeOperation = 'overlay';
-          ctx.globalAlpha = 0.22;
+          ctx.globalAlpha = 0.22 * monoAmt;
           var ox = Math.random() * 160, oy = Math.random() * 160;
           ctx.translate(-ox, -oy);
           ctx.fillStyle = grain;
@@ -193,7 +215,17 @@
           var sw = src.w, sh = sw * 0.62;
           var snap = document.createElement('canvas');
           snap.width = tw; snap.height = th;
-          snap.getContext('2d').drawImage(out, src.c.x - sw / 2, src.c.y - sh / 2, sw, sh, 0, 0, tw, th);
+          var sctx = snap.getContext('2d');
+          sctx.drawImage(cam, src.c.x - sw / 2, src.c.y - sh / 2, sw, sh, 0, 0, tw, th);
+          if (monoAmt > 0) {
+            // The same mono and grain as the background, on the small snapshot.
+            var im = sctx.getImageData(0, 0, tw, th), dd = im.data;
+            for (var q = 0; q < dd.length; q += 4) {
+              var lum = 0.2126 * dd[q] + 0.7152 * dd[q + 1] + 0.0722 * dd[q + 2], gr = (Math.random() - 0.5) * 46 * monoAmt;
+              dd[q] += (lum - dd[q]) * monoAmt + gr; dd[q + 1] += (lum - dd[q + 1]) * monoAmt + gr; dd[q + 2] += (lum - dd[q + 2]) * monoAmt + gr;
+            }
+            sctx.putImageData(im, 0, 0);
+          }
           tiles.push({ img: snap, w: tw, h: th, x: src.c.x, y: src.c.y, s: 0.3, z: 0, alpha: 1, slot: count, n: count });
           count++;
           featureIndex++;
