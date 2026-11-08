@@ -157,7 +157,6 @@ Magi.effectConfig = [
       { id: 'print', name: 'Print' },
       { id: 'prism', name: 'Prism' },
       { id: 'triangle', name: 'Triangle' },
-      { id: 'mosaic', name: 'Mosaic' },
       { id: 'code', name: 'Code' }
     ],
     // `modes` on a parameter shows it only in those modes.
@@ -167,15 +166,12 @@ Magi.effectConfig = [
       { id: 'frost', label: 'Frosted', type: 'toggle', default: false, modes: ['blur'], hint: 'Frosted glass: scattered, hazy and grainy.' },
       { id: 'mosaic', label: 'Mosaic', min: 0, max: 100, step: 1, default: 0, modes: ['blur'] },
       { id: 'speed', label: 'Speed', min: 0, max: 100, step: 1, default: 30, modes: ['acid', 'thermal'] },
-      { id: 'line', label: 'Line', type: 'toggle', default: false, modes: ['acid', 'thermal', 'invert', 'blur', 'print', 'prism', 'triangle', 'mosaic'], hint: 'A crisp outline around the window, or around each sheet, face and fold.' },
+      { id: 'line', label: 'Line', type: 'toggle', default: false, modes: ['acid', 'thermal', 'invert', 'blur', 'print', 'prism', 'triangle'], hint: 'A crisp outline around the window, or around each sheet, face and fold.' },
       { id: 'border', label: 'Border', type: 'toggle', default: true, modes: ['print'], hint: 'A white paper margin around the print. Off: full bleed.' },
-      { id: 'sheets', label: 'Sheets', min: 1, max: 4, step: 1, default: 1, modes: ['print'] },
+      { id: 'sheets', label: 'Sheets', min: 1, max: 4, step: 1, default: 1, modes: ['print', 'prism', 'triangle'] },
       { id: 'dots', label: 'Dots', min: 1, max: 9, step: 1, default: 4, modes: ['print', 'prism', 'triangle'] },
       { id: 'grain', label: 'Grain', min: 0, max: 100, step: 1, default: 60, modes: ['print', 'prism', 'triangle'] },
-      { id: 'slices', label: 'Slices', min: 4, max: 64, step: 1, default: 24, modes: ['mosaic'] },
-      { id: 'shift', label: 'Shift', min: 0, max: 100, step: 1, default: 35, modes: ['print', 'mosaic'] },
-      { id: 'mix', label: 'Mix', min: 0, max: 100, step: 1, default: 30, modes: ['mosaic'] },
-      { id: 'silhouette', label: 'Silhouette', min: 0, max: 100, step: 1, default: 50, modes: ['mosaic'] },
+      { id: 'shift', label: 'Shift', min: 0, max: 100, step: 1, default: 35, modes: ['print'] },
       { id: 'cells', label: 'Cells', min: 1, max: 9, step: 1, default: 3, modes: ['code'] },
       { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue', modes: ['code'] },
       { id: 'lock', label: 'Lock', type: 'toggle', default: true, modes: ['code'], hint: 'On: corners stay where you let go of them; a fist frees that hand’s corner. Off: the box follows your pinches.' },
@@ -416,7 +412,7 @@ Magi.effectConfig = [
     name: 'Interactive',
     group: 'facade',
     ready: true,
-    params: facadeParams(true, 13, 9).concat(tintParams(0))
+    params: facadeParams(true, 13, 9).concat([range('opacity', 'Opacity', 0, 100, 100)], tintParams(0))
   },
   {
     id: 'facade-electrokinetic',
@@ -511,9 +507,8 @@ Magi.effectGuides = {
     'Print: hold a sheet by its corners, index fingers on top, thumbs below. Twist to fold it; a side that turns over shows its back.',
     'Sheets: 1 is the folding print. 2–4 give each finger its own sheet (index, middle, ring, pinky), in overprinting riso inks.',
     'Dots, Grain, Shift: halftone size, riso grain, ink misregistration. Border: the white paper margin (off: full bleed).',
-    'Prism: hold the paper by its corners, index fingers on top, thumbs below; it folds into four facets (blue stipple, green/yellow, pink stipple, red dots). Open thumb and index to deepen the fold.',
-    'Triangle: a three-sided paper prism between your hands; roll your hands to turn it. Dots, Grain: halftone size and riso grain on the faces.',
-    'Mosaic: the L-hand window cut into vertical slices that drift up and down. Pinch to snap the window onto a stack behind it, like album covers. Slices: how many. Shift: how far they drift. Mix: share of slices showing the snapped layer. Silhouette: your body as a flat lime layer.',
+    'Prism: hold the paper by its corners, fingertips on top, thumbs below; it folds into four facets (blue stipple, green/yellow, pink stipple, red dots). Open thumb and index to deepen the fold. Sheets: 1–4 papers, one per finger (index, middle, ring, pinky).',
+    'Triangle: a three-sided paper prism between your hands; roll your hands to turn it. Sheets: 1–4 prisms, one per finger, fanned. Dots, Grain: halftone size and riso grain on the faces.',
     'Code: pinch with both hands to span a box, read out as 1-bit code. Cells: block size. Color: ink.',
     'Lock: on, corners stay where you let go; a fist frees that hand’s corner until your next pinch. Off: the box follows your pinches.',
     'Outside: codes everything outside the box instead. Solid: fills the area with one flat color.',
@@ -588,7 +583,7 @@ Magi.effectGuides = {
   'facade-interactive': [
     'How it works: the camera is the sun behind a building skin; louvers turn face-on where something moves.',
     'Scale: module size. Response, Speed: how strongly and how fast modules react.',
-    'Shade: close against light (on) or open to it (off). Saturation, Color: louver tint.'
+    'Shade: close against light (on) or open to it (off). Opacity: how solid the louvers are over the camera. Saturation, Color: louver tint.'
   ],
   'facade-electrokinetic': [
     'How it works: pixel glazing; colored particles spread over each cell in proportion to the light behind it. Tap the tile to change shape.',

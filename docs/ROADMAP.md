@@ -29,4 +29,3 @@ Decisions from the planning questionnaire. Each item becomes a small release, te
   - Pure black and white by Otsu's threshold.
   - The mouth-and-jaw block from the face mesh slides out of place in jumps.
   - A mirrored ripple band runs through the body below it.
-  - Shares slice and block displacement with Pinch Frame Mosaic.

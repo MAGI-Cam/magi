@@ -134,6 +134,8 @@
           }
           ctx.save();
           frame.draw(ctx, w, h);
+          // Opacity (where an effect has it): the modules fade over the camera.
+          if (params.opacity !== undefined) ctx.globalAlpha = params.opacity / 100;
           for (var j = 0; j < modules.length; j++) spec.draw(ctx, modules[j], state[j], signal, params);
           ctx.restore();
         },
