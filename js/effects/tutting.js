@@ -112,9 +112,11 @@
           }
           var depth = 0.15 + (params.depth / 100) * 0.85, fan = params.fan / 100, drift = (params.drift / 100) * 0.06;
           var base = Math.min(W, H) * 0.012 + (params.size / 100) * Math.min(W, H) * 0.05;
+          var pack = 1 - (params.squish || 0) / 100 * 0.85;
           var placed = tiles.map(function (q) {
-            var x = Math.max(-1, Math.min(1, q.x + Math.sin(t * q.rate + q.ph) * drift));
-            var y = Math.max(-1, Math.min(1, q.y + Math.cos(t * q.rate * 0.8 + q.ph) * drift)), z = q.z;
+            // Squish packs the tiles toward the middle of the volume (positions × 1 − 0.85·Squish).
+            var x = Math.max(-1, Math.min(1, q.x + Math.sin(t * q.rate + q.ph) * drift)) * pack;
+            var y = Math.max(-1, Math.min(1, q.y + Math.cos(t * q.rate * 0.8 + q.ph) * drift)) * pack, z = q.z * pack;
             // A turning half rotates about the horizontal axis, its front going down.
             turns.forEach(function (tn) {
               if ((q.x < 0 ? -1 : 1) !== tn.side) return;

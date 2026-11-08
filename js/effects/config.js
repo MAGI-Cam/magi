@@ -180,10 +180,12 @@ Magi.effectConfig = [
       range('damping', 'Damping', 0, 100, 30),
       range('push', 'Push', 0, 100, 50),
       range('reach', 'Reach', 0, 100, 40),
-      range('shape', 'Shape', 0, 2, 0),
-      range('letter', 'Letter', 0, 25, 10),
-      range('dim', 'Dim', 0, 100, 55),
-      toggle('hide', 'Hide', false, 'Hide resting particles: only the ones your hand moves show.')
+      { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
+      range('glow', 'Glow', 0, 100, 40),
+      range('dim', 'Dim', 0, 100, 0),
+      toggle('hide', 'Hide', true, 'Hide resting particles: only the ones your hand moves show.'),
+      toggle('pointer', 'Pointer', true, 'A red dot on your index fingertip.'),
+      { id: 'text', label: 'Text', type: 'text', default: '', placeholder: 'Any characters (empty: whole screen)', maxLength: 40 }
     ]
   },
   {
@@ -295,11 +297,14 @@ Magi.effectConfig = [
       { id: 'watercolor', name: 'Watercolor' }
     ],
     params: [
-      range('trail', 'Trail', 0, 100, 50),
-      range('flow', 'Flow', 0, 100, 60),
-      range('swirl', 'Swirl', 0, 100, 45),
+      { id: 'trail', label: 'Trail', min: 0, max: 100, step: 1, default: 50, modes: ['smoke'] },
+      { id: 'flow', label: 'Flow', min: 0, max: 100, step: 1, default: 60, modes: ['smoke'] },
+      { id: 'swirl', label: 'Swirl', min: 0, max: 100, step: 1, default: 45, modes: ['smoke'] },
       { id: 'rise', label: 'Rise', min: 0, max: 100, step: 1, default: 30, modes: ['smoke'] },
-      { id: 'colors', label: 'Colors', min: 0, max: 15, step: 1, default: 1, modes: ['watercolor'] },
+      { id: 'wtrail', label: 'Trail', min: 0, max: 100, step: 1, default: 0, modes: ['watercolor'] },
+      { id: 'wflow', label: 'Flow', min: 0, max: 100, step: 1, default: 0, modes: ['watercolor'] },
+      { id: 'wswirl', label: 'Swirl', min: 0, max: 100, step: 1, default: 30, modes: ['watercolor'] },
+      { id: 'colors', label: 'Colors', min: 0, max: 100, step: 1, default: 4, modes: ['watercolor'] },
       { id: 'edges', label: 'Edges', min: 0, max: 100, step: 1, default: 50, modes: ['watercolor'] },
       { id: 'dark', label: 'Dark', type: 'toggle', default: false, modes: ['watercolor'], hint: 'Paint on black paper instead of white.' }
     ]
@@ -363,12 +368,12 @@ Magi.effectConfig = [
     ready: true,
     photoType: 'image/jpeg',
     params: [
-      range('size', 'Size', 30, 200, 100),
-      range('particles', 'Particles', 500, 3000, 1200),
-      range('gravity', 'Gravity', 0, 100, 60),
-      range('viscosity', 'Viscosity', 0, 100, 20),
+      range('size', 'Size', 0, 100, 30),
+      range('particles', 'Particles', 500, 3000, 1000),
+      range('gravity', 'Gravity', 0, 100, 100),
+      range('viscosity', 'Viscosity', 0, 100, 50),
       range('orbit', 'Orbit', 0, 100, 0),
-      range('spin', 'Spin', 0, 100, 15),
+      range('spin', 'Spin', 0, 100, 0),
       { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 9, track: 'hue' },
       toggle('outline', 'Cube', true, 'Draw the cube’s edges.'),
       toggle('glow', 'Glow', true, 'Particles add light where they overlap.'),
@@ -409,6 +414,7 @@ Magi.effectConfig = [
       range('fan', 'Fan', 0, 100, 70),
       range('depth', 'Depth', 0, 100, 50),
       range('drift', 'Drift', 0, 100, 30),
+      range('squish', 'Squish', 0, 100, 0),
       range('dim', 'Dim', 0, 100, 0),
       toggle('edges', 'Edges', false, 'A hairline around each tile.')
     ]
@@ -533,6 +539,8 @@ Magi.effectConfig = [
       range('links', 'Links', 1, 6, 3),
       range('size', 'Size', 0, 100, 30),
       range('hands', 'Hands', 0, 100, 30),
+      range('zoom', 'Zoom', 0, 100, 50),
+      range('rotation', 'Rotation', 0, 100, 50),
       range('glow', 'Glow', 0, 100, 60),
       toggle('box', 'Box', true, 'The turning wireframe box under the figure.'),
       range('dim', 'Dim', 0, 100, 100)
@@ -655,7 +663,7 @@ Magi.effectGuides = {
     'Sequencer: three rings of Euclidean rhythms (events spread as evenly as possible over the steps). Grip and turn like a knob to change a ring’s number of events: thumb and index out for red, add the middle finger for yellow, all five for blue. Close your hand to randomize where the events sit. Tempo: speed. Sound: kick, snare and hi-hat, recorded into videos. Dim: darkens the camera.',
     'Rabinovich: thousands of points ride the Rabinovich–Fabrikant equations. Open thumb and index to raise α (0.1 → 1.3) and reshape the attractor; turn and raise your hand to turn the view. Two hands: two attractors, one per hand. Speed, Trail, Size, Dim.',
     'Cohesion: a chord diagram of your hand’s 21 landmarks. Pairs close together are joined, so a fist fills the circle and spread fingers thin it; the level reads at the top with its recent history. Two hands: all 42 landmarks, chords across the hands in white as they come together, and each hand’s level plus the hands’ cohesion.',
-    'Pollinate: concepts orbit in a spiral galaxy. Point: a small pad follows your hand, and your fingertip’s place on it picks two concepts (across, down). Hold still on a cell: they pollinate into “A + B = ?” and an idea that decodes on the right. Pinch: pins the cell. Fist: clears pins. Open palm: spins the galaxy faster.'
+    'Pollinate: concepts orbit in a spiral galaxy. Point with your index finger: a small pad appears there, and only your index finger moves it (by pushing past an edge). Your fingertip’s place on it picks two concepts (across, down). Hold still on a cell for half a second (the arc fills): they pollinate into “A + B = ?” and an idea that decodes on the right. Pinch: pins the cell. Fist: clears pins. Open palm: spins the galaxy faster.'
   ],
   'line-art': [
     'How it works: points gather on the outlines of your hands and arms (where the picture’s edges are strongest) and one continuous line runs through them, always to the nearest point, redrawn as you move.',
@@ -666,12 +674,15 @@ Magi.effectGuides = {
   particles: [
     'How it works: every particle sits on a damped spring to its resting place; your fingertips push particles away as they pass, and the field springs back behind them. Moving particles light up and streak.',
     'Count: how many. Stiffness: how fast they spring back. Damping: how quickly they settle (low: they wobble). Push, Reach: how hard and how far your fingertips push.',
-    'Shape: 0 the whole screen, 1 a letter (Letter picks it, in Literata), 2 an oval field. Hide: only the particles your hand moves show. Dim: darkens the camera.'
+    'Text: type any characters to make the particles form them (empty: the whole screen). Hide: only the particles your hand moves show. Pointer: a red dot on your index fingertip. Color, Glow: tint and halo. Dim: darkens the camera.'
   ],
   'particle-life': [
-    'How it works: particle life. Each color likes or dislikes every other by a hidden random table, so chases, cells and worms organize themselves.',
-    'Hold up 1 to 5 fingers: picks the color your fingertip holds. Pinch: particles near the pinch become that color. Point: your fingertip pulls them in. Fist: they flee your hand. Clap: a new table, a new world.',
-    'Count, Types: how many and how many colors. Radius: how far they sense each other. Force, Friction: how hard they pull and how quickly they slow. Trail, Thickness: the worms. Dim: darkens the camera.'
+    'How it works: every color is a species. Each species feels every other one as an attraction or a repulsion, set by a hidden random table that isn’t symmetric: red may chase yellow while yellow runs from red. Up close, everything pushes apart so particles never overlap.',
+    'Colors, in order: 1 red, 2 yellow, 3 blue, 4 green, 5 violet, 6 pink, 7 cyan, 8 white (Types sets how many are in play).',
+    'What you see: species that attract their own kind clump into cells; a species chasing one that flees forms worms and trails; mutual attraction makes orbits and swirls; mutual repulsion spreads them apart.',
+    'Your fingertip shows the color it holds: hold up 1 to 5 fingers to pick it (1 red … 5 violet). Pinch: particles near the pinch become that color, so you add a species where you want it.',
+    'Point (index only): your fingertip pulls particles in like a current. Fist: they flee your hand. Clap: a new random table, a new world.',
+    'Count, Types: how many particles and species. Radius: how far they sense each other. Force: how strongly they pull. Friction: how quickly they slow. Trail, Thickness: the worms. Dim: darkens the camera.'
   ],
   exhale: [
     'How it works: a sphere of particles that breathes. Each particle springs toward the breath at its own pace, so exhales bloom rough and bristled and inhales gather into a bright ring.',
@@ -683,7 +694,7 @@ Magi.effectGuides = {
     'How it works: your body (from the segmenter) filled with characters strung together by red threads, above a wireframe box. The characters keep their places on your body, head to toe, and move with you; a share of them ride your hands.',
     'Text: type anything, with any keyboard — Japanese, Chinese, Korean, Arabic, emoji. Empty: Set picks 0 Hiragana, 1 Kanji, 2 Latin, 3 Hangul, 4 Digits, 5 Emoji; swipe to change it.',
     'Turn your hand: turns the whole structure in depth. Spread thumb and index (other fingers down): zooms in between them. Open palm: loosens the figure. Fist: pulls it tight.',
-    'Points, Links: how many characters and threads each. Size: character size. Hands: share of characters on your hands. Glow: thread glow. Box: show the box. Dim: darkens the camera.'
+    'Zoom: how far spreading thumb and index zooms in (up to 5×). Rotation: how much turning your hand turns the structure. Points, Links: how many characters and threads each. Size: character size. Hands: share of characters on your hands. Glow: thread glow. Box: show the box. Dim: darkens the camera.'
   ],
   font: [
     'How it works: a letter traced from a typeface (marching squares), drawn as a dotted outline inside an A–Z dial, with an envelope around it.',
@@ -716,7 +727,7 @@ Magi.effectGuides = {
     'Trail: how long the swirl lasts. Flow: how strongly your motion drags the picture.',
     'Swirl: extra curling where you’ve moved. Rise: how much the disturbance drifts upward, like smoke.',
     'Watercolor (tap the tile): your fingers paint pigment that the same flow carries and bleeds, on paper. Colors mix like glazes and pool darker at their edges.',
-    'Colors: 0 takes colors from the camera; 1 Rothko, 2 Indigo, 3 Spring, 4 Sunset, 5 Earth, 6 Water Lilies, 7 Great Wave, 8 Gold Leaf, 9 Cutouts, 10 Stain, 11 Neon, 12 Ocean, 13 Forest, 14 Desert, 15 Sumi (the name shows on screen). Edges: how much pigment pools at the edges. Dark: black paper instead of white. Trail: how long the painting lasts. Pinch: washes it away.'
+    'Colors: 0 takes colors from the camera; above it the slider runs through 23 palettes, blending between neighbors (Rothko, Indigo, Spring, Sunset, Earth, Water Lilies, Great Wave, Gold Leaf, Cutouts, Stain, Neon, Ocean, Forest, Desert, Sumi, Fauve, Klein, Candy, Ember, Aurora, Pop, Lagoon, Blossom; the name shows on screen). Pinch: the colors move on through the palettes; with both hands pinching, twice as fast. Edges: how much pigment pools at the edges. Dark: black paper instead of white. Trail: how long the painting lasts. Flow, Swirl: how much your motion and the curls move the paint.'
   ],
   bubbles: [
     'Wave your fingers: faster fingers blow more bubbles.',
@@ -747,7 +758,7 @@ Magi.effectGuides = {
     'Hold up both hands: a volume of image tiles fills the box between your palms; side by side a slab, stacked a column. It holds when your hands come together.',
     'Flick a hand down or up (a quick snap of the fingers or hand is enough): that side of the volume turns over like a Rubik’s cube layer.',
     'Modes: Scatter (pieces of the room) or Behind (what’s behind each tile).',
-    'Tiles, Size, Fan, Depth, Drift: count, tile size, page turn, perspective, float. Dim: darkens the camera. Edges: tile outlines.'
+    'Tiles, Size, Fan, Depth, Drift: count, tile size, page turn, perspective, float. Squish: packs the tiles closer together. Dim: darkens the camera. Edges: tile outlines.'
   ],
   chromatic: [
     'Point: your index fingertip turns the space (left–right spins it, up–down tips it).',

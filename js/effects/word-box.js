@@ -9,7 +9,7 @@
 // each sits a fraction of the way along one of the hand's bones, so the figure grows hands that
 // follow yours. Points ease to their places with a 0.08 s time constant.
 // Depth: every point has its own depth z (±0.35 of the figure's width); turning your hand turns the
-// whole structure about its vertical axis (1.5 × your hand's roll), drawn in perspective, the box
+// whole structure about its vertical axis (0–3 × your hand's roll, Rotation), drawn in perspective, the box
 // included. With no hand it sways slowly.
 // Each point is joined to its Links nearest neighbors (found on a uniform grid), a red web drawn
 // twice, wide and faint then fine, like a glow.
@@ -17,7 +17,7 @@
 // Korean, Arabic, emoji — split into user-perceived characters (Intl.Segmenter, so accents and emoji
 // stay whole). Empty Text uses a set (Set): 0 Hiragana, 1 Kanji, 2 Latin, 3 Hangul, 4 Digits,
 // 5 Emoji. Characters are drawn on the HUD so they stay sharp.
-// Gestures: spread thumb and index (other fingers down) to zoom in between them (1× to 3×); open
+// Gestures: spread thumb and index (other fingers down) to zoom in between them (up to 1×–5×, Zoom); open
 // palm loosens the figure, points drifting from their places; a fist pulls it tight; turn your hand
 // to turn it; swipe to change the set.
 (function () {
@@ -92,11 +92,11 @@
           if (e.type === 'swipe' && !text && (e.dir === 'left' || e.dir === 'right')) frame.setParam('set', (setIx + (e.dir === 'left' ? SETS.length - 1 : 1)) % SETS.length);
         });
         if (hd) {
-          wantYaw = hd.rotation * Math.PI / 180 * 1.5;
+          wantYaw = hd.rotation * Math.PI / 180 * (params.rotation / 100 * 3);
           if (hd.count >= 5) wantLoose = 1;
           else if (hd.fist) wantLoose = -1;
           else if (!hd.pinched && hd.fingers.thumb.extended && hd.fingers.index.extended && !hd.fingers.middle.extended) {
-            wantZoom = 1 + 2 * Math.max(0, Math.min(1, (hd.pinchWith.index.distance - 0.4) / 1.2));
+            wantZoom = 1 + (params.zoom / 100 * 4) * Math.max(0, Math.min(1, (hd.pinchWith.index.distance - 0.4) / 1.2));
             var m = { x: (hd.points[4].x + hd.points[8].x) / 2, y: (hd.points[4].y + hd.points[8].y) / 2 };
             zc = zc ? { x: zc.x + (m.x - zc.x) * 0.3, y: zc.y + (m.y - zc.y) * 0.3 } : m;
           }

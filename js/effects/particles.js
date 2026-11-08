@@ -6,42 +6,38 @@
 // integrated with semi-implicit Euler in two substeps a frame. Every fingertip pushes particles
 // away within a radius r (Reach, 4–20% of the frame height) with an acceleration that fades as
 // (1 − d/r)² (Push), so your finger carves a path and the field springs back behind it.
-// Rest shape (Shape): 0 the whole screen (a jittered grid); 2 an oval field like the reference
-// (inside an ellipse, denser toward the middle); 1 a letter (the Letter slider, A–Z), its filled shape sampled
-// from Literata on a hidden canvas.
+// Rest shape: the whole screen, or with Text typed (any characters, any keyboard) the shape of that
+// text, sampled from Literata (with CJK fallbacks) on a hidden canvas.
 // Look: each particle a small ring; moving ones light up white with a streak back along their
 // motion, brighter the faster they go. Hide: resting particles are invisible, so only the reactive
-// ones show. The index fingertips get a red dot, as in the reference.
+// ones show. Color tints them (far left white), Glow adds a soft halo to moving ones. Pointer: a red
+// dot on each index fingertip, as in the reference.
 (function () {
   var TIPS = [4, 8, 12, 16, 20];
 
-  function restPoints(shape, letter, n, W, H) {
-    var pts = [], cx = W * 0.35, cy = H * 0.48, rx = Math.min(W * 0.3, H * 0.55), ry = H * 0.3;
-    if (shape === 1) {
-      var S = 200, c = document.createElement('canvas'); c.width = c.height = S;
-      var g = c.getContext('2d', { willReadFrequently: true });
-      g.font = '500 170px Literata, Georgia, serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#fff';
-      g.fillText('ABCDEFGHIJKLMNOPQRSTUVWXYZ'[letter], S / 2, S / 2);
-      var d = g.getImageData(0, 0, S, S).data, inside = [];
-      for (var y = 0; y < S; y += 2) for (var x = 0; x < S; x += 2) if (d[(y * S + x) * 4 + 3] > 127) inside.push([x, y]);
-      var sc = H * 0.8 / S;
+  // Rest positions. Text empty: a jittered grid over the whole frame (cells of equal area, one
+  // particle each, offset by up to 40% of a cell), even edge to edge. Text typed (any characters,
+  // any keyboard): the particles sample the filled shape of that text, drawn as large as fits.
+  function restPoints(text, n, W, H) {
+    var pts = [];
+    if (text) {
+      var S = 512, Sh = Math.round(S * H / W), c = document.createElement('canvas'); c.width = S; c.height = Sh;
+      var g = c.getContext('2d', { willReadFrequently: true }), font = function (px) { return '500 ' + px + 'px Literata, "Noto Sans JP", "Hiragino Sans", "Apple SD Gothic Neo", Georgia, serif'; };
+      var px = Sh * 0.7;
+      g.font = font(px);
+      var tw = g.measureText(text).width;
+      if (tw > S * 0.9) { px *= S * 0.9 / tw; g.font = font(px); }
+      g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#fff';
+      g.fillText(text, S / 2, Sh / 2);
+      var d = g.getImageData(0, 0, S, Sh).data, inside = [];
+      for (var y = 0; y < Sh; y++) for (var x = 0; x < S; x++) if (d[(y * S + x) * 4 + 3] > 127) inside.push([x, y]);
+      var sc = W / S;
       for (var i = 0; i < n && inside.length; i++) {
         var q = inside[Math.floor(Math.random() * inside.length)];
-        pts.push([cx + (q[0] + Math.random() * 2 - S / 2) * sc, cy + (q[1] + Math.random() * 2 - S / 2) * sc]);
+        pts.push([(q[0] + Math.random()) * sc, (q[1] + Math.random()) * sc]);
       }
-      return pts;
+      if (pts.length) return pts;
     }
-    if (shape === 2) {
-      // Oval field: rejection-sampled inside the ellipse, denser toward the middle.
-      while (pts.length < n) {
-        var u = Math.random() * 2 - 1, v = Math.random() * 2 - 1, r2 = u * u + v * v;
-        if (r2 > 1 || Math.random() > 1.15 - 0.5 * r2) continue;
-        pts.push([cx + u * rx, cy + v * ry]);
-      }
-      return pts;
-    }
-    // Screen: a jittered grid over the whole frame (cells of equal area, one particle each, offset
-    // by up to 40% of a cell), so the field is even edge to edge.
     var cell = Math.sqrt(W * H / n), cols = Math.ceil(W / cell), rows = Math.ceil(H / cell);
     for (var gy = 0; gy < rows; gy++) for (var gx = 0; gx < cols; gx++) {
       pts.push([(gx + 0.5 + (Math.random() - 0.5) * 0.8) * cell, (gy + 0.5 + (Math.random() - 0.5) * 0.8) * cell]);
@@ -60,12 +56,12 @@
         frame.draw(ctx, W, H);
         ctx.fillStyle = 'rgba(0,0,0,' + (params.dim / 100).toFixed(3) + ')';
         ctx.fillRect(0, 0, W, H);
-        var shape = Math.round(params.shape), n = Math.round(params.count), letter = Math.round(params.letter);
-        if (shape === 1 && !Magi.fx.fontReady('Literata')) { frame.say('Loading the typeface…'); return; }
-        var k2 = [W, H, shape, n, letter].join(':');
+        var n = Math.round(params.count), text = (params.text || '').trim();
+        if (text && !Magi.fx.fontReady('Literata')) { frame.say('Loading the typeface…'); return; }
+        var k2 = [W, H, n, text].join(':');
         if (k2 !== key) {
           key = k2;
-          P = restPoints(shape, letter, n, W, H).map(function (q) { return { x0: q[0], y0: q[1], x: q[0], y: q[1], vx: 0, vy: 0, px: q[0], py: q[1] }; });
+          P = restPoints(text, n, W, H).map(function (q) { return { x0: q[0], y0: q[1], x: q[0], y: q[1], vx: 0, vy: 0, px: q[0], py: q[1] }; });
         }
         var dt = lastT === null ? 1 / 60 : Math.max(1 / 240, Math.min(1 / 30, t - lastT));
         lastT = t;
@@ -87,8 +83,9 @@
         // Drawing: rings at rest; moving particles light up with a streak.
         var rr = Math.max(1.2, 1.8 * u), still = [], moving = [];
         P.forEach(function (q) { var sp = Math.hypot(q.vx, q.vy) / H; (sp > 0.08 ? moving : still).push([q, Math.min(1, sp / 0.8)]); });
+        var ink = params.color ? Magi.fx.inkColor(params.color) : [1, 1, 1], rgb = ink.map(function (v) { return Math.round(v * 255); }).join(','), glow = params.glow / 100;
         ctx.save();
-        ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+        ctx.strokeStyle = 'rgba(' + rgb + ',0.55)';
         ctx.lineWidth = Math.max(0.8, 0.8 * u);
         ctx.beginPath();
         // Hide: resting particles are invisible; only the ones your hand sets moving show.
@@ -97,17 +94,25 @@
         ctx.globalCompositeOperation = 'lighter';
         ctx.lineCap = 'round';
         // Moving particles in four brightness bands, one path each.
+        // Glow: each band is first stroked wide and faint, then fine.
         [0, 1, 2, 3].forEach(function (band) {
           var lo = band / 4, hi = (band + 1) / 4, b = (band + 0.5) / 4;
-          ctx.strokeStyle = 'rgba(255,255,255,' + (0.35 + 0.65 * b).toFixed(3) + ')';
-          ctx.lineWidth = Math.max(1, (1 + 1.6 * b) * u);
           ctx.beginPath();
           moving.forEach(function (e) { if (e[1] < lo || (e[1] >= hi && band < 3)) return; var q = e[0]; ctx.moveTo(q.x - q.vx * dt * 3, q.y - q.vy * dt * 3); ctx.lineTo(q.x, q.y); });
+          if (glow > 0) {
+            ctx.strokeStyle = 'rgba(' + rgb + ',' + (0.12 * glow * (0.4 + b)).toFixed(3) + ')';
+            ctx.lineWidth = Math.max(3, (5 + 6 * b) * u);
+            ctx.stroke();
+          }
+          ctx.strokeStyle = 'rgba(' + rgb + ',' + (0.35 + 0.65 * b).toFixed(3) + ')';
+          ctx.lineWidth = Math.max(1, (1 + 1.6 * b) * u);
           ctx.stroke();
         });
         ctx.globalCompositeOperation = 'source-over';
-        ctx.fillStyle = '#ff3b30';
-        ix.hands.forEach(function (hd) { var q = hd.points[8]; ctx.beginPath(); ctx.arc(q.x, q.y, 3.5 * u, 0, Math.PI * 2); ctx.fill(); });
+        if (params.pointer) {
+          ctx.fillStyle = '#ff3b30';
+          ix.hands.forEach(function (hd) { var q = hd.points[8]; ctx.beginPath(); ctx.arc(q.x, q.y, 3.5 * u, 0, Math.PI * 2); ctx.fill(); });
+        }
         ctx.restore();
         var tracker = Magi.tracking.hands;
         if (tracker.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, tracker, 'hand');

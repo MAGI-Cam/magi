@@ -126,7 +126,15 @@
     { name: 'Ocean', c: ['#023e8a', '#0096c7', '#48cae4', '#03045e'] },         // deep, mid, shallow, abyss
     { name: 'Forest', c: ['#1b4332', '#40916c', '#95d5b2', '#6b4226'] },        // pine, leaf, mint, bark
     { name: 'Desert', c: ['#c1440e', '#e9a03b', '#f2d0a4', '#7a4419'] },        // rust, sand, dune, umber
-    { name: 'Sumi', c: ['#111111', '#3a3a3a', '#6b5b4b', '#8c2f1c'] }           // ink, gray wash, sepia, seal red
+    { name: 'Sumi', c: ['#111111', '#3a3a3a', '#6b5b4b', '#8c2f1c'] },          // ink, gray wash, sepia, seal red
+    { name: 'Fauve', c: ['#ff2a00', '#00b3ff', '#ffd400', '#00c853'] },          // vermilion, cerulean, cadmium, emerald
+    { name: 'Klein', c: ['#002fa7', '#1e90ff', '#00ffd5', '#0b0033'] },          // International Klein Blue and its kin
+    { name: 'Candy', c: ['#ff4fa3', '#7c4dff', '#00e5ff', '#ffea00'] },
+    { name: 'Ember', c: ['#ff3d00', '#ff9100', '#ffd180', '#4e0d0d'] },
+    { name: 'Aurora', c: ['#00ff9d', '#00b3ff', '#8f00ff', '#ff00a8'] },
+    { name: 'Pop', c: ['#ff0055', '#00d1ff', '#ffe600', '#00ff73'] },
+    { name: 'Lagoon', c: ['#00c2a8', '#0077b6', '#90e0ef', '#f4a261'] },
+    { name: 'Blossom', c: ['#ffafcc', '#bde0fe', '#cdb4db', '#ffc8dd'] }
   ];
   function hex(c) { return [parseInt(c.slice(1, 3), 16) / 255, parseInt(c.slice(3, 5), 16) / 255, parseInt(c.slice(5, 7), 16) / 255]; }
 
@@ -203,7 +211,7 @@
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     }
 
-    var shownPalette = null, paletteAt = -9, W = 0, H = 0, sw, sh, vel, act, map, pig, prs, div, curl, camTex, maskTex, mask, lastHands = null, prev = {}, lastT = null;
+    var colorPos = null, lastColorT = null, shownPalette = null, paletteAt = -9, W = 0, H = 0, sw, sh, vel, act, map, pig, prs, div, curl, camTex, maskTex, mask, lastHands = null, prev = {}, lastT = null;
     function alloc(w, h) {
       W = w; H = h;
       sw = Math.max(32, Math.round(w / 4)); sh = Math.max(32, Math.round(h / 4));
@@ -257,6 +265,8 @@
     return {
       animated: true,
       render: function (frame, out, params) {
+        // Watercolor has its own Trail, Flow and Swirl (different defaults from Smoke).
+        if (params.mode === 'watercolor') params = Object.assign({}, params, { trail: params.wtrail, flow: params.wflow, swirl: params.wswirl });
         if (out.width !== frame.width || out.height !== frame.height) { out.width = frame.width; out.height = frame.height; }
         var ctx = out.getContext('2d');
         if (!ok) { frame.draw(ctx, frame.width, frame.height); frame.say('Wisp needs WebGL2, which this browser doesn’t offer.'); return; }
@@ -280,7 +290,8 @@
 
         // Pinch: the stirred picture is drawn back to normal quickly (0.12 s half-life) and the flow
         // is damped, as if sucked back up.
-        var sucking = Magi.interaction.read(frame).hands.some(function (h) { return h.pinched; });
+        // Pinch (Smoke): the picture is sucked back. In Watercolor a pinch changes the colors instead.
+        var sucking = params.mode !== 'watercolor' && Magi.interaction.read(frame).hands.some(function (h) { return h.pinched; });
         var vt = [1 / sw, 1 / sh], keep = Math.pow(2, -dt / (sucking ? 0.12 : 0.15 * Math.pow(2, params.trail / 20)));
         run('emit', { act: act.read, mask: maskTex }, act.write, vt); act.swap();
         run('force', { vel: vel.read, mask: maskTex, act: act.read, size: [sw, sh], flow: params.flow / 100, dt: dt,
@@ -301,15 +312,31 @@
         act.swap();
         if (params.mode === 'watercolor') {
           // Watercolor: deposit, carry with the flow, bleed, then paint on paper. The painting lasts
-          // (pigment half-life 2·2^(Trail/12) s, about 36 s at the middle); a pinch washes it out
-          // (0.4 s half-life).
-          var pt = [1 / pig.read.w, 1 / pig.read.h], entry = PALETTES[Math.max(0, Math.min(PALETTES.length - 1, Math.round(params.colors)))], pal = entry.c;
+          // (pigment half-life 2·2^(Trail/12) s). Watercolor has its own Trail, Flow and Swirl.
+          // Colors, 0–100, runs continuously through the palettes: 0 is the camera's own colors, and
+          // every other value blends the two palettes it falls between, so each step changes the
+          // colors. Pinching moves it on, one palette a second per pinching hand (two hands: twice
+          // as fast); the slider follows.
+          var pinching = Magi.interaction.read(frame).hands.filter(function (h) { return h.pinched; }).length;
+          if (colorPos === null || Math.abs(Math.round(colorPos) - params.colors) >= 1) colorPos = params.colors;
+          if (!pinching) lastColorT = null;
+          if (pinching) {
+            // Real elapsed time (the fluid's own step is capped at 1/30 s for stability).
+            var real = lastColorT === null ? dt : Math.min(0.25, t - lastColorT);
+            colorPos += pinching * real * 100 / (PALETTES.length - 1);
+            if (colorPos > 100) colorPos -= 99;
+            lastColorT = t;
+            if (Math.round(colorPos) !== params.colors) frame.setParam('colors', Math.round(colorPos));
+          }
+          var pos = colorPos / 100 * (PALETTES.length - 1), lo = Math.floor(pos), fr = pos - lo, A0 = PALETTES[lo], A1 = PALETTES[Math.min(PALETTES.length - 1, lo + 1)];
+          var pt = [1 / pig.read.w, 1 / pig.read.h], entry = fr < 0.5 ? A0 : A1, pal = pos > 0 ? true : null;
           // The palette's name shows for 2 s after it changes.
           if (entry !== shownPalette) { shownPalette = entry; paletteAt = t; }
-          var cs = pal ? pal.map(hex) : [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]];
+          var ca = (A0.c || A1.c).map(hex), cb = (A1.c || A0.c).map(hex);
+          var cs = pal ? ca.map(function (c, k) { return [c[0] + (cb[k][0] - c[0]) * fr, c[1] + (cb[k][1] - c[1]) * fr, c[2] + (cb[k][2] - c[2]) * fr]; }) : [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]];
           run('deposit', { pig: pig.read, mask: maskTex, cam: camTex, c0: cs[0], c1: cs[1], c2: cs[2], c3: cs[3], amount: dt * 2.5, t: t, useCam: pal ? 0 : 1 }, pig.write, pt);
           pig.swap();
-          var pkeep = Math.pow(2, -dt / (sucking ? 0.4 : 2 * Math.pow(2, params.trail / 12)));
+          var pkeep = Math.pow(2, -dt / (2 * Math.pow(2, params.trail / 12)));
           run('advect', { vel: vel.read, src: pig.read, velTexel: vt, dt: dt, keep: pkeep }, pig.write, pt);
           pig.swap();
           run('bleed', { pig: pig.read, k: 0.12 }, pig.write, pt);

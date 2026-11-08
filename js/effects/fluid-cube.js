@@ -287,7 +287,7 @@
           var idle = rotation(0, yaw);
           Rot = Rot ? easeRot(Rot, idle, 1 - Math.exp(-dt / 0.6)) : idle;
         }
-        var R = Rot, S = Math.max(12, cube.s * (params.size / 100));
+        var R = Rot, S = Math.max(12, cube.s * (0.15 + params.size / 100 * 1.85)); // Size 0–100: ×0.15 to ×2 the hand-sized cube
         churn = Math.max(0, churn - dt);
 
         // The cube's acceleration on screen, in cube units, from its last three positions.
