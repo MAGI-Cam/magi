@@ -165,7 +165,9 @@ Magi.effectConfig = [
       range('points', 'Points', 40, 600, 220),
       { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
       range('dim', 'Dim', 0, 100, 0),
-      toggle('connect', 'Connect', true, 'One line through both hands, with strands between matching fingertips. Off: a line per hand.')
+      toggle('connect', 'Connect', true, 'One line through both hands, with strands between matching fingertips. Off: a line per hand.'),
+      range('depth', 'Depth', 0, 100, 40),
+      { id: 'text', label: 'Text', type: 'text', default: '', placeholder: 'Letters between your hands (Connect on)', maxLength: 40 }
     ]
   },
   {
@@ -317,7 +319,8 @@ Magi.effectConfig = [
     photoType: 'image/jpeg',
     params: [
       range('rings', 'Rings', 0, 5, 3),
-      range('sag', 'Sag', 0, 100, 35),
+      range('sag', 'Sag', 0, 100, 25),
+      range('throw', 'Throw', 0, 100, 50),
       range('particles', 'Particles', 0, 100, 50),
       range('glow', 'Glow', 0, 100, 60),
       { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' }
@@ -669,7 +672,8 @@ Magi.effectGuides = {
     'How it works: points gather on the outlines of your hands and arms (where the picture’s edges are strongest) and one continuous line runs through them, always to the nearest point, redrawn as you move.',
     'Pinch: freezes the drawing until you let go.',
     'Close your palm: the drawing shrinks; open it: the drawing expands. Size: how large the drawing is around each hand. Connect: one line through both hands with strands between matching fingertips (off: each hand its own line).',
-    'Thickness: line width. Texture: a dry brush, broken and layered. Spikiness: 0 rounded curves, 50 straight lines, 100 sharp spikes. Rate: how often it redraws. Points: how many. Color: far left lime. Dim: darkens the camera.'
+    'Thickness: line width. Texture: a dry brush, broken and layered. Spikiness: 0 rounded curves, 50 straight lines, 100 sharp spikes. Rate: how often it redraws. Points: how many. Color: far left lime. Dim: darkens the camera.',
+    'Text (Connect on): type letters or a phrase and, with both hands up, it forms between them as one continuous line in 3D. Roll your hands to turn it; Depth sets how thick it is.'
   ],
   particles: [
     'How it works: every particle sits on a damped spring to its resting place; your fingertips push particles away as they pass, and the field springs back behind them. Moving particles light up and streak.',
@@ -685,9 +689,10 @@ Magi.effectGuides = {
     'Count, Types: how many particles and species. Radius: how far they sense each other. Force: how strongly they pull. Friction: how quickly they slow. Trail, Thickness: the worms. Dim: darkens the camera.'
   ],
   exhale: [
-    'How it works: a sphere of particles that breathes. Each particle springs toward the breath at its own pace, so exhales bloom rough and bristled and inhales gather into a bright ring.',
-    'It follows your hand. Pinch to grab it and roll it like a ball; roll your pinching hand to spin it flat; let go and it keeps spinning. Swipe: flings it into a spin.',
-    'Two hands: pull them apart to exhale, bring them together to inhale. One hand: open palm exhales, fist inhales. No hand: it breathes on its own at Rate.',
+    'How it works: a sphere of particles that breathes. Each particle springs toward the breath at its own pace, so exhales bloom bristled and inhales rush back.',
+    'Open palm: exhale. Fist: inhale all the way and the sphere implodes into a bright core; open your hand and it blooms back out.',
+    'Two hands: two spheres, one per hand, each following and breathing with its own hand.',
+    'Pinch: the particles jump to your pinch and burst outward, then fall back into the sphere. Brush your hand across it to spin it like a ball; roll your hand to turn it; swipe to fling it. No hand: it breathes on its own at Rate.',
     'Count, Size: how many and how big. Bristles: the streaks of rushing particles. Rate: breaths a minute with no hand. Color: far left green. Dim: darkens the camera.'
   ],
   'word-box': [
@@ -800,12 +805,11 @@ Magi.effectGuides = {
     'Scale, Response, Speed, Shade: as in Interactive. Saturation: image color. Color: hue rotation.'
   ],
   web: [
-    'Raise a hand: threads run from your palm to each fingertip and between neighboring fingertips, with rings like an orb web.',
+    'Raise a hand: threads run from your palm to each fingertip and between neighboring fingertips, with rings like an orb web, pulled taut.',
     'Two hands: threads join matching fingertips across your hands, with rings between them.',
+    'Throw: swing an open palm fast and a web line shoots out of it, sticks where it hits the edge of the frame with a small splat, and holds taut between your hand and that point. Pull too far and it snaps back to your palm. Up to five at once.',
     'Pinch: draws a taut thumb–index thread; let go and the web gets plucked.',
-    'Flick: the web lets go of your fingers and floats away, and a new one forms.',
-    'Threads sag and swing as you move: real rope physics, pinned to your fingers.',
-    'Rings: how many rings. Sag: how much threads droop. Particles: how many specks flow along the threads. Glow, Color: light and color.'
+    'Rings: how many rings. Sag: how much threads droop (low: taut). Throw: how easily a swing throws a line. Particles: specks flowing along the threads. Glow, Color: light and color.'
   ],
   cards: [
     'How it works: a collection of images built into 3D structures. Without a feed, the cards are snapshots of the camera.',

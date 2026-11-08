@@ -18,8 +18,32 @@
 // and opening it expands it (×0.45–×1.6 more). Connect: one tour through both
 // hands plus strands between matching fingertips (sagging when Spikiness is low); off: one tour per
 // hand.
+// Text (with Connect on and two hands): the typed text forms between your hands as one continuous
+// line, in 3D with depth (Depth), turned by your hands' roll (see textLine).
 // Pinch: freezes the drawing until you let go.
 (function () {
+  // A text's outline as one continuous line: the text is drawn on a hidden canvas, its edge pixels
+  // (inside, with a neighbor outside) are thinned to at most 1600 and ordered by a nearest-neighbor
+  // tour, so the pen runs around each letter and jumps between them like a single-line drawing.
+  // Jumps longer than 6% of the text height lift the pen. Cached per text.
+  var textCache = {};
+  function textLine(text) {
+    if (textCache[text]) return textCache[text];
+    var S = 900, Hh = 220, c = document.createElement('canvas'); c.width = S; c.height = Hh;
+    var g = c.getContext('2d', { willReadFrequently: true }), fs = 160, font = function (px) { return '500 ' + px + 'px Literata, "Noto Sans JP", "Hiragino Sans", Georgia, serif'; };
+    g.font = font(fs);
+    var tw = g.measureText(text).width;
+    if (tw > S * 0.94) { fs *= S * 0.94 / tw; g.font = font(fs); tw = g.measureText(text).width; }
+    g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillStyle = '#fff';
+    g.fillText(text, S / 2, Hh / 2);
+    var d = g.getImageData(0, 0, S, Hh).data, on = function (x, y) { return x >= 0 && y >= 0 && x < S && y < Hh && d[(y * S + x) * 4 + 3] > 127; }, edge = [];
+    for (var y = 0; y < Hh; y++) for (var x = 0; x < S; x++) if (on(x, y) && (!on(x - 1, y) || !on(x + 1, y) || !on(x, y - 1) || !on(x, y + 1))) edge.push({ x: x, y: y });
+    var stepK = Math.max(1, Math.ceil(edge.length / 1600)), pick = edge.filter(function (_, i) { return i % stepK === 0; });
+    var tour = Magi.nearestTour(pick), lift = fs * 0.06, pts = [];
+    tour.forEach(function (q, i) { var prev = tour[i - 1]; pts.push([q.x - (S / 2 - tw / 2), q.y - (Hh / 2 - fs / 2), !prev || Math.hypot(q.x - prev.x, q.y - prev.y) > lift]); });
+    return (textCache[text] = { pts: pts, w: tw, h: fs });
+  }
+
   function createLineArt() {
     var sample = Magi.contourSampler(), frozen = null, seeds = [], lastPts = null, palmK = 1;
     function rnd(i, k) { var h = Math.sin(i * 127.1 + k * 311.7) * 43758.5453; return h - Math.floor(h); }
@@ -89,13 +113,46 @@
             }
           }
         });
+        // Text between the hands (Connect on, Text typed): the letters' outline as one continuous line,
+        // extruded in depth, spanning the line between your palms.
+        var text = (params.text || '').trim(), drewText = false;
+        if (params.connect && hs.length >= 2 && text && Magi.fx.fontReady('Literata')) {
+          var T = textLine(text), ca = hs[0].center, cb = hs[1].center;
+          if (ca.x > cb.x) { var sw = ca; ca = cb; cb = sw; }
+          var ax = cb.x - ca.x, ay = cb.y - ca.y, len = Math.hypot(ax, ay) || 1, ex = ax / len, ey = ay / len;
+          var span = len * 0.9 * Math.pow(2, (params.size - 50) / 50) * palmK, sc = span / T.w, mid = { x: (ca.x + cb.x) / 2, y: (ca.y + cb.y) / 2 };
+          // The text plane turns about the hands' axis by the hands' mean roll (and sways a little).
+          var r0 = hs[0].rotation * Math.PI / 180, r1 = hs[1].rotation * Math.PI / 180;
+          var phi = Math.atan2(Math.sin(r0) + Math.sin(r1), Math.cos(r0) + Math.cos(r1)) + Math.sin(frame.time / 1000 * 0.6) * 0.25;
+          var cp = Math.cos(phi), sp = Math.sin(phi), depth = params.depth / 100 * 0.35 * T.h * sc, Fz = span * 2;
+          // Basis: e1 along the hands' axis, e2 "up" in the plane (screen-perpendicular to e1, turned by φ
+          // out of the screen), e3 the plane's depth. A point (u, v, w) → mid + e1 u + e2 v + e3 w, in
+          // perspective (focal length twice the span).
+          var px = ey, py = -ex;
+          var proj = function (uu, vv, ww) {
+            var X = ex * uu + px * (vv * cp - ww * sp), Y = ey * uu + py * (vv * cp - ww * sp), Z = vv * sp + ww * cp, k = Fz / (Fz + Z);
+            return { x: mid.x + X * k, y: mid.y + Y * k };
+          };
+          [-0.5, 0.5].forEach(function (side) {
+            T.pts.forEach(function (q, i) {
+              var P = proj((q[0] - T.w / 2) * sc, -(q[1] - T.h / 2) * sc, side * depth);
+              i && !q[2] ? path.lineTo(P.x, P.y) : path.moveTo(P.x, P.y);
+            });
+          });
+          for (var c2 = 0; c2 < T.pts.length; c2 += 40) {
+            var q2 = T.pts[c2], A = proj((q2[0] - T.w / 2) * sc, -(q2[1] - T.h / 2) * sc, -0.5 * depth), B = proj((q2[0] - T.w / 2) * sc, -(q2[1] - T.h / 2) * sc, 0.5 * depth);
+            path.moveTo(A.x, A.y); path.lineTo(B.x, B.y);
+          }
+          drewText = true;
+          links = [];
+        }
         // Strands between the hands: straight, or sagging into a curve when Spikiness is low.
         links.forEach(function (l) {
           var mx = (l[0].x + l[1].x) / 2, my = (l[0].y + l[1].y) / 2 + Math.max(0, 0.5 - s) * 0.15 * H;
           path.moveTo(l[0].x, l[0].y);
           path.quadraticCurveTo(mx, my, l[1].x, l[1].y);
         });
-        if (groups.length || links.length) {
+        if (groups.length || links.length || drewText) {
           var n = groups.reduce(function (a, g) { return a + g.length; }, 0) + links.length;
           var ink = params.color ? Magi.fx.inkColor(params.color) : [0.78, 0.94, 0.24];
           var rgb = ink.map(function (v) { return Math.round(v * 255); }).join(',');
