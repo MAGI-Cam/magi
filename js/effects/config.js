@@ -106,7 +106,9 @@ Magi.effectConfig = [
       { id: 'contour', name: 'Contour' },
       { id: 'filaments', name: 'Filaments' },
       { id: 'attention', name: 'Attention' },
-      { id: 'sequencer', name: 'Sequencer' }
+      { id: 'sequencer', name: 'Sequencer' },
+      { id: 'rabinovich', name: 'Rabinovich' },
+      { id: 'cohesion', name: 'Cohesion' }
     ],
     params: [
       { id: 'readouts', label: 'Readouts', type: 'toggle', default: true, modes: ['skeleton'], hint: 'Show which hand it is, the tracking score and rotation.' },
@@ -126,7 +128,10 @@ Magi.effectConfig = [
       { id: 'feed', label: 'Feed', type: 'text', default: '', placeholder: 'Feed URL or Are.na channel', maxLength: 300, modes: ['attention'] },
       { id: 'tempo', label: 'Tempo', min: 60, max: 180, step: 1, default: 110, modes: ['sequencer'] },
       { id: 'sound', label: 'Sound', type: 'toggle', default: false, modes: ['sequencer'], hint: 'Play the rings (kick, snare, hi-hat); recorded into videos.' },
-      { id: 'dim', label: 'Dim', min: 0, max: 100, step: 1, default: 45, modes: ['filaments', 'sequencer'] }
+      { id: 'dim', label: 'Dim', min: 0, max: 100, step: 1, default: 45, modes: ['filaments', 'sequencer', 'rabinovich', 'cohesion'] },
+      { id: 'speed', label: 'Speed', min: 0, max: 100, step: 1, default: 50, modes: ['rabinovich'] },
+      { id: 'trail', label: 'Trail', min: 0, max: 100, step: 1, default: 70, modes: ['rabinovich'] },
+      { id: 'size', label: 'Size', min: 0, max: 100, step: 1, default: 50, modes: ['rabinovich'] }
     ]
   },
   {
@@ -177,6 +182,38 @@ Magi.effectConfig = [
       range('shape', 'Shape', 0, 1, 0),
       range('letter', 'Letter', 0, 25, 10),
       range('dim', 'Dim', 0, 100, 55)
+    ]
+  },
+  {
+    id: 'particle-life',
+    name: 'Particle Life',
+    group: 'hand',
+    ready: true,
+    photoType: 'image/jpeg',
+    params: [
+      range('count', 'Count', 200, 2000, 900),
+      range('types', 'Types', 2, 8, 5),
+      range('radius', 'Radius', 0, 100, 35),
+      range('force', 'Force', 0, 100, 50),
+      range('friction', 'Friction', 0, 100, 30),
+      range('trail', 'Trail', 0, 100, 60),
+      range('thickness', 'Thickness', 0, 100, 30),
+      range('dim', 'Dim', 0, 100, 80)
+    ]
+  },
+  {
+    id: 'exhale',
+    name: 'Exhale',
+    group: 'hand',
+    ready: true,
+    photoType: 'image/jpeg',
+    params: [
+      range('count', 'Count', 500, 6000, 2600),
+      range('size', 'Size', 0, 100, 50),
+      range('bristles', 'Bristles', 0, 100, 60),
+      range('rate', 'Rate', 2, 20, 6),
+      { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
+      range('dim', 'Dim', 0, 100, 90)
     ]
   },
   {
@@ -482,6 +519,23 @@ Magi.effectConfig = [
     ]
   },
   {
+    id: 'word-box',
+    name: 'Word Box',
+    group: 'body',
+    ready: true,
+    photoType: 'image/jpeg',
+    params: [
+      { id: 'text', label: 'Text', type: 'text', default: '', placeholder: 'Type in any language or keyboard', maxLength: 400 },
+      range('set', 'Set', 0, 5, 0),
+      range('points', 'Points', 80, 900, 420),
+      range('links', 'Links', 1, 6, 3),
+      range('size', 'Size', 0, 100, 30),
+      range('glow', 'Glow', 0, 100, 60),
+      toggle('box', 'Box', true, 'The turning wireframe box under the figure.'),
+      range('dim', 'Dim', 0, 100, 100)
+    ]
+  },
+  {
     id: 'glitch',
     name: 'Glitch',
     group: 'body',
@@ -595,7 +649,9 @@ Magi.effectGuides = {
     'Filaments: bundles of glowing strands strung along your bones, between fingertips and across both hands; they flex as you move, with bright pulses running along them. Strands: per bundle. Glow, Dim: light and background.',
     'Attention: your image library as a Mapper graph: images that look alike gather into nodes, and nodes that share images are linked. View 0 Graph, 1 PCA (each image by its two main directions of variation). Feed: a JSON feed or Are.na channel; images with an embedding in the feed are grouped by it, others by color. Without a feed, camera snapshots stand in.',
     'Attention gestures: point (only the index up) to select the node under your fingertip and fan out its images; a fist pulls the graph in; an open palm spreads it out.',
-    'Sequencer: three rings of Euclidean rhythms (events spread as evenly as possible over the steps). Grip and turn like a knob to change a ring’s number of events: thumb and index out for red, add the middle finger for yellow, all five for blue. Close your hand to randomize where the events sit. Tempo: speed. Sound: kick, snare and hi-hat, recorded into videos. Dim: darkens the camera.'
+    'Sequencer: three rings of Euclidean rhythms (events spread as evenly as possible over the steps). Grip and turn like a knob to change a ring’s number of events: thumb and index out for red, add the middle finger for yellow, all five for blue. Close your hand to randomize where the events sit. Tempo: speed. Sound: kick, snare and hi-hat, recorded into videos. Dim: darkens the camera.',
+    'Rabinovich: thousands of points ride the Rabinovich–Fabrikant equations. Open thumb and index to raise α (0.1 → 1.3) and reshape the attractor; turn and raise your hand to turn the view. Speed, Trail, Size, Dim.',
+    'Cohesion: a chord diagram of your hand’s 21 landmarks. Pairs close together are joined, so a fist fills the circle and spread fingers thin it; the level reads at the top with its recent history.'
   ],
   'line-art': [
     'How it works: points gather on the outlines of your hands and arms (where the picture’s edges are strongest) and one continuous line runs through them, always to the nearest point, redrawn as you move.',
@@ -607,6 +663,22 @@ Magi.effectGuides = {
     'How it works: every particle sits on a damped spring to its resting place; your fingertips push particles away as they pass, and the field springs back behind them. Moving particles light up and streak.',
     'Count: how many. Stiffness: how fast they spring back. Damping: how quickly they settle (low: they wobble). Push, Reach: how hard and how far your fingertips push.',
     'Shape: 0 an oval field, 1 a letter (Letter picks it, in Literata). Dim: darkens the camera.'
+  ],
+  'particle-life': [
+    'How it works: particle life. Each color likes or dislikes every other by a hidden random table, so chases, cells and worms organize themselves.',
+    'Hold up 1 to 5 fingers: picks the color your fingertip holds. Pinch: particles near the pinch become that color. Point: your fingertip pulls them in. Fist: they flee your hand. Clap: a new table, a new world.',
+    'Count, Types: how many and how many colors. Radius: how far they sense each other. Force, Friction: how hard they pull and how quickly they slow. Trail, Thickness: the worms. Dim: darkens the camera.'
+  ],
+  exhale: [
+    'How it works: a sphere of particles that breathes. Each particle springs toward the breath at its own pace, so exhales bloom rough and bristled and inhales gather into a bright ring.',
+    'Two hands: pull them apart to exhale, bring them together to inhale. One hand: open palm exhales, fist inhales. No hand: it breathes on its own at Rate. Swipe sideways: a gust turns it.',
+    'Count, Size: how many and how big. Bristles: the streaks of rushing particles. Rate: breaths a minute with no hand. Color: far left green. Dim: darkens the camera.'
+  ],
+  'word-box': [
+    'How it works: your body (from the segmenter) filled with characters strung together by red threads, above a turning wireframe box.',
+    'Text: type anything, with any keyboard — Japanese, Chinese, Korean, Arabic, emoji. Empty: Set picks 0 Hiragana, 1 Kanji, 2 Latin, 3 Hangul, 4 Digits, 5 Emoji; swipe to change it.',
+    'Spread thumb and index: zooms into the figure between them. Open palm: the figure loosens and drifts. Fist: pulls it tight. Turn your hand: turns the box.',
+    'Points, Links: how many characters and threads each. Size: character size. Glow: thread glow. Box: show the box. Dim: darkens the camera.'
   ],
   font: [
     'How it works: a letter traced from a typeface (marching squares), drawn as a dotted outline inside an A–Z dial, with an envelope around it.',

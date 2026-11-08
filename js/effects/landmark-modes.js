@@ -540,4 +540,159 @@
       }
     };
   };
+
+  // Rabinovich (after "Rabinovich–Fabrikant equations"): a cloud of points riding the
+  // Rabinovich–Fabrikant system (Rabinovich & Fabrikant 1979, a model of waves in a nonequilibrium
+  // medium):
+  //   ẋ = y(z − 1 + x²) + γx,   ẏ = x(3z + 1 − x²) + γy,   ż = −2z(α + xy),
+  // integrated with fourth-order Runge–Kutta (h = 0.01, Speed steps a frame). γ = 0.1; α comes from
+  // your hand: the thumb–index distance sets α from 0.1 to 1.3 (pinched to wide open), where the
+  // attractor goes from a pair of tight rings to a broad spiral; with no hand α drifts slowly.
+  // Turning your hand turns the view. Points that escape (|x|, |y| or |z| > 20) restart near the
+  // origin. Each point leaves a pastel trail (hue by height z) added like light, fading by Trail.
+  // The equations and α read on the HUD; red squares sit on your fingertips, α at the index tip.
+  Magi.landmarkModes.rabinovich = function () {
+    var N = 1400, P = [], trail = document.createElement('canvas'), tctx = trail.getContext('2d'), alpha = 0.6, yaw = 0, pitch = 0.4;
+    function seed() { return [(Math.random() - 0.5) * 1.6, (Math.random() - 0.5) * 1.6, Math.random() * 0.8 + 0.1]; }
+    for (var i = 0; i < N; i++) P.push(seed());
+    function f(p, a, g) { var x = p[0], y = p[1], z = p[2]; return [y * (z - 1 + x * x) + g * x, x * (3 * z + 1 - x * x) + g * y, -2 * z * (a + x * y)]; }
+    function rk4(p, a, g, h) {
+      var k1 = f(p, a, g), p2 = [p[0] + k1[0] * h / 2, p[1] + k1[1] * h / 2, p[2] + k1[2] * h / 2];
+      var k2 = f(p2, a, g), p3 = [p[0] + k2[0] * h / 2, p[1] + k2[1] * h / 2, p[2] + k2[2] * h / 2];
+      var k3 = f(p3, a, g), p4 = [p[0] + k3[0] * h, p[1] + k3[1] * h, p[2] + k3[2] * h], k4 = f(p4, a, g);
+      return [p[0] + h / 6 * (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0]), p[1] + h / 6 * (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1]), p[2] + h / 6 * (k1[2] + 2 * k2[2] + 2 * k3[2] + k4[2])];
+    }
+    return function (ctx, frame, ix, params) {
+      var W = frame.width, H = frame.height, u = frame.pxPerCss, t = frame.time / 1000, hud = frame.hud;
+      if (trail.width !== W || trail.height !== H) { trail.width = W; trail.height = H; }
+      ctx.fillStyle = 'rgba(0,0,0,' + (params.dim / 100).toFixed(3) + ')';
+      ctx.fillRect(0, 0, W, H);
+      var hd = ix.hands[0], target = 0.7 + 0.55 * Math.sin(t * 0.07);
+      if (hd) {
+        target = 0.1 + 1.2 * Math.max(0, Math.min(1, (hd.pinchWith.index.distance - 0.15) / 1.2));
+        yaw += ((hd.rotation * Math.PI / 180) * 1.5 - yaw) * 0.1;
+        pitch += ((hd.center.y / H - 0.5) * 1.2 + 0.4 - pitch) * 0.1;
+      } else yaw += 0.003;
+      alpha += (target - alpha) * 0.08;
+      var steps = Math.max(1, Math.round(params.speed / 100 * 6)), g = 0.1, h = 0.01;
+      var cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch), sc = H * 0.2 * (0.5 + params.size / 100), ox = W * 0.32, oy = H * 0.5;
+      function proj(p) { var x = p[0] * cy - p[1] * sy, y0 = p[0] * sy + p[1] * cy, z = p[2] - 0.6; return [ox + x * sc, oy - (z * cp - y0 * sp) * sc, p[2]]; }
+      // Trails: fade, then draw each point's motion this frame.
+      tctx.globalCompositeOperation = 'destination-out';
+      tctx.fillStyle = 'rgba(0,0,0,' + (0.04 + (1 - params.trail / 100) * 0.3).toFixed(3) + ')';
+      tctx.fillRect(0, 0, W, H);
+      tctx.globalCompositeOperation = 'lighter';
+      tctx.lineWidth = Math.max(0.6, 0.7 * u);
+      var bins = [[], [], [], [], []];
+      for (var i = 0; i < N; i++) {
+        var a0 = proj(P[i]);
+        for (var s2 = 0; s2 < steps; s2++) P[i] = rk4(P[i], alpha, g, h);
+        var q = P[i];
+        if (!isFinite(q[0]) || Math.abs(q[0]) > 20 || Math.abs(q[1]) > 20 || Math.abs(q[2]) > 20) { P[i] = seed(); continue; }
+        var a1 = proj(q);
+        bins[Math.max(0, Math.min(4, Math.floor(q[2] / 0.5)))].push(a0[0], a0[1], a1[0], a1[1]);
+      }
+      var cols = ['120,200,255', '150,255,220', '190,170,255', '255,170,230', '255,240,200'];
+      bins.forEach(function (b, k) {
+        if (!b.length) return;
+        tctx.strokeStyle = 'rgba(' + cols[k] + ',0.32)';
+        tctx.beginPath();
+        for (var j = 0; j < b.length; j += 4) { tctx.moveTo(b[j], b[j + 1]); tctx.lineTo(b[j + 2], b[j + 3]); }
+        tctx.stroke();
+      });
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.drawImage(trail, 0, 0);
+      ctx.restore();
+      // Fingertip squares and the α readout.
+      if (hd) {
+        ctx.save();
+        ctx.strokeStyle = '#ff3b30'; ctx.lineWidth = Math.max(1, 1.2 * u);
+        [4, 8, 12, 16, 20].forEach(function (k) { var pt = hd.points[k]; ctx.strokeRect(pt.x - 4 * u, pt.y - 4 * u, 8 * u, 8 * u); });
+        ctx.beginPath(); ctx.moveTo(hd.points[4].x, hd.points[4].y); ctx.lineTo(hd.points[8].x, hd.points[8].y); ctx.stroke();
+        ctx.restore();
+        hud.save(); hud.fillStyle = '#fff'; hud.font = '400 ' + Math.round(9 * u) + 'px ' + Magi.fx.MONO;
+        hud.fillText('α:' + alpha.toFixed(4), hd.points[8].x + 8 * u, hd.points[8].y); hud.restore();
+      }
+      hud.save();
+      hud.fillStyle = '#fff';
+      hud.font = '300 ' + Math.round(15 * u) + 'px Inter, sans-serif';
+      hud.fillText('Rabinovich–Fabrikant equations', W * 0.18, H * 0.08);
+      hud.font = '300 ' + Math.round(9 * u) + 'px Inter, sans-serif';
+      ['Δx = y(z − 1 + x²) + γx', 'Δy = x(3z + 1 − x²) + γy', 'Δz = −2z(α + xy)', 'α = ' + alpha.toFixed(4)].forEach(function (l, k) { hud.fillText(l, W * 0.66, H * 0.05 + k * 13 * u); });
+      hud.restore();
+    };
+  };
+
+  // Cohesion (after "landmarks cohesion level"): how tightly your hand holds together, as a chord
+  // diagram of its 21 landmarks. Cohesion of a pair is c = max(0, 1 − d / L), d
+  // their distance L = 0.9 palm lengths; the hand's cohesion level is the mean over all 210 pairs,
+  // scaled so a closed fist reads 100% (an open hand about 50%). Around a circle, the landmarks sit at evenly spaced angles, named; each pair with
+  // c > 0.15 is joined by a chord (a quadratic curve through the middle) in its landmark's hue, as
+  // opaque as its cohesion, so a fist fills the circle and spread fingers thin it out. A white line
+  // drawing of your hand (bones and joint rings) and a strip chart of the level's last 8 s go with it.
+  var LM_NAMES = ['WRIST', 'THUMB CMC', 'THUMB MCP', 'THUMB IP', 'THUMB TIP', 'INDEX FINGER MCP', 'INDEX FINGER PIP', 'INDEX FINGER DIP', 'INDEX FINGER TIP',
+    'MIDDLE FINGER MCP', 'MIDDLE FINGER PIP', 'MIDDLE FINGER DIP', 'MIDDLE FINGER TIP', 'RING FINGER MCP', 'RING FINGER PIP', 'RING FINGER DIP', 'RING FINGER TIP',
+    'PINKY MCP', 'PINKY PIP', 'PINKY DIP', 'PINKY TIP'];
+  Magi.landmarkModes.cohesion = function () {
+    var level = 0, hist = [], lastSample = 0, FIST = 0.42;
+    return function (ctx, frame, ix, params) {
+      var W = frame.width, H = frame.height, u = frame.pxPerCss, t = frame.time / 1000, hud = frame.hud;
+      ctx.fillStyle = 'rgba(0,0,0,' + (params.dim / 100).toFixed(3) + ')';
+      ctx.fillRect(0, 0, W, H);
+      var hd = ix.hands[0], pairs = [];
+      if (hd) {
+        var p = hd.points, palm = hd.size || 1, sum = 0;
+        for (var i = 0; i < 21; i++) for (var j = i + 1; j < 21; j++) {
+          var c = Math.max(0, 1 - Math.hypot(p[i].x - p[j].x, p[i].y - p[j].y) / (0.9 * palm));
+          sum += c; if (c > 0.15) pairs.push([i, j, c]);
+        }
+        level += (Math.min(1, sum / 210 / FIST) - level) * 0.25;
+        // The hand as a white line drawing.
+        var C = (Magi.tracking.connections && Magi.tracking.connections.hand) || [];
+        ctx.save();
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(1, 1.2 * u);
+        ctx.beginPath(); C.forEach(function (e) { ctx.moveTo(p[e.start].x, p[e.start].y); ctx.lineTo(p[e.end].x, p[e.end].y); });
+        p.forEach(function (q) { ctx.moveTo(q.x + 5 * u, q.y); ctx.arc(q.x, q.y, 5 * u, 0, Math.PI * 2); });
+        ctx.stroke(); ctx.restore();
+      }
+      if (t - lastSample > 0.1) { lastSample = t; hist.push(level); if (hist.length > 80) hist.shift(); }
+      // Chord diagram.
+      var R = Math.min(W, H) * 0.3, cx = W - R * 1.55, cy = H * 0.5;
+      var at = function (k) { var a = -Math.PI / 2 + (k - 10) * (Math.PI * 2 / 21); return [cx + Math.cos(a) * R, cy + Math.sin(a) * R, a]; };
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = Math.max(1, u);
+      ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.stroke();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.lineWidth = Math.max(1, 1.3 * u);
+      pairs.forEach(function (pr) {
+        var a = at(pr[0]), b = at(pr[1]);
+        ctx.strokeStyle = 'hsla(' + Math.round(pr[0] / 21 * 360) + ',100%,62%,' + (pr[2] * 0.9).toFixed(3) + ')';
+        ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.quadraticCurveTo(cx, cy, b[0], b[1]); ctx.stroke();
+      });
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = '#000'; ctx.strokeStyle = '#ccff66';
+      for (var k = 0; k < 21; k++) { var q2 = at(k); ctx.beginPath(); ctx.arc(q2[0], q2[1], 3.5 * u, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+      ctx.restore();
+      hud.save();
+      hud.fillStyle = '#fff';
+      hud.font = '500 ' + Math.round(7 * u) + 'px ' + Magi.fx.MONO;
+      for (var k2 = 0; k2 < 21; k2++) {
+        var q3 = at(k2), right = Math.cos(q3[2]) >= 0;
+        hud.textAlign = right ? 'left' : 'right';
+        hud.fillText(LM_NAMES[k2], q3[0] + Math.cos(q3[2]) * 8 * u, q3[1] + Math.sin(q3[2]) * 8 * u);
+      }
+      hud.textAlign = 'left';
+      hud.font = '500 ' + Math.round(11 * u) + 'px ' + Magi.fx.MONO;
+      hud.fillText('landmarks cohesion level:' + Math.round(level * 100) + '%', W * 0.03, H * 0.06);
+      hud.restore();
+      // Strip chart of the level.
+      ctx.save();
+      ctx.strokeStyle = '#5b8cff'; ctx.lineWidth = Math.max(1, 1.2 * u);
+      var x0 = W * 0.45, x1 = W * 0.6, y0 = H * 0.09;
+      ctx.beginPath();
+      hist.forEach(function (v, k3) { var x = x0 + (x1 - x0) * k3 / 79, y = y0 - v * H * 0.05; k3 ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+      ctx.stroke(); ctx.restore();
+    };
+  };
 })();

@@ -280,7 +280,7 @@
         if (Magi.landmarkModes && Magi.landmarkModes[params.mode]) {
           (extra[params.mode] || (extra[params.mode] = Magi.landmarkModes[params.mode]()))(ctx, frame, ix, params);
           if (tracker.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, tracker, 'hand');
-          else if (!hands.length && params.mode !== 'attention') Magi.tracking.hint(ctx, frame, 'Raise your hands.');
+          else if (!hands.length && params.mode !== 'attention' && params.mode !== 'rabinovich') Magi.tracking.hint(ctx, frame, 'Raise your hands.');
           return;
         }
         hands.forEach(function (p, i) {
