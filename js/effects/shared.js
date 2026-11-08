@@ -471,4 +471,24 @@
       reset: function () { Object.keys(made).forEach(function (id) { made[id].reset(); }); }
     };
   };
+
+  // Sound for effects that make it (the sequencer). fx.audio() returns { ctx, out }: connect voices to
+  // `out`, which plays through the speakers and also feeds fx.audioStream, a MediaStream the app adds
+  // to video recordings while an effect is sounding (it sets fx.audioLiveAt = performance.now() each
+  // frame it plays; older than 1 s counts as silent). Created on first use; browsers
+  // only start audio after a tap, so effects call it from a control the user turned on.
+  var audio = null;
+  fx.audioLiveAt = 0;
+  fx.audioStream = null;
+  fx.audio = function () {
+    if (audio) { if (audio.ctx.state === 'suspended') audio.ctx.resume(); return audio; }
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    var ctx = new AC(), out = ctx.createGain(), tap = ctx.createMediaStreamDestination ? ctx.createMediaStreamDestination() : null;
+    out.gain.value = 0.8;
+    out.connect(ctx.destination);
+    if (tap) { out.connect(tap); fx.audioStream = tap.stream; }
+    audio = { ctx: ctx, out: out };
+    return audio;
+  };
 })();

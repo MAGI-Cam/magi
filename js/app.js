@@ -771,8 +771,13 @@
   function startRecording() {
     var out = view.captureStream(30);
     // With the mic on, the canvas's video and the microphone's audio go into one stream.
-    var withAudio = !!(micOn && micStream && micStream.getAudioTracks().length && state.input === 'camera');
-    var rec = withAudio ? new MediaStream(out.getVideoTracks().concat(micStream.getAudioTracks())) : out;
+    var withMic = !!(micOn && micStream && micStream.getAudioTracks().length && state.input === 'camera');
+    // Sound an effect is making (Magi.fx.audioStream, e.g. the sequencer) is recorded too. With both,
+    // the effect's sound is used: one audio track keeps MediaRecorder support broad.
+    var fxAudio = Magi.fx.audioStream && performance.now() - Magi.fx.audioLiveAt < 1000 ? Magi.fx.audioStream.getAudioTracks() : [];
+    var audioTracks = fxAudio.length ? fxAudio : withMic ? micStream.getAudioTracks() : [];
+    var withAudio = audioTracks.length > 0;
+    var rec = withAudio ? new MediaStream(out.getVideoTracks().concat(audioTracks)) : out;
     var type = videoType(withAudio);
     try {
       recorder = new MediaRecorder(rec, type ? { mimeType: type, videoBitsPerSecond: 8000000 } : undefined);

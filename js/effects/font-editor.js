@@ -19,8 +19,8 @@
 // are (1–13 points), so high values melt the letter into a blob; the envelope turns smooth too.
 // Gestures (the reference's grips): the fingers you hold out pick the control, as if gripping a
 // knob with them — thumb and index (an L): the letter; thumb, index and middle: Distortion; all
-// five: Smoothness. The grip must hold for 0.15 s. Then turning your hand turns the value like a
-// knob (letter: one per 12°; Distortion and Smoothness: one unit per degree), the dial turns, and
+// five: Smoothness. The grip must hold for 0.15 s. Then turning it turns the value like a knob
+// (the angle of the thumb-to-index line, unwrapped) (letter: one per 12°; Distortion and Smoothness: one unit per degree), the dial turns, and
 // the sliders move with it. Rings mark the gripping fingertips. The HUD reads the control being
 // adjusted and the three values.
 (function () {
@@ -173,8 +173,11 @@
       if (active) {
         mode = active;
         var key = active === 'character' ? 'letter' : active;
-        if (!grab || grab.what !== active) grab = { what: active, r: hd.rotation, v: vals[key] };
-        var turn = hd.rotation - grab.r;
+        // The knob's angle: the thumb-to-index line (it twists as you turn the grip), unwrapped.
+        var pp = hd.points, ang = Math.atan2(pp[8].y - pp[4].y, pp[8].x - pp[4].x) * 180 / Math.PI;
+        if (!grab || grab.what !== active) grab = { what: active, last: ang, acc: 0, v: vals[key] };
+        var dA = ang - grab.last; dA -= Math.round(dA / 360) * 360; grab.acc += dA; grab.last = ang;
+        var turn = grab.acc;
         if (active === 'character') vals.letter = grab.v + turn / 12;
         else vals[key] = Math.max(0, Math.min(100, grab.v + turn));
         var rounded = active === 'character' ? ((Math.round(vals.letter) % 26) + 26) % 26 : Math.round(vals[key]);
@@ -249,6 +252,13 @@
         hud.textAlign = 'left'; hud.fillText(row[0], rx, ry + i * 15 * u);
         hud.textAlign = 'right'; hud.fillText(row[1], rx + col, ry + i * 15 * u);
       });
+      if (params.guide !== false) {
+        // The reference's instructions, as a small legend.
+        hud.textAlign = 'left';
+        hud.font = '500 ' + Math.round(7.5 * u) + 'px ' + Magi.fx.MONO;
+        hud.fillStyle = 'rgba(255,255,255,0.7)';
+        ['GRIP AND TURN LIKE A KNOB', 'THUMB + INDEX  →  PICK THE LETTER', 'THUMB + INDEX + MIDDLE  →  WARP ITS GLYPHS', 'ALL FIVE  →  SMOOTH THE LINES'].forEach(function (l, i) { hud.fillText(l, W * 0.03, H * 0.06 + i * 13 * u); });
+      }
       if ('letterSpacing' in hud) hud.letterSpacing = '0px';
       hud.restore();
       if (!G) frame.say('Loading the typeface…');

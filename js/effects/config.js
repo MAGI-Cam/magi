@@ -105,7 +105,8 @@ Magi.effectConfig = [
       { id: 'link', name: 'Link' },
       { id: 'contour', name: 'Contour' },
       { id: 'filaments', name: 'Filaments' },
-      { id: 'attention', name: 'Attention' }
+      { id: 'attention', name: 'Attention' },
+      { id: 'sequencer', name: 'Sequencer' }
     ],
     params: [
       { id: 'readouts', label: 'Readouts', type: 'toggle', default: true, modes: ['skeleton'], hint: 'Show which hand it is, the tracking score and rotation.' },
@@ -121,9 +122,11 @@ Magi.effectConfig = [
       { id: 'labels', label: 'Labels', type: 'toggle', default: true, modes: ['contour'], hint: 'Edge-strength readouts beside the points.' },
       { id: 'strands', label: 'Strands', min: 2, max: 14, step: 1, default: 7, modes: ['filaments'] },
       { id: 'glow', label: 'Glow', min: 0, max: 100, step: 1, default: 60, modes: ['filaments'] },
-      { id: 'dim', label: 'Dim', min: 0, max: 100, step: 1, default: 45, modes: ['filaments'] },
       { id: 'view', label: 'View', min: 0, max: 1, step: 1, default: 0, modes: ['attention'] },
-      { id: 'feed', label: 'Feed', type: 'text', default: '', placeholder: 'Feed URL or Are.na channel', maxLength: 300, modes: ['attention'] }
+      { id: 'feed', label: 'Feed', type: 'text', default: '', placeholder: 'Feed URL or Are.na channel', maxLength: 300, modes: ['attention'] },
+      { id: 'tempo', label: 'Tempo', min: 60, max: 180, step: 1, default: 110, modes: ['sequencer'] },
+      { id: 'sound', label: 'Sound', type: 'toggle', default: false, modes: ['sequencer'], hint: 'Play the rings (kick, snare, hi-hat); recorded into videos.' },
+      { id: 'dim', label: 'Dim', min: 0, max: 100, step: 1, default: 45, modes: ['filaments', 'sequencer'] }
     ]
   },
   {
@@ -137,7 +140,8 @@ Magi.effectConfig = [
       range('distortion', 'Distortion', 0, 100, 0),
       range('smoothness', 'Smoothness', 0, 100, 0),
       range('face', 'Face', 0, 4, 0),
-      range('dim', 'Dim', 0, 100, 60)
+      range('dim', 'Dim', 0, 100, 60),
+      toggle('guide', 'Guide', true, 'Show the three grips on screen.')
     ]
   },
   {
@@ -154,6 +158,23 @@ Magi.effectConfig = [
       range('points', 'Points', 40, 600, 220),
       { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
       range('dim', 'Dim', 0, 100, 0)
+    ]
+  },
+  {
+    id: 'particles',
+    name: 'Particles',
+    group: 'hand',
+    ready: true,
+    photoType: 'image/jpeg',
+    params: [
+      range('count', 'Count', 200, 3000, 1200),
+      range('stiffness', 'Stiffness', 0, 100, 35),
+      range('damping', 'Damping', 0, 100, 30),
+      range('push', 'Push', 0, 100, 50),
+      range('reach', 'Reach', 0, 100, 40),
+      range('shape', 'Shape', 0, 1, 0),
+      range('letter', 'Letter', 0, 25, 10),
+      range('dim', 'Dim', 0, 100, 55)
     ]
   },
   {
@@ -567,17 +588,24 @@ Magi.effectGuides = {
     'Contour: points gather on the outlines of your hands and arms (drawn where the picture’s edges are strongest). Style 0 Points with readouts, 1 Path (a nearest-neighbor tour through them), 2 Fill (that path as a flat lime shape). Pinch to step through the styles. Points: how many. Rate: how often they’re redrawn. Labels: the readouts.',
     'Filaments: bundles of glowing strands strung along your bones, between fingertips and across both hands; they flex as you move, with bright pulses running along them. Strands: per bundle. Glow, Dim: light and background.',
     'Attention: your image library as a Mapper graph: images that look alike gather into nodes, and nodes that share images are linked. View 0 Graph, 1 PCA (each image by its two main directions of variation). Feed: a JSON feed or Are.na channel; images with an embedding in the feed are grouped by it, others by color. Without a feed, camera snapshots stand in.',
-    'Attention gestures: point (only the index up) to select the node under your fingertip and fan out its images; a fist pulls the graph in; an open palm spreads it out.'
+    'Attention gestures: point (only the index up) to select the node under your fingertip and fan out its images; a fist pulls the graph in; an open palm spreads it out.',
+    'Sequencer: three rings of Euclidean rhythms (events spread as evenly as possible over the steps). Grip and turn like a knob to change a ring’s number of events: thumb and index out for red, add the middle finger for yellow, all five for blue. Close your hand to randomize where the events sit. Tempo: speed. Sound: kick, snare and hi-hat, recorded into videos. Dim: darkens the camera.'
   ],
   'line-art': [
     'How it works: points gather on the outlines of your hands and arms (where the picture’s edges are strongest) and one continuous line runs through them, always to the nearest point, redrawn as you move.',
     'Pinch: freezes the drawing until you let go.',
     'Thickness: line width. Texture: a dry brush, broken and layered. Spikiness: 0 rounded curves, 50 straight lines, 100 sharp spikes. Rate: how often it redraws. Points: how many. Color: far left lime. Dim: darkens the camera.'
   ],
+  particles: [
+    'How it works: every particle sits on a damped spring to its resting place; your fingertips push particles away as they pass, and the field springs back behind them. Moving particles light up and streak.',
+    'Count: how many. Stiffness: how fast they spring back. Damping: how quickly they settle (low: they wobble). Push, Reach: how hard and how far your fingertips push.',
+    'Shape: 0 an oval field, 1 a letter (Letter picks it, in Literata). Dim: darkens the camera.'
+  ],
   font: [
     'How it works: a letter traced from a typeface (marching squares), drawn as a dotted outline inside an A–Z dial, with an envelope around it.',
     'Grip it like a knob and turn your hand. Thumb and index out (an L): picks the letter. Thumb, index and middle out: Distortion, the outline warped by a smooth field. All five out: Smoothness, the outline rounded (Taubin smoothing). The sliders move with your hand.',
-    'Face: 0 Literata, 1 Bodoni, 2 Inter, 3 Silkscreen, 4 VT323. Dim: darkens the camera behind the letter.'
+    'Face: 0 Literata, 1 Bodoni, 2 Inter, 3 Silkscreen, 4 VT323. Dim: darkens the camera behind the letter.',
+    'Guide: shows the three grips on screen.'
   ],
   mosh: [
     'Spread thumb and index: the zone between them moshes; spreading wider makes it bigger.',

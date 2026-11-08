@@ -420,4 +420,124 @@
       hud.restore();
     };
   };
+
+  // Sequencer (after "a simple euclidean sequencer with hand tracking"): three rings of steps, each
+  // playing a Euclidean rhythm. A Euclidean rhythm E(k, n) spreads k events as evenly as possible
+  // over n steps (Toussaint 2005, after Bjorklund's algorithm for spacing timing pulses); step i is
+  // an event when ⌊(i + 1)k/n⌋ − ⌊ik/n⌋ = 1, which gives the same rhythms up to rotation (E(3, 8) is
+  // the tresillo, x..x..x.). Rings: red 16 steps (outer), yellow 12, blue 8 (inner); a playhead line
+  // sweeps each at Tempo (sixteenth notes), and an event flashes as it's hit.
+  // Gestures, as in the reference: the grip picks the ring — thumb and index out (an L): red; thumb,
+  // index and middle: yellow; all five: blue — and turning the grip (the thumb-to-index line, like a
+  // knob) changes that ring's number of events, one per 15°. Close your hand: every ring's events
+  // are rotated to a random placement. Sound (on): each ring is a voice — red a kick (a sine falling
+  // 150 → 45 Hz), yellow a snare (noise through a band-pass, plus a 190 Hz tone), blue a hi-hat
+  // (noise through a high-pass) — and plays into video recordings.
+  var SEQ = [
+    { color: '#ff3b30', n: 16, k: 4, r: 1 },
+    { color: '#ffd60a', n: 12, k: 5, r: 0.72 },
+    { color: '#5b8cff', n: 8, k: 3, r: 0.46 }
+  ];
+  function euclid(k, n, rot) {
+    var out = [];
+    for (var i = 0; i < n; i++) { var j = (i + rot) % n; out.push(Math.floor((j + 1) * k / n) - Math.floor(j * k / n) === 1); }
+    return out;
+  }
+  Magi.landmarkModes.sequencer = function () {
+    var rings = SEQ.map(function (r) { return { color: r.color, n: r.n, k: r.k, r: r.r, rot: 0, flash: [] }; });
+    var grab = null, cand = null, candSince = 0, wasFist = false, message = '', messageColor = '#fff', messageAt = -9, lastStep = null, noise = null;
+    function wrap(a) { return a - Math.round(a / 360) * 360; }
+    function voice(i, A) {
+      var c = A.ctx, t0 = c.currentTime, g = c.createGain();
+      g.connect(A.out);
+      if (i === 0) {
+        var o = c.createOscillator(); o.frequency.setValueAtTime(150, t0); o.frequency.exponentialRampToValueAtTime(45, t0 + 0.25);
+        g.gain.setValueAtTime(0.9, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + 0.3); o.connect(g); o.start(t0); o.stop(t0 + 0.32);
+        return;
+      }
+      if (!noise) {
+        noise = c.createBuffer(1, c.sampleRate * 0.3, c.sampleRate);
+        var d = noise.getChannelData(0); for (var q = 0; q < d.length; q++) d[q] = Math.random() * 2 - 1;
+      }
+      var src = c.createBufferSource(), f = c.createBiquadFilter();
+      src.buffer = noise; f.type = i === 1 ? 'bandpass' : 'highpass'; f.frequency.value = i === 1 ? 1800 : 7000;
+      src.connect(f); f.connect(g);
+      var len = i === 1 ? 0.14 : 0.05;
+      g.gain.setValueAtTime(i === 1 ? 0.5 : 0.25, t0); g.gain.exponentialRampToValueAtTime(0.001, t0 + len);
+      src.start(t0); src.stop(t0 + len + 0.02);
+      if (i === 1) { var o2 = c.createOscillator(), g2 = c.createGain(); o2.frequency.value = 190; g2.gain.setValueAtTime(0.3, t0); g2.gain.exponentialRampToValueAtTime(0.001, t0 + 0.08); o2.connect(g2); g2.connect(A.out); o2.start(t0); o2.stop(t0 + 0.1); }
+    }
+    return function (ctx, frame, ix, params) {
+      var W = frame.width, H = frame.height, u = frame.pxPerCss, t = frame.time / 1000, hud = frame.hud;
+      ctx.fillStyle = 'rgba(0,0,0,' + (params.dim / 100).toFixed(3) + ')';
+      ctx.fillRect(0, 0, W, H);
+      // Grip → ring; turning → event count; fist → random placements.
+      var hd = ix.hands[0], grip = -1;
+      if (hd) {
+        var f = hd.fingers, out = function (nm) { return f[nm].extended; };
+        if (out('thumb') && out('index') && out('middle') && out('ring') && out('pinky')) grip = 2;
+        else if (out('thumb') && out('index') && out('middle') && !out('ring') && !out('pinky')) grip = 1;
+        else if (out('thumb') && out('index') && !out('middle') && !out('ring') && !out('pinky')) grip = 0;
+        if (hd.fist && !wasFist) {
+          rings.forEach(function (rg) { rg.rot = Math.floor(Math.random() * rg.n); });
+          message = 'RANDOMIZING EVENT PLACEMENTS...'; messageColor = '#ff3b30'; messageAt = t;
+        }
+        wasFist = hd.fist;
+      } else wasFist = false;
+      if (grip !== cand) { cand = grip; candSince = t; }
+      var active = cand >= 0 && t - candSince > 0.15 ? cand : -1;
+      if (active >= 0) {
+        var p = hd.points, ang = Math.atan2(p[8].y - p[4].y, p[8].x - p[4].x) * 180 / Math.PI;
+        if (!grab || grab.ring !== active) grab = { ring: active, last: ang, acc: 0, k: rings[active].k };
+        grab.acc += wrap(ang - grab.last); grab.last = ang;
+        rings[active].k = Math.max(0, Math.min(rings[active].n, Math.round(grab.k + grab.acc / 15)));
+        message = 'CHANGING EVENT COUNT...'; messageColor = rings[active].color; messageAt = t;
+      } else grab = null;
+
+      // Clock: sixteenth notes at Tempo.
+      var step = t * params.tempo / 60 * 4, A = params.sound ? Magi.fx.audio() : null;
+      if (A) Magi.fx.audioLiveAt = performance.now();
+      var R = H * 0.3, cx = Math.max(R * 1.25, W * 0.26), cy = H * 0.46;
+      ctx.save();
+      ctx.lineWidth = Math.max(1, 1.1 * u);
+      rings.forEach(function (rg, i) {
+        var pat = euclid(rg.k, rg.n, rg.rot), rad = R * rg.r, s = step % rg.n, cur = Math.floor(s);
+        // Triggers: steps crossed since the last frame.
+        if (lastStep !== null && Math.floor(step) !== Math.floor(lastStep)) {
+          var hit = Math.floor(step) % rg.n;
+          if (pat[hit]) { rg.flash[hit] = t; if (A) voice(i, A); }
+        }
+        ctx.strokeStyle = rg.color;
+        ctx.globalAlpha = 0.85;
+        ctx.beginPath(); ctx.arc(cx, cy, rad, 0, Math.PI * 2); ctx.stroke();
+        // Playhead.
+        var a = -Math.PI / 2 + s / rg.n * Math.PI * 2;
+        ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(a) * rad, cy + Math.sin(a) * rad); ctx.stroke();
+        // Events.
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = rg.color;
+        pat.forEach(function (on, j) {
+          if (!on) return;
+          var aj = -Math.PI / 2 + j / rg.n * Math.PI * 2, fl = rg.flash[j] !== undefined ? Math.max(0, 1 - (t - rg.flash[j]) / 0.25) : 0;
+          ctx.beginPath(); ctx.arc(cx + Math.cos(aj) * rad, cy + Math.sin(aj) * rad, (3.2 + 3 * fl) * u, 0, Math.PI * 2); ctx.fill();
+        });
+      });
+      lastStep = step;
+      // Fingertips in the active ring's color.
+      if (hd) {
+        ctx.fillStyle = active >= 0 ? rings[active].color : '#5b8cff';
+        [4, 8, 12, 16, 20].forEach(function (k2) { if (k2 === 4 || hd.fingers[['thumb', 'index', 'middle', 'ring', 'pinky'][k2 / 4 - 1]].extended) { var q = hd.points[k2]; ctx.beginPath(); ctx.arc(q.x, q.y, 5 * u, 0, Math.PI * 2); ctx.fill(); } });
+      }
+      ctx.restore();
+      if (t - messageAt < 1.5) {
+        hud.save();
+        if ('letterSpacing' in hud) hud.letterSpacing = Math.round(1.5 * u) + 'px';
+        hud.fillStyle = messageColor;
+        hud.font = '500 ' + Math.round(10 * u) + 'px ' + Magi.fx.MONO;
+        hud.fillText(message, cx - R, cy + R * 1.35);
+        if ('letterSpacing' in hud) hud.letterSpacing = '0px';
+        hud.restore();
+      }
+    };
+  };
 })();
