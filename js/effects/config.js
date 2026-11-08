@@ -102,7 +102,8 @@ Magi.effectConfig = [
     modes: [
       { id: 'skeleton', name: 'Skeleton' },
       { id: 'controller', name: 'Controller' },
-      { id: 'link', name: 'Link' }
+      { id: 'link', name: 'Link' },
+      { id: 'contour', name: 'Contour' }
     ],
     params: [
       { id: 'readouts', label: 'Readouts', type: 'toggle', default: true, modes: ['skeleton'], hint: 'Show which hand it is, the tracking score and rotation.' },
@@ -111,7 +112,11 @@ Magi.effectConfig = [
       { id: 'fingers', label: 'Fingers', type: 'toggle', default: false, modes: ['skeleton'], hint: 'Show the gaps between neighboring fingertips on each hand.' },
       { id: 'pairs', label: 'Pairs', type: 'toggle', default: false, modes: ['skeleton'], hint: 'Show the distances between matching fingertips of your left and right hands.' },
       { id: 'signals', label: 'Signals', type: 'toggle', default: false, modes: ['skeleton'], hint: 'Show what MAGI reads from each hand: fingers, curl, spread, pinches, speed and motions.' },
-      { id: 'opacity', label: 'Opacity', min: 0, max: 100, step: 1, default: 85, modes: ['controller'] }
+      { id: 'opacity', label: 'Opacity', min: 0, max: 100, step: 1, default: 85, modes: ['controller'] },
+      { id: 'style', label: 'Style', min: 0, max: 2, step: 1, default: 0, modes: ['contour'] },
+      { id: 'points', label: 'Points', min: 40, max: 600, step: 1, default: 260, modes: ['contour'] },
+      { id: 'rate', label: 'Rate', min: 0, max: 100, step: 1, default: 40, modes: ['contour'] },
+      { id: 'labels', label: 'Labels', type: 'toggle', default: true, modes: ['contour'], hint: 'Edge-strength readouts beside the points.' }
     ]
   },
   {
@@ -535,7 +540,8 @@ Magi.effectGuides = {
     'Controller: a circle spans your thumb and index fingertips and grows as they open; it slides along the ruler, and its value is your position across the frame. It’s an outline while your hand is open and fills as you pinch; Opacity: the fullest fill.',
     'Controller, index only (thumb tucked): the circle shrinks to a pointer dot on your fingertip and keeps sliding. Two hands: the second hand gets its own circle, value and ring stack on the right.',
     'Controller: rings swell as thumb and index open. Node map: your hand redrawn small, fingertips trailing smooth curves. Graph: the value held every quarter second, scrolling down as a staircase (hand 2 in gray, to the left).',
-    'Link: two hands; a line joins your index fingertips with their distance at the green midpoint; the scope shows your fingertips around the palm.'
+    'Link: two hands; a line joins your index fingertips with their distance at the green midpoint; the scope shows your fingertips around the palm.',
+    'Contour: points gather on the outlines of your hands and arms (drawn where the picture’s edges are strongest). Style 0 Points with readouts, 1 Path (a nearest-neighbor tour through them), 2 Fill (that path as a flat lime shape). Pinch to step through the styles. Points: how many. Rate: how often they’re redrawn. Labels: the readouts.'
   ],
   font: [
     'How it works: a letter traced from a typeface (marching squares), drawn as evenly spaced points inside an A–Z dial.',
