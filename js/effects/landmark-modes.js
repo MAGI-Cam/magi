@@ -551,6 +551,8 @@
   // Turning your hand turns the view. Points that escape (|x|, |y| or |z| > 20) restart near the
   // origin. Each point leaves a pastel trail (hue by height z) added like light, fading by Trail.
   // The equations and α read on the HUD; red squares sit on your fingertips, α at the index tip.
+  // Strength: how bright and thick the trails are (light per segment 0.32 × Strength/50, width
+  // grows with it), from a faint haze to a solid glow.
   // Two hands: two attractors, one per hand, each with its own α and view, beside its hand.
   Magi.landmarkModes.rabinovich = function () {
     var N = 1400, trail = document.createElement('canvas'), tctx = trail.getContext('2d');
@@ -579,7 +581,8 @@
       tctx.fillStyle = 'rgba(0,0,0,' + (0.04 + (1 - params.trail / 100) * 0.3).toFixed(3) + ')';
       tctx.fillRect(0, 0, W, H);
       tctx.globalCompositeOperation = 'lighter';
-      tctx.lineWidth = Math.max(0.6, 0.7 * u);
+      var strength = (params.strength === undefined ? 50 : params.strength) / 50;
+      tctx.lineWidth = Math.max(0.6, 0.7 * u * (0.6 + 0.4 * strength));
       A.forEach(function (at, k) {
         var hd = hs[k], solo = hs.length < 2;
         // The second attractor fades in with a second hand and out without it.
@@ -607,7 +610,7 @@
         }
         bins.forEach(function (b, kb) {
           if (!b.length) return;
-          tctx.strokeStyle = 'rgba(' + at.pal[kb] + ',' + (0.32 * at.on).toFixed(3) + ')';
+          tctx.strokeStyle = 'rgba(' + at.pal[kb] + ',' + Math.min(1, 0.32 * strength * at.on).toFixed(3) + ')';
           tctx.beginPath();
           for (var j = 0; j < b.length; j += 4) { tctx.moveTo(b[j], b[j + 1]); tctx.lineTo(b[j + 2], b[j + 3]); }
           tctx.stroke();

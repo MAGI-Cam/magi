@@ -133,7 +133,8 @@ Magi.effectConfig = [
       { id: 'dim', label: 'Dim', min: 0, max: 100, step: 1, default: 45, modes: ['sequencer', 'rabinovich', 'cohesion', 'pollinate'] },
       { id: 'speed', label: 'Speed', min: 0, max: 100, step: 1, default: 50, modes: ['rabinovich'] },
       { id: 'trail', label: 'Trail', min: 0, max: 100, step: 1, default: 70, modes: ['rabinovich'] },
-      { id: 'size', label: 'Size', min: 0, max: 100, step: 1, default: 50, modes: ['rabinovich'] }
+      { id: 'size', label: 'Size', min: 0, max: 100, step: 1, default: 50, modes: ['rabinovich'] },
+      { id: 'strength', label: 'Strength', min: 0, max: 100, step: 1, default: 50, modes: ['rabinovich'] }
     ]
   },
   {
@@ -222,6 +223,7 @@ Magi.effectConfig = [
       range('size', 'Size', 0, 100, 50),
       range('bristles', 'Bristles', 0, 100, 60),
       range('rate', 'Rate', 2, 20, 6),
+      range('speed', 'Speed', 0, 100, 50),
       { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
       range('dim', 'Dim', 0, 100, 90)
     ]
@@ -665,7 +667,7 @@ Magi.effectGuides = {
     'Attention: your image library as a Mapper graph: images that look alike gather into nodes, and nodes that share images are linked. View 0 Graph, 1 PCA (each image by its two main directions of variation). Feed: a JSON feed or Are.na channel; images with an embedding in the feed are grouped by it, others by color. Without a feed, camera snapshots stand in.',
     'Attention gestures: point (only the index up) to select the node under your fingertip and fan out its images; a fist pulls the graph in; an open palm spreads it out.',
     'Sequencer: three rings of Euclidean rhythms (events spread as evenly as possible over the steps). Grip and turn like a knob to change a ring’s number of events: thumb and index out for red, add the middle finger for yellow, all five for blue. Close your hand to randomize where the events sit. Tempo: speed. Sound: kick, snare and hi-hat, recorded into videos. Dim: darkens the camera.',
-    'Rabinovich: thousands of points ride the Rabinovich–Fabrikant equations. Open thumb and index to raise α (0.1 → 1.3) and reshape the attractor; turn and raise your hand to turn the view. Two hands: two attractors, one per hand. Speed, Trail, Size, Dim.',
+    'Rabinovich: thousands of points ride the Rabinovich–Fabrikant equations. Open thumb and index to raise α (0.1 → 1.3) and reshape the attractor; turn and raise your hand to turn the view. Two hands: two attractors, one per hand. Speed, Trail, Size, Dim. Strength: how bright and thick the trails are.',
     'Cohesion: a chord diagram of your hand’s 21 landmarks. Pairs close together are joined, so a fist fills the circle and spread fingers thin it; the level reads at the top with its recent history. Two hands: all 42 landmarks, chords across the hands in white as they come together, and each hand’s level plus the hands’ cohesion.',
     'Pollinate: concepts orbit in a spiral galaxy. Point with your index finger: a small pad appears there, and only your index finger moves it (by pushing past an edge). Your fingertip’s place on it picks two concepts (across, down). Hold still on a cell for half a second: the cell is marked in red and they pollinate into “A + B = ?” and an idea that decodes on the right. Fist: clears the marks. Open palm: spins the galaxy faster.'
   ],
@@ -692,9 +694,9 @@ Magi.effectGuides = {
   exhale: [
     'How it works: a sphere of particles that breathes. Each particle springs toward the breath at its own pace, so exhales bloom bristled and inhales rush back.',
     'Open palm: exhale. Fist: inhale all the way and the sphere implodes into a bright core; open your hand and it blooms back out.',
-    'Two hands: two spheres, one per hand, each following and breathing with its own hand.',
-    'Pinch: the particles jump to your pinch and burst outward, then fall back into the sphere. Brush your hand across it to spin it like a ball; roll your hand to turn it; swipe to fling it. No hand: it breathes on its own at Rate.',
-    'Count, Size: how many and how big. Bristles: the streaks of rushing particles. Rate: breaths a minute with no hand. Color: far left green. Dim: darkens the camera.'
+    'Two hands: two spheres, one per hand, each following and breathing with its own hand. They pull on each other like gravity; bring them together and when they touch they merge into one. Pull your hands apart to split it.',
+    'Pinch: the particles stream to your pinch, burst outward when they reach it, then fall back into the sphere. Brush your hand across it to spin it like a ball; roll your hand to turn it; swipe to fling it. No hand: it breathes on its own at Rate.',
+    'Count, Size: how many and how big. Bristles: the streaks of rushing particles. Rate: breaths a minute with no hand. Speed: how fast the particles travel, burst, return and breathe. Color: far left green. Dim: darkens the camera.'
   ],
   'word-box': [
     'How it works: your body (from the segmenter) filled with characters strung together by red threads, above a wireframe box. The characters keep their places on your body, head to toe, and move with you; a share of them ride your hands.',
