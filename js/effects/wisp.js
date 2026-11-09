@@ -38,6 +38,17 @@
     'float vacW(vec2 p) { float w = 0.0; vec2 a = vec2(aspect, 1.0);\n' +
     '  if (vac0.z > 0.0) w = max(w, smoothstep(vac0.z, 0.0, length((p - vac0.xy) * a)));\n' +
     '  if (vac1.z > 0.0) w = max(w, smoothstep(vac1.z, 0.0, length((p - vac1.xy) * a)));\n' +
+    '  return w; }\n' +
+    // The vacuum's sink: a 2D point sink draws everything toward the fist with speed Q/(2πr)
+    // (r the distance; capped near the center), fading to 0 at the vacuum's edge; inside its
+    // core (6% of the frame height) what arrives is erased.
+    'uniform float vq;\n' +
+    'vec2 sink1(vec2 p, vec3 v) { vec2 a = vec2(aspect, 1.0), d = (v.xy - p) * a; float r = length(d) + 1e-4;\n' +
+    '  return v.z > 0.0 ? d / r * vq * min(1.0 / (r * 6.0), 3.0) * smoothstep(v.z, 0.0, r) / a : vec2(0.0); }\n' +
+    'vec2 vacSink(vec2 p) { return sink1(p, vac0) + sink1(p, vac1); }\n' +
+    'float vacCore(vec2 p) { vec2 a = vec2(aspect, 1.0); float w = 0.0;\n' +
+    '  if (vac0.z > 0.0) w = max(w, smoothstep(0.06, 0.0, length((p - vac0.xy) * a)));\n' +
+    '  if (vac1.z > 0.0) w = max(w, smoothstep(0.06, 0.0, length((p - vac1.xy) * a)));\n' +
     '  return w; }\n';
   var FS = {
     // Hand drag, curl-noise swirl (ψ = sin·sin, force = (∂ψ/∂y, −∂ψ/∂x)) and buoyant rise, both
@@ -71,10 +82,10 @@
       'void main() { o = vec4(texture(vel, uv).xy - 0.5 * vec2(texture(pr, vR).x - texture(pr, vL).x, texture(pr, vT).x - texture(pr, vB).x), 0.0, 1.0); }',
     // Semi-Lagrangian advection: look back along the velocity, then fade.
     advect: 'uniform sampler2D vel, src; uniform vec2 velTexel; uniform float dt, keep;\n' +
-      'void main() { vec2 back = uv - dt * texture(vel, uv).xy * velTexel; o = mix(keep, vk, vacW(uv)) * texture(src, back); }',
+      'void main() { vec2 back = uv - dt * (texture(vel, uv).xy * velTexel + vacSink(uv)); o = mix(keep, vk, vacCore(uv)) * texture(src, back); }',
     // The image map: D(x) ← D(x − v·dt) − v·dt, then relaxed toward zero.
     warp: 'uniform sampler2D vel, map; uniform vec2 velTexel; uniform float dt, keep;\n' +
-      'void main() { vec2 st = dt * texture(vel, uv).xy * velTexel; o = vec4((texture(map, uv - st).xy - st) * mix(keep, vk, vacW(uv)), 0.0, 1.0); }',
+      'void main() { vec2 st = dt * (texture(vel, uv).xy * velTexel + vacSink(uv)); o = vec4((texture(map, uv - st).xy - st) * mix(keep, vk, vacCore(uv)), 0.0, 1.0); }',
     // The stirred picture; where it is displaced, its hue turns by `hue` (a rotation about the gray
     // axis in YIQ), weighted by how far the pixel has been carried, so a pinch tints the swirls.
     show: 'uniform sampler2D cam, map; uniform float hue;\nvoid main() { vec2 d = texture(map, uv).xy; vec3 c = texture(cam, clamp(uv + d, 0.0, 1.0)).rgb;\n' +
@@ -301,14 +312,15 @@
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, out);
         gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
 
-        // Fist: a vacuum around each closed hand (radius a quarter of the frame height): there the
-        // stirred picture is drawn back to normal quickly (0.12 s half-life, pigment 0.4 s) and the
-        // flow is damped. Two fists vacuum two places.
+        // Fist: a vacuum at each closed hand. Within 35% of the frame height everything stirred
+        // (the picture's displacement, the activity, the pigment) is drawn into the fist by a point
+        // sink (see vacSink) and erased in its core, and the flow there is damped. Two fists, two
+        // vacuums.
         // Pinch (Psychedelic, Watercolor): shifts the colors, one palette a second per pinching hand (two hands: twice as fast;
         // real elapsed time, since the fluid's own step is capped); in Smoke it turns the hue of the
         // swirls. The slider follows in Watercolor.
         var ixW = Magi.interaction.read(frame), fists = ixW.hands.filter(function (h) { return h.fist; }).slice(0, 2);
-        var vacs = [0, 1].map(function (k) { var h = fists[k]; return h ? [h.center.x / W, 1 - h.center.y / H, 0.25] : [0, 0, 0]; });
+        var vacs = [0, 1].map(function (k) { var h = fists[k]; return h ? [h.center.x / W, 1 - h.center.y / H, 0.35] : [0, 0, 0]; });
         var pinching = ixW.hands.filter(function (h) { return h.pinched; }).length;
         var realDt = lastColorT === null ? dt : Math.min(0.25, t - lastColorT);
         lastColorT = t;
@@ -319,7 +331,7 @@
             if (Math.abs(colorAcc) >= 1) { var stepC = Math.trunc(colorAcc); colorAcc -= stepC; var nc = params.colors + stepC; if (nc > 100) nc = 1 + (nc - 101); frame.setParam('colors', nc); params = Object.assign({}, params, { colors: nc }); }
           }
         }
-        var vac = { vac0: vacs[0], vac1: vacs[1], aspect: W / H };
+        var vac = { vac0: vacs[0], vac1: vacs[1], aspect: W / H, vq: 0.25 };
         var vt = [1 / sw, 1 / sh], keep = Math.pow(2, -dt / (0.15 * Math.pow(2, params.trail / 20))), vkeep = Math.pow(2, -dt / 0.12);
         run('emit', { act: act.read, mask: maskTex }, act.write, vt); act.swap();
         run('force', { vel: vel.read, mask: maskTex, act: act.read, size: [sw, sh], flow: params.flow / 100, dt: dt,
@@ -334,9 +346,9 @@
         for (var i = 0; i < 20; i++) { run('pressure', { pr: prs.read, dv: div }, prs.write, vt); prs.swap(); }
         run('gradient', { vel: vel.read, pr: prs.read }, vel.write, vt);
         vel.swap();
-        run('advect', { vel: vel.read, src: vel.read, velTexel: vt, dt: dt, keep: 1, vk: 1, vac0: vac.vac0, vac1: vac.vac1, aspect: vac.aspect }, vel.write, vt);
+        run('advect', { vel: vel.read, src: vel.read, velTexel: vt, dt: dt, keep: 1, vk: 1, vq: 0, vac0: vac.vac0, vac1: vac.vac1, aspect: vac.aspect }, vel.write, vt);
         vel.swap();
-        run('advect', { vel: vel.read, src: act.read, velTexel: vt, dt: dt, keep: keep, vk: vkeep, vac0: vac.vac0, vac1: vac.vac1, aspect: vac.aspect }, act.write, vt);
+        run('advect', { vel: vel.read, src: act.read, velTexel: vt, dt: dt, keep: keep, vk: vkeep, vq: vac.vq, vac0: vac.vac0, vac1: vac.vac1, aspect: vac.aspect }, act.write, vt);
         act.swap();
         if (params.mode === 'watercolor') {
           // Watercolor: deposit, carry with the flow, bleed, then paint on paper. The painting lasts
@@ -354,14 +366,14 @@
           run('deposit', { pig: pig.read, mask: maskTex, cam: camTex, c0: cs[0], c1: cs[1], c2: cs[2], c3: cs[3], amount: dt * 2.5, t: t, useCam: pal ? 0 : 1 }, pig.write, pt);
           pig.swap();
           var pkeep = Math.pow(2, -dt / (2 * Math.pow(2, params.trail / 12)));
-          run('advect', { vel: vel.read, src: pig.read, velTexel: vt, dt: dt, keep: pkeep, vk: Math.pow(2, -dt / 0.4), vac0: vac.vac0, vac1: vac.vac1, aspect: vac.aspect }, pig.write, pt);
+          run('advect', { vel: vel.read, src: pig.read, velTexel: vt, dt: dt, keep: pkeep, vk: Math.pow(2, -dt / 0.1), vq: vac.vq, vac0: vac.vac0, vac1: vac.vac1, aspect: vac.aspect }, pig.write, pt);
           pig.swap();
           run('bleed', { pig: pig.read, k: 0.12 }, pig.write, pt);
           pig.swap();
           if (t - paletteAt < 2) { var hud = frame.hud; hud.save(); hud.fillStyle = params.dark ? '#fff' : '#111'; hud.font = '500 ' + Math.round(11 * frame.pxPerCss) + 'px ' + Magi.fx.MONO; hud.fillText(entry.name.toUpperCase(), W * 0.04, H * 0.07); hud.restore(); }
           run('paint', { pig: pig.read, size: [pig.read.w, pig.read.h], edges: params.edges / 100 * 2.5, dark: params.dark ? 1 : 0 }, null, pt);
         } else {
-          run('warp', { vel: vel.read, map: map.read, velTexel: vt, dt: dt, keep: keep, vk: vkeep, vac0: vac.vac0, vac1: vac.vac1, aspect: vac.aspect }, map.write, [1 / map.read.w, 1 / map.read.h]);
+          run('warp', { vel: vel.read, map: map.read, velTexel: vt, dt: dt, keep: keep, vk: vkeep, vq: vac.vq, vac0: vac.vac0, vac1: vac.vac1, aspect: vac.aspect }, map.write, [1 / map.read.w, 1 / map.read.h]);
           map.swap();
           run('show', { cam: camTex, map: map.read, hue: params.mode === 'psychedelic' ? colorShift * 2.4 : 0 }, null, [1 / W, 1 / H]);
         }

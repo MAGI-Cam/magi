@@ -392,6 +392,25 @@ svg {
   transition: opacity 0.22s var(--ease), transform 0.22s var(--ease);
 }
 
+/* Search at the top of the tray: typing lists every matching effect and group, from any level. */
+.tray-search {
+  width: 100%;
+  height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--ink);
+  color: var(--paper);
+  font: inherit;
+  font-size: 13px;
+  letter-spacing: 0.03em;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.tray-search::placeholder { color: var(--dim); }
+.tray-search:focus { outline: none; border-color: var(--paper); }
+.tray-empty { grid-column: 1 / -1; font-size: 12px; color: var(--dim); padding: 8px 0; }
+
 .tiles {
   display: grid;
   grid-template-columns: 1fr 1fr;

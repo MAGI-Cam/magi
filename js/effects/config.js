@@ -46,6 +46,8 @@ Magi.effectGroups = [
   { id: 'hand', name: 'Hand Tracking', parent: 'gesture' },
   { id: 'face', name: 'Face Tracking', parent: 'gesture' },
   { id: 'body', name: 'Body Tracking', parent: 'gesture' },
+  // Particle: particle systems driven by your hands.
+  { id: 'particle', name: 'Particle', parent: 'gesture' },
   // Spacenet: words strung through space (on your body, or free in the room).
   { id: 'spacenet', name: 'Spacenet', parent: 'gesture' },
   { id: 'facade', name: 'Facade' }
@@ -186,53 +188,106 @@ Magi.effectConfig = [
     ]
   },
   {
-    id: 'particles',
-    name: 'Particles',
-    group: 'hand',
-    ready: true,
-    photoType: 'image/jpeg',
-    params: [
-      range('count', 'Count', 200, 5000, 2600),
-      range('stiffness', 'Stiffness', 0, 100, 35),
-      range('damping', 'Damping', 0, 100, 30),
-      range('push', 'Push', 0, 100, 50),
-      range('reach', 'Reach', 0, 100, 40),
-      { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
-      range('glow', 'Glow', 0, 100, 40),
-      range('dim', 'Dim', 0, 100, 0),
-      toggle('hide', 'Hide', true, 'Hide resting particles: only the ones your hand moves show.'),
-      toggle('pointer', 'Pointer', true, 'A red dot on your index fingertip.'),
-      { id: 'text', label: 'Text', type: 'text', default: '', placeholder: 'Any characters (empty: whole screen)', maxLength: 40 }
-    ]
-  },
-  {
-    id: 'particle-life',
-    name: 'Particle Life',
-    group: 'hand',
+    id: 'pseudo-plexus',
+    name: 'Pseudo Plexus',
+    group: 'particle',
     ready: true,
     photoType: 'image/jpeg',
     modes: [
-      { id: 'worms', name: 'Worms' },
-      { id: 'glow', name: 'Glow' }
+      { id: 'light', name: 'Light' },
+      { id: 'ink', name: 'Ink' }
     ],
     params: [
-      range('count', 'Count', 200, 2000, 900),
-      range('types', 'Types', 2, 8, 5),
-      range('radius', 'Radius', 0, 100, 35),
-      range('force', 'Force', 0, 100, 50),
-      range('friction', 'Friction', 0, 100, 30),
-      range('trail', 'Trail', 0, 100, 60),
-      range('thickness', 'Thickness', 0, 100, 30),
-      range('size', 'Size', 0, 100, 20),
-      { id: 'glow', label: 'Glow', min: 0, max: 100, step: 1, default: 35, modes: ['glow'] },
-      range('profile', 'Profile', 0, 100, 0),
-      range('dim', 'Dim', 0, 100, 40)
+      range('count', 'Count', 2, 100, 6),
+      range('links', 'Links', 1, 6, 4),
+      range('reach', 'Reach', 0, 100, 65),
+      range('lines', 'Lines', 0, 100, 70),
+      range('turbulence', 'Turbulence', 0, 100, 30),
+      range('scale', 'Scale', 0, 100, 40),
+      range('hold', 'Hold', 0, 100, 50),
+      range('trails', 'Trails', 0, 100, 0),
+      range('exposure', 'Exposure', 0, 100, 50),
+      range('glow', 'Glow', 0, 100, 15),
+      { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
+      range('dim', 'Dim', 0, 100, 90)
+    ]
+  },
+  {
+    id: 'fibre',
+    name: 'Fibre',
+    group: 'particle',
+    ready: true,
+    photoType: 'image/jpeg',
+    modes: [
+      { id: 'fibre', name: 'Fibre' },
+      { id: 'tidal', name: 'Tidal' },
+      { id: 'horizon', name: 'Horizon' },
+      { id: 'lightbeam', name: 'Lightbeam' },
+      { id: 'thundercloud', name: 'Thundercloud' },
+      { id: 'symbiote', name: 'Symbiote' }
+    ],
+    params: [
+      range('count', 'Count', 20, 1000, 250),
+      range('size', 'Size', 0, 100, 50),
+      range('turbulence', 'Turbulence', 0, 100, 65),
+      range('scale', 'Scale', 0, 100, 60),
+      range('hold', 'Hold', 0, 100, 30),
+      range('trails', 'Trails', 0, 100, 75),
+      range('exposure', 'Exposure', 0, 100, 50),
+      range('glow', 'Glow', 0, 100, 35),
+      toggle('camera', 'Camera', false, 'Each particle takes the color of the video under it.'),
+      { id: 'ink', label: 'Ink', type: 'toggle', default: false, modes: ['fibre', 'tidal', 'horizon', 'thundercloud'], hint: 'Dark strands on white paper instead of light on dark.' },
+      { id: 'leak', label: 'Leak', type: 'toggle', default: true, modes: ['lightbeam'], hint: 'Warm light leaks at the edges and some red-orange strokes.' },
+      { id: 'flash', label: 'Flash', type: 'toggle', default: true, modes: ['lightbeam'], hint: 'A pinch fires a white flash over the background.' },
+      { id: 'core', label: 'Core', min: 0, max: 100, step: 1, default: 0, track: 'hue', modes: ['thundercloud'] },
+      { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
+      range('dim', 'Dim', 0, 100, 90)
+    ]
+  },
+  {
+    id: 'particle-cloud',
+    name: 'Particle Cloud',
+    group: 'particle',
+    ready: true,
+    photoType: 'image/jpeg',
+    modes: [
+      { id: 'light', name: 'Light' },
+      { id: 'ink', name: 'Ink' }
+    ],
+    params: [
+      range('count', 'Count', 20, 1000, 300),
+      range('turbulence', 'Turbulence', 0, 100, 50),
+      range('scale', 'Scale', 0, 100, 40),
+      range('hold', 'Hold', 0, 100, 50),
+      range('trails', 'Trails', 0, 100, 40),
+      range('exposure', 'Exposure', 0, 100, 50),
+      range('glow', 'Glow', 0, 100, 40),
+      { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
+      range('dim', 'Dim', 0, 100, 85)
+    ]
+  },
+  {
+    id: 'tendrils',
+    name: 'Tendrils',
+    group: 'particle',
+    ready: true,
+    photoType: 'image/jpeg',
+    modes: [
+      { id: 'neon', name: 'Neon' },
+      { id: 'silk', name: 'Silk' }
+    ],
+    params: [
+      range('count', 'Count', 0, 100, 50),
+      range('curl', 'Curl', 0, 100, 50),
+      range('length', 'Length', 0, 100, 50),
+      range('glow', 'Glow', 0, 100, 60),
+      { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' }
     ]
   },
   {
     id: 'exhale',
     name: 'Exhale',
-    group: 'hand',
+    group: 'particle',
     ready: true,
     photoType: 'image/jpeg',
     modes: [
@@ -252,6 +307,50 @@ Magi.effectConfig = [
       toggle('dissipate', 'Dissipate', false, 'With no hand up, the particles drift away and fade; they gather back when a hand returns.'),
       { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
       range('dim', 'Dim', 0, 100, 90)
+    ]
+  },
+  {
+    id: 'particles',
+    name: 'Particles',
+    group: 'particle',
+    ready: true,
+    photoType: 'image/jpeg',
+    params: [
+      range('count', 'Count', 200, 5000, 2600),
+      range('stiffness', 'Stiffness', 0, 100, 35),
+      range('damping', 'Damping', 0, 100, 30),
+      range('push', 'Push', 0, 100, 50),
+      range('reach', 'Reach', 0, 100, 40),
+      { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
+      range('glow', 'Glow', 0, 100, 40),
+      range('dim', 'Dim', 0, 100, 0),
+      toggle('hide', 'Hide', true, 'Hide resting particles: only the ones your hand moves show.'),
+      toggle('pointer', 'Pointer', true, 'A red dot on your index fingertip.'),
+      { id: 'text', label: 'Text', type: 'text', default: '', placeholder: 'Any characters (empty: whole screen)', maxLength: 40 }
+    ]
+  },
+  {
+    id: 'particle-life',
+    name: 'Particle Life',
+    group: 'particle',
+    ready: true,
+    photoType: 'image/jpeg',
+    modes: [
+      { id: 'worms', name: 'Worms' },
+      { id: 'glow', name: 'Glow' }
+    ],
+    params: [
+      range('count', 'Count', 200, 2000, 900),
+      range('types', 'Types', 2, 8, 5),
+      range('radius', 'Radius', 0, 100, 35),
+      range('force', 'Force', 0, 100, 50),
+      range('friction', 'Friction', 0, 100, 30),
+      range('trail', 'Trail', 0, 100, 60),
+      range('thickness', 'Thickness', 0, 100, 30),
+      range('size', 'Size', 0, 100, 20),
+      { id: 'glow', label: 'Glow', min: 0, max: 100, step: 1, default: 35, modes: ['glow'] },
+      range('profile', 'Profile', 0, 100, 0),
+      range('dim', 'Dim', 0, 100, 40)
     ]
   },
   {
@@ -472,102 +571,6 @@ Magi.effectConfig = [
       range('dim', 'Dim', 0, 100, 0),
       toggle('squares', 'Squares', true, 'A small square at every color.'),
       toggle('axes', 'Axes', true, 'Draw the color space’s axes.')
-    ]
-  },
-  {
-    id: 'tendrils',
-    name: 'Tendrils',
-    group: 'hand',
-    ready: true,
-    photoType: 'image/jpeg',
-    modes: [
-      { id: 'neon', name: 'Neon' },
-      { id: 'silk', name: 'Silk' }
-    ],
-    params: [
-      range('count', 'Count', 0, 100, 50),
-      range('curl', 'Curl', 0, 100, 50),
-      range('length', 'Length', 0, 100, 50),
-      range('glow', 'Glow', 0, 100, 60),
-      { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' }
-    ]
-  },
-  {
-    id: 'fibre',
-    name: 'Fibre',
-    group: 'hand',
-    ready: true,
-    photoType: 'image/jpeg',
-    modes: [
-      { id: 'fibre', name: 'Fibre' },
-      { id: 'tidal', name: 'Tidal' },
-      { id: 'horizon', name: 'Horizon' },
-      { id: 'lightbeam', name: 'Lightbeam' },
-      { id: 'thundercloud', name: 'Thundercloud' },
-      { id: 'symbiote', name: 'Symbiote' }
-    ],
-    params: [
-      range('count', 'Count', 20, 1000, 250),
-      range('size', 'Size', 0, 100, 50),
-      range('turbulence', 'Turbulence', 0, 100, 65),
-      range('scale', 'Scale', 0, 100, 60),
-      range('hold', 'Hold', 0, 100, 30),
-      range('trails', 'Trails', 0, 100, 75),
-      range('exposure', 'Exposure', 0, 100, 50),
-      range('glow', 'Glow', 0, 100, 35),
-      toggle('camera', 'Camera', false, 'Each particle takes the color of the video under it.'),
-      { id: 'ink', label: 'Ink', type: 'toggle', default: false, modes: ['fibre', 'tidal', 'horizon', 'thundercloud'], hint: 'Dark strands on white paper instead of light on dark.' },
-      { id: 'leak', label: 'Leak', type: 'toggle', default: true, modes: ['lightbeam'], hint: 'Warm light leaks at the edges and some red-orange strokes.' },
-      { id: 'flash', label: 'Flash', type: 'toggle', default: true, modes: ['lightbeam'], hint: 'A pinch fires a white flash over the background.' },
-      { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
-      range('dim', 'Dim', 0, 100, 90)
-    ]
-  },
-  {
-    id: 'particle-cloud',
-    name: 'Particle Cloud',
-    group: 'hand',
-    ready: true,
-    photoType: 'image/jpeg',
-    modes: [
-      { id: 'light', name: 'Light' },
-      { id: 'ink', name: 'Ink' }
-    ],
-    params: [
-      range('count', 'Count', 20, 1000, 300),
-      range('turbulence', 'Turbulence', 0, 100, 50),
-      range('scale', 'Scale', 0, 100, 40),
-      range('hold', 'Hold', 0, 100, 50),
-      range('trails', 'Trails', 0, 100, 40),
-      range('exposure', 'Exposure', 0, 100, 50),
-      range('glow', 'Glow', 0, 100, 40),
-      { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
-      range('dim', 'Dim', 0, 100, 85)
-    ]
-  },
-  {
-    id: 'pseudo-plexus',
-    name: 'Pseudo Plexus',
-    group: 'hand',
-    ready: true,
-    photoType: 'image/jpeg',
-    modes: [
-      { id: 'light', name: 'Light' },
-      { id: 'ink', name: 'Ink' }
-    ],
-    params: [
-      range('count', 'Count', 2, 100, 6),
-      range('links', 'Links', 1, 6, 4),
-      range('reach', 'Reach', 0, 100, 65),
-      range('lines', 'Lines', 0, 100, 70),
-      range('turbulence', 'Turbulence', 0, 100, 30),
-      range('scale', 'Scale', 0, 100, 40),
-      range('hold', 'Hold', 0, 100, 50),
-      range('trails', 'Trails', 0, 100, 0),
-      range('exposure', 'Exposure', 0, 100, 50),
-      range('glow', 'Glow', 0, 100, 15),
-      { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
-      range('dim', 'Dim', 0, 100, 90)
     ]
   },
   {
@@ -864,7 +867,7 @@ Magi.effectGuides = {
   ],
   wisp: [
     'Move your fingers through the picture: the video itself swirls and drags like smoke where they pass, then settles. A still hand does nothing.',
-    'Fist: vacuums the picture back to normal around your hand; two fists vacuum two places.',
+    'Fist: a vacuum: the swirls (or the paint) are sucked into your fist and disappear. Two fists, two vacuums.',
     'Pinch (Psychedelic and Watercolor): shifts the colors, the hue of the swirls or the palette. Pinch with both hands: twice as fast. Smoke stays the picture’s own colors.',
     'Modes: tap the tile. Smoke: the picture swirls in its own colors. Psychedelic: the same, and the swirls shift hue as you pinch. Watercolor: painting with pigment.',
     'Trail: how long the swirl lasts. Flow: how strongly your motion drags the picture.',
@@ -959,7 +962,7 @@ Magi.effectGuides = {
     'Tidal: your hand is a moon. Its tidal pull (stronger the closer it is, by the inverse cube of the distance) raises two opposite bulges that stream toward and away from it. Open palm: a heavier moon; fist: lighter.',
     'Horizon: particles pour along a line, lifted off it like smoke. Close a fist to set the line through it and turn the fist to tilt it. Open palm: raises a plume.',
     'Lightbeam: draw with light with your index finger; strokes glow and fade (Trails sets how long). Fist: wipes the drawing. Leak: warm light leaks and red-orange strokes. Flash: a pinch flashes the background white.',
-    'Thundercloud: a churning cloud, grey outside and glowing at its heart. It follows your hand; fist heats and compresses it, open palm swells it, pinch throws lightning to your fingertips.',
+    'Thundercloud: a dense, heavy cloud, grey outside and glowing at its heart; the nearer a particle is to the center, the more it takes the Core color (far left: ember orange). It follows your hand slowly, like a heavy mass. Fist heats and compresses it, open palm swells it. Pinch: lightning that lights up the cloud from inside, a searing flash and a ripple of light through the particles, flickering like real lightning.',
     'Symbiote: black ink grows from your hands and clings to them, lashing out when you move fast.',
     'Count: particles, in thousands (fewer if your phone stutters). Size, Turbulence, Scale, Hold (how strongly the shape pulls particles back), Trails, Exposure, Glow. Camera: color from the video. Ink: dark on white. Color: tint. Dim: darkens (or, in ink, whitens) the camera.'
   ],

@@ -10,7 +10,7 @@
   var app = $('app'), stage = $('stage'), view = $('view'), reviewVideo = $('review-video');
   var notice = $('notice'), noticeText = $('notice-text'), noticeActions = $('notice-actions');
   var shutter = $('shutter'), saveBtn = $('save'), timer = $('timer');
-  var caret = $('caret'), tray = $('tray'), tiles = $('tiles'), controls = $('controls'), hint = $('hint');
+  var caret = $('caret'), tray = $('tray'), tiles = $('tiles'), controls = $('controls'), hint = $('hint'), search = $('search');
   var uploadBtn = $('upload'), cameraBtn = $('camera'), fileInput = $('file');
   var camsBtn = $('cams'), camMenu = $('cam-menu'), micBtn = $('mic');
   var modeButtons = Array.prototype.slice.call(document.querySelectorAll('[data-mode-option]'));
@@ -404,7 +404,7 @@
     caret.setAttribute('aria-expanded', String(open));
     caret.setAttribute('aria-label', open ? 'Hide effects' : 'Show effects');
     // Reopen where you left it: the last level of the tray you were looking at.
-    if (open) showLevel(level);
+    if (open) { if (search.value.trim()) showSearch(search.value); else showLevel(level); }
   }
 
   function groupById(id) {
@@ -451,6 +451,30 @@
     syncTiles();
   }
 
+  // Search: every effect whose name, modes or group path contains the words typed (all of them, in
+  // any order), and every group whose name does, in tray order; clearing it returns to the level.
+  function showSearch(q) {
+    var words = q.toLowerCase().split(/\s+/).filter(Boolean);
+    if (!words.length) { showLevel(level); return; }
+    tiles.textContent = '';
+    var path = function (gid) { var g = groupById(gid), out = []; while (g) { out.unshift(g.name); g = groupById(g.parent); } return out.join(' '); };
+    var hit = function (text) { text = text.toLowerCase(); return words.every(function (w) { return text.indexOf(w) >= 0; }); };
+    var n = 0;
+    Magi.effectConfig.forEach(function (fx) {
+      var text = fx.name + ' ' + (fx.modes || []).map(function (m) { return m.name; }).join(' ') + ' ' + path(fx.group);
+      if (hit(text)) { addTile(fx); n++; }
+    });
+    Magi.effectGroups.forEach(function (g) { if (hit(g.name)) { addGroupTile(g); n++; } });
+    if (!n) { var none = document.createElement('p'); none.className = 'tray-empty'; none.textContent = 'No effects match “' + q.trim() + '”.'; tiles.appendChild(none); }
+    syncTiles();
+  }
+  search.addEventListener('input', function () { showSearch(search.value); });
+  search.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !search.value) return; // an empty search: Escape closes the tray as usual
+    e.stopPropagation(); // typing here never triggers the app's shortcuts
+    if (e.key === 'Escape') { e.preventDefault(); search.value = ''; showLevel(level); }
+  });
+
   function addGroupTile(group) {
     var b = document.createElement('button');
     b.type = 'button';
@@ -459,6 +483,7 @@
     b.innerHTML = '<span></span><span class="tile-mode"></span>';
     b.firstChild.textContent = group.name;
     b.addEventListener('click', function () {
+      search.value = '';
       showLevel(group.id);
       tiles.querySelector('.tile').focus();
     });

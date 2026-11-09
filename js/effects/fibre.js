@@ -28,28 +28,23 @@
 //     any speed) and stay where they are, glowing, for 2–12 s (Trails). Leak (switch): warm light
 //     leaks drift at the picture's edges and some strokes come out red-orange. Flash (switch): a
 //     pinch fires a white flash over the background. Fist: wipes the drawing.
-//   Thundercloud — a solid ball of particles (born uniformly in its volume, radius ∝ ∛u) churned by
-//     turbulence and held together by a pull to its center, grey at the edge and glowing red-orange
-//     at its heart (color blended toward the core color within 90% of the radius). It follows your
-//     palm; open palm: it swells and churns; fist: it compresses and heats. Pinch: lightning, a bolt
-//     from the cloud to your fingertips drawn by midpoint displacement (each segment's midpoint
-//     pushed sideways by up to half the remaining length, recursively, a fractal path), with a flash
-//     of heat inside the cloud.
+//   Thundercloud — a dense ball of particles (born uniformly in its volume, radius ∝ ∛u) churned
+//     slowly by fine turbulence and held hard by a pull to its center, grey at the edge and glowing at
+//     its heart: each particle's color blends toward the Core color the nearer it is to the center
+//     (fully inside 15% of the radius, not at all past 90%). Heavy: its center follows your palm as a
+//     mass on a soft spring (1.2 Hz, ζ 0.45), lagging and overshooting. Open palm: it swells and
+//     churns; fist: it compresses and heats. Pinch: lightning. It strikes inside the cloud on your
+//     hand's side and lights the particles themselves: a searing glow at the strike and a shell of
+//     light rippling out through the cloud at 2.2 units a second, flickering through four return
+//     strokes (0, 90, 200 and 360 ms, each decaying in 50 ms), as real lightning does, with a faint
+//     flash of the sky behind.
 //   Symbiote — always ink: black strands that grow from your hands (born at your 21 landmarks) and
 //     cling to them (attractors at your palms), lashing out when you move fast (turbulence × hand
 //     speed) and leaving long wet strokes (long trails). No hand: a restless blob in the middle.
 (function () {
-  // A lightning bolt from a to b by midpoint displacement (Fournier, Fussell & Carpenter 1982).
-  function bolt(a, b, rough, depth, out) {
-    if (depth === 0) { out.push(b); return; }
-    var mx = (a[0] + b[0]) / 2, my = (a[1] + b[1]) / 2, dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1;
-    var off = (Math.random() - 0.5) * l * rough, m = [mx - dy / l * off, my + dx / l * off];
-    bolt(a, m, rough, depth - 1, out); bolt(m, b, rough, depth - 1, out);
-  }
-
   function createFibre() {
     var sys = undefined, camCopy = document.createElement('canvas'), lastT = null, center = [0, 0, 0], radius = 0.5, view = { yaw: 0, pitch: 0.2 }, vel = { yaw: 0.15, pitch: 0 }, grab = null, seen = 0;
-    var tk = { amp: 1, hold: 1, rad: 1, tide: 1, heat: 1 }, lastMode = null, prevTip = null, lineAng = 0, lineY = 0, flash = 0, bolts = [], wasPinched = {}, wasFist = false;
+    var tk = { amp: 1, hold: 1, rad: 1, tide: 1, heat: 1 }, cvel = [0, 0, 0], strike = null, lastMode = null, prevTip = null, lineAng = 0, lineY = 0, flash = 0, wasPinched = {}, wasFist = false;
     return {
       animated: true,
       render: function (frame, out, params) {
@@ -73,7 +68,7 @@
         lastT = t;
         var aspect = W / H, toW = function (p) { return [(p.x / W * 2 - 1) * aspect, 1 - p.y / H * 2, 0]; };
         var ix = Magi.interaction.read(frame), hands = ix.pair ? [ix.pair.left, ix.pair.right] : ix.hands.slice(0, 1), hd = hands[0];
-        var e = 1 - Math.exp(-dt / 0.25), baseR = 0.2 + params.size / 100 * 0.6;
+        var e = 1 - Math.exp(-dt / 0.25), baseR = 0.2 + params.size / 100 * 0.6, heavy = false;
         var turb = params.turbulence / 100, hold = params.hold / 100, kscale = 0.5 + params.scale / 100 * 2.5;
         var step = { dt: dt, time: t, count: 0, kscale: kscale, follow: 2.5, soft: 0.1, lifeMin: 3, lifeMax: 9, jitter: 0.04 };
         var look = { depthK: 0.6, areaR: radius, pivot: center, spin: true, trailsOverride: null };
@@ -139,13 +134,14 @@
             if (h.fist) { want.rad *= 0.7; want.heat *= 2.2; want.amp *= 0.7; }
             else if (h.count >= 4 && !h.pinched) { want.rad *= 1.35; want.amp *= 1.5; }
             if (h.pinched && pinchStart === h) {
-              var pm = h.points[8], c2 = [(center[0] / aspect + 1) / 2 * W, (1 - center[1]) / 2 * H];
-              var path = [c2]; bolt(c2, [pm.x, pm.y], 0.55, 6, path); bolts.push({ path: path, born: t }); flash = 1;
+              var hw = toW(h.center), hx = hw[0] - center[0], hy = hw[1] - center[1], hl = Math.hypot(hx, hy) || 1, Rn = radius * tk.rad;
+              strike = { at: t, c: [center[0] + hx / hl * Rn * 0.5 + (Math.random() - 0.5) * Rn * 0.3, center[1] + hy / hl * Rn * 0.5 + (Math.random() - 0.5) * Rn * 0.3, (Math.random() - 0.5) * Rn * 0.4] };
             }
           });
-          step.emitShape = 3; step.center = center; step.radius = radius * tk.rad; step.amp = (0.08 + turb * 0.7) * tk.amp; step.follow = 1.6;
-          step.lifeMin = 3; step.lifeMax = 8; attract.push(center.concat([0.012 * (0.5 + hold)]));
-          look.coreK = (1.1 + flash * 2.5) * tk.heat; look.depthK = 0.5;
+          step.emitShape = 3; step.center = center; step.radius = radius * tk.rad * 0.75; step.amp = (0.04 + turb * 0.35) * tk.amp; step.follow = 1.2; step.kscale = kscale * 1.8;
+          step.lifeMin = 4; step.lifeMax = 10; step.soft = 0.35; attract.push(center.concat([0.05 * (0.5 + hold) * (1 + (tk.heat - 1) * 0.6)]));
+          look.coreK = 0.75 * tk.heat; look.depthK = 0.5; look.areaR = radius * tk.rad * 0.75;
+          heavy = true;
         } else if (mode === 'symbiote') {
           var emit = [];
           hands.forEach(function (h) {
@@ -158,10 +154,23 @@
           step.amp = (0.15 + turb * 0.9) * tk.amp; step.follow = 4; step.lifeMin = 1.5; step.lifeMax = 5; step.kscale = kscale * 1.6;
           look.areaR = 0.5; look.pivot = [0, 0, 0]; look.spin = false; look.depthK = 0.2; look.trailsOverride = 0.985;
         }
-        center = center.map(function (v, i) { return v + (want.c[i] - v) * e; });
+        if (heavy) {
+          // A mass on a soft spring: 1.2 Hz, damping ratio 0.45, so it lags and overshoots.
+          var wcn = 2 * Math.PI * 1.2;
+          center = center.map(function (v, i) { cvel[i] += (wcn * wcn * (want.c[i] - v) - 2 * 0.45 * wcn * cvel[i]) * dt; return v + cvel[i] * dt; });
+        } else center = center.map(function (v, i) { return v + (want.c[i] - v) * e; });
         radius += (want.r - radius) * e;
         ['amp', 'hold', 'rad', 'tide', 'heat'].forEach(function (k) { tk[k] += (want[k] - tk[k]) * e; });
         flash *= Math.exp(-dt / 0.3);
+        // Lightning's return strokes: four pulses, each decaying in 50 ms, and a shell of light that
+        // restarts from the strike with each.
+        var flashI = 0, waveR = 0;
+        if (strike) {
+          var ts = t - strike.at, last = 0;
+          [0, 0.09, 0.2, 0.36].forEach(function (tk2, k2) { if (ts >= tk2) { flashI += Math.exp(-(ts - tk2) / 0.05) * (1 - k2 * 0.15); last = tk2; } });
+          waveR = (ts - last) * 2.2;
+          if (ts > 0.9) strike = null; else flash = Math.max(flash, flashI * 0.25);
+        }
 
         // Turning (sphere modes): pinch and drag, momentum, swipes.
         if (look.spin && mode !== 'thundercloud') {
@@ -199,18 +208,19 @@
         var nEff = sys.count() / (1 - decay);
         var col = params.color ? Magi.fx.inkColor(params.color) : mode === 'thundercloud' ? [0.62, 0.62, 0.66] : [1, 1, 1];
         if (ink) col = col.map(function (v) { return params.color ? 1 - v : 1; });
-        var brightK = mode === 'lightbeam' ? 0.06 * (N / 250000) : mode === 'thundercloud' ? 0.6 : mode === 'symbiote' ? 0.2 : 0.45;
+        var brightK = mode === 'lightbeam' ? 0.06 * (N / 250000) : mode === 'thundercloud' ? 0.1 : mode === 'symbiote' ? 0.2 : 0.45;
         sys.draw({
           w: w, h: h, view: M, pivot: look.pivot, color: col, focal: 3, psize: Math.max(1, Math.round((mode === 'lightbeam' ? 1.2 : 0.8) * u * sL)),
           bright: mode === 'lightbeam' ? brightK * 250000 / sys.count() : brightK * areaPx / nEff, decay: decay, exposure: 0.3 + params.exposure / 100 * 2.4,
-          glow: (params.glow / 100) * (mode === 'lightbeam' || mode === 'thundercloud' ? 2.2 : 1.5), ink: ink,
+          glow: (params.glow / 100) * (mode === 'lightbeam' || mode === 'thundercloud' ? 2.2 : 1.5) * (1 + flashI * 1.5), ink: ink,
           useCam: params.camera, cam: params.camera ? camCopy : null, depthK: look.depthK,
           accent: [1, 0.3, 0.12], accentShare: mode === 'lightbeam' && params.leak ? 0.14 : 0,
-          coreColor: [1, 0.36, 0.12], coreK: look.coreK || 0, coreR: radius * tk.rad * 0.9, coreC: center
+          coreColor: params.core ? Magi.fx.inkColor(params.core) : [1, 0.36, 0.12], coreK: look.coreK || 0, coreR: radius * tk.rad * 0.75 * 0.9, coreC: center,
+          flashI: flashI, waveR: waveR, flashC: strike ? strike.c : [0, 0, 0]
         });
         ctx.save();
         // Flash (Lightbeam, Thundercloud): a white flash over the background, under the light.
-        if (flash > 0.02 && (mode === 'lightbeam' || mode === 'thundercloud')) { ctx.fillStyle = 'rgba(255,255,255,' + (flash * (mode === 'lightbeam' ? 0.85 : 0.35)).toFixed(3) + ')'; ctx.fillRect(0, 0, W, H); }
+        if (flash > 0.02 && (mode === 'lightbeam' || mode === 'thundercloud')) { ctx.fillStyle = (mode === 'lightbeam' ? 'rgba(255,255,255,' : 'rgba(200,215,255,') + (flash * (mode === 'lightbeam' ? 0.85 : 0.6)).toFixed(3) + ')'; ctx.fillRect(0, 0, W, H); }
         ctx.globalCompositeOperation = ink ? 'multiply' : 'lighter';
         ctx.imageSmoothingEnabled = true;
         ctx.drawImage(sys.canvas, 0, 0, W, H);
@@ -221,18 +231,6 @@
             var gx = L[0] * W, gy = L[1] * H, gr = ctx.createRadialGradient(gx, gy, 0, gx, gy, Math.max(W, H) * 0.45);
             gr.addColorStop(0, 'rgba(' + L[2] + ',0.28)'); gr.addColorStop(1, 'rgba(' + L[2] + ',0)');
             ctx.fillStyle = gr; ctx.fillRect(0, 0, W, H);
-          });
-        }
-        // Lightning (Thundercloud): each bolt glows and fades over 0.35 s.
-        if (bolts.length) {
-          ctx.globalCompositeOperation = 'lighter'; ctx.lineJoin = 'round';
-          bolts = bolts.filter(function (B) {
-            var a2 = 1 - (t - B.born) / 0.35; if (a2 <= 0) return false;
-            [[7 * u, 0.15], [2.5 * u, 0.5], [Math.max(1, u), 1]].forEach(function (ps) {
-              ctx.strokeStyle = 'rgba(200,220,255,' + (ps[1] * a2).toFixed(3) + ')'; ctx.lineWidth = ps[0];
-              ctx.beginPath(); B.path.forEach(function (q, i) { i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]); }); ctx.stroke();
-            });
-            return true;
           });
         }
         ctx.restore();
@@ -247,7 +245,7 @@
           symbiote: 'Raise your hands: the ink grows from them and lashes when you move.'
         }[mode]);
       },
-      reset: function () { lastT = null; grab = null; prevTip = null; bolts = []; if (sys) sys.reset(); }
+      reset: function () { lastT = null; grab = null; prevTip = null; strike = null; if (sys) sys.reset(); }
     };
   }
 

@@ -32,6 +32,8 @@
 // (9 taps, two passes), added back. Tone mapping: light = 1 − e^(−E·x) (never clips, keeps the
 // density gradient); ink = e^(−E·x), Beer–Lambert absorption, so dense particles go dark on paper.
 // Lookup (Lookup Texture POP): a particle can take its color from the camera at its place on screen.
+// Flash: particles near a point light up (a Gaussian glow) and a thin shell of light at radius
+// waveR passes through them, so a strike lights the particles themselves and ripples outward.
 // Emitters can be up to 42 points (two hands' landmarks); with emitByIndex each particle is always
 // born at point (index mod count), so particles a multiple of that count apart share a birthplace.
 // Pseudo plexus (lines): each particle i is joined to particle (i + stride) mod N, and the line's
@@ -104,8 +106,8 @@
     'uniform int side;',
     'uniform mat3 view;',
     'uniform vec3 pivot, color;',
-    'uniform float aspect, focal, psize, useCam, bright, depthK, accentShare, coreK, coreR;',
-    'uniform vec3 accent, coreColor, coreC;',
+    'uniform float aspect, focal, psize, useCam, bright, depthK, accentShare, coreK, coreR, flashI, waveR;',
+    'uniform vec3 accent, coreColor, coreC, flashC, flashCol;',
     'out vec3 vC;',
     'float h1(float n) { return fract(sin(n * 12.9898) * 43758.5453); }',
     'void main() {',
@@ -121,6 +123,7 @@
     '  vec3 col = useCam > 0.5 ? texture(camTex, vec2(s.x * 0.5 + 0.5, 0.5 - s.y * 0.5)).rgb : color;',
     '  if (accentShare > 0.0 && h1(float(gl_VertexID)) < accentShare) col = accent;',
     '  if (coreK > 0.0) col = mix(col, coreColor * coreK, smoothstep(coreR, coreR * 0.15, distance(P.xyz, coreC)));',
+    '  if (flashI > 0.0) { float fd = distance(P.xyz, flashC); col += flashCol * flashI * (4.0 * exp(-fd * fd / 0.02) + 3.0 * exp(-(fd - waveR) * (fd - waveR) / 0.004)); }',
     '  vC = col * fade * depth * bright;',
     '}'
   ].join('\n');
@@ -337,7 +340,8 @@
         uniforms(P.points, {
           posTex: state[cur].pos, velTex: state[cur].vel, camTex: camTex || state[cur].pos, side: { int: side }, view: { mat3: o.view }, pivot: o.pivot,
           color: o.color, aspect: w / h, focal: o.focal || 3, psize: o.psize || 1, useCam: o.useCam && o.cam ? 1 : 0, bright: o.bright, depthK: o.depthK === undefined ? 0.5 : o.depthK,
-          accent: o.accent || [1, 1, 1], accentShare: o.accentShare || 0, coreColor: o.coreColor || [1, 1, 1], coreK: o.coreK || 0, coreR: o.coreR || 0.5, coreC: o.coreC || [0, 0, 0]
+          accent: o.accent || [1, 1, 1], accentShare: o.accentShare || 0, coreColor: o.coreColor || [1, 1, 1], coreK: o.coreK || 0, coreR: o.coreR || 0.5, coreC: o.coreC || [0, 0, 0],
+          flashI: o.flashI || 0, waveR: o.waveR || 0, flashC: o.flashC || [0, 0, 0], flashCol: o.flashCol || [0.8, 0.88, 1]
         });
         gl.bindVertexArray(emptyVao);
         gl.bindFramebuffer(gl.FRAMEBUFFER, accum.fbo);
