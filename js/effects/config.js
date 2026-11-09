@@ -221,7 +221,8 @@ Magi.effectConfig = [
       range('trail', 'Trail', 0, 100, 60),
       range('thickness', 'Thickness', 0, 100, 30),
       range('size', 'Size', 0, 100, 20),
-      { id: 'glow', label: 'Glow', min: 0, max: 100, step: 1, default: 60, modes: ['glow'] },
+      { id: 'glow', label: 'Glow', min: 0, max: 100, step: 1, default: 35, modes: ['glow'] },
+      range('profile', 'Profile', 0, 100, 0),
       range('dim', 'Dim', 0, 100, 40)
     ]
   },
@@ -244,6 +245,8 @@ Magi.effectConfig = [
       range('speed', 'Speed', 0, 100, 10),
       range('fluidity', 'Fluidity', 0, 100, 30),
       range('glow', 'Glow', 0, 100, 40),
+      range('flash', 'Flash', 0, 100, 50),
+      toggle('dissipate', 'Dissipate', false, 'With no hand up, the particles drift away and fade; they gather back when a hand returns.'),
       { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
       range('dim', 'Dim', 0, 100, 90)
     ]
@@ -366,6 +369,7 @@ Magi.effectConfig = [
       range('size', 'Size', 0, 100, 50),
       range('float', 'Float', 0, 100, 40),
       range('wind', 'Wind', 0, 100, 35),
+      range('profile', 'Profile', 0, 100, 0),
       toggle('wand', 'Wand', true, 'Pinch thumb and index: a bubble grows while you hold and floats off when you let go.'),
       toggle('pop', 'Pop', true, 'Touch a bubble with a fingertip to pop it.'),
       toggle('skeleton', 'Skeleton', false, 'Draw the hand skeleton.')
@@ -740,7 +744,7 @@ Magi.effectGuides = {
     'How it works: points gather on the outlines of your hands and arms (where the picture’s edges are strongest) and one continuous line runs through them, always to the nearest point, redrawn as you move.',
     'Pinch: freezes the drawing until you let go.',
     'Close your palm: the drawing shrinks; open it: the drawing expands. Size: how large the drawing is around each hand. Connect: one line through both hands with strands between matching fingertips (off: each hand its own line).',
-    'Thickness: line width. Texture: a dry brush, broken and layered. Spikiness: 0 rounded curves, 50 straight lines, 100 sharp spikes. Rate: how often it redraws. Points: how many. Color: far left lime. Dim: darkens the camera.'
+    'Thickness: line width. Texture: a highlighter / marker stroke: translucent ink with darker edges and fine streaks, fixed to the line. Spikiness: 0 rounded curves, 50 straight lines, 100 sharp spikes. Rate: how often it redraws. Points: how many. Color: far left lime. Dim: darkens the camera.'
   ],
   particles: [
     'How it works: every particle sits on a damped spring to its resting place; your fingertips push particles away as they pass, and the field springs back behind them. Moving particles light up and streak.',
@@ -749,23 +753,24 @@ Magi.effectGuides = {
   ],
   'particle-life': [
     'How it works: every color is a species. Each species feels every other one as an attraction or a repulsion, set by a hidden random table that isn’t symmetric: red may chase yellow while yellow runs from red. Up close, everything pushes apart so particles never overlap.',
-    'Colors, in order: 1 red, 2 yellow, 3 blue, 4 green, 5 violet, 6 pink, 7 cyan, 8 white (Types sets how many are in play).',
+    'Colors, in order (Original profile): 1 red, 2 yellow, 3 blue, 4 green, 5 violet, 6 pink, 7 cyan, 8 white (Types sets how many are in play).',
     'What you see: species that attract their own kind clump into cells; a species chasing one that flees forms worms and trails; mutual attraction makes orbits and swirls; mutual repulsion spreads them apart.',
     'Your fingertip shows the color it holds: hold up 1 to 5 fingers to pick it (1 red … 5 violet). Pinch: particles near the pinch become that color, so you add a species where you want it.',
     'Point (index only): your fingertip pulls particles in like a current. Fist: they flee your hand. Clap: a new random table, a new world.',
-    'Size: how big each particle is (a round head on its trail). Thickness: the trail’s width. Modes: tap the tile. Worms: colored trails. Glow: the trails drawn as neon light that adds up, so dense clusters burn white. Glow: the halo’s strength.',
+    'Size: how big each particle is (a round head on its trail). Thickness: the trail’s width. Modes: tap the tile. Worms: colored trails. Glow: the trails drawn as neon light that adds up, so dense clusters burn white. Glow: how much they glow (low: just a soft line). Profile: the colors (Original, Pastel, Neon, Ember, Ocean, Forest, Mono).',
     'Count, Types: how many particles and species. Radius: how far they sense each other. Force: how strongly they pull. Friction: how quickly they slow. Trail, Thickness: the worms. Dim: darkens the camera.'
   ],
   exhale: [
     'How it works: a sphere of particles that breathes. Each particle springs toward the breath at its own pace, so exhales bloom bristled and inhales rush back.',
     'Open palm: exhale. Fist: inhale all the way and the sphere implodes into a bright core; open your hand and it blooms back out.',
     'Two hands: pull them apart and the sphere divides gradually into two, one per hand, each breathing with its own hand. The two pull on each other like gravity; bring them together and when they touch, particles cross over where they meet and the two blend into one shared sphere.',
+    'Pull apart: pinch and hold with both hands and the sphere is torn to each pinch, fast; open both palms and pull apart and it separates slowly, like iron filings between two magnets. A fist pulls its particles in faster.',
     'Pinch: the sphere moves to your pinch, its particles streaming there and forming it again around your fingers; let go and they stream back to your palm. Brush your hand across it to spin it like a ball; roll your hand to turn it; swipe to fling it. No hand: it breathes on its own at Rate.',
-    'Count, Size: how many and how big. Bristles: the streaks of rushing particles. Rate: breaths a minute with no hand. Speed: how fast the particles travel and breathe. Fluidity: how liquid it feels — particles trail further behind your hand, the shell sloshes after each breath and ripples on its surface. Glow: a soft bloom around them. Modes: tap the tile. Sphere: dots. Zero: digits counting 0–9 down the sphere. Binary: flickering 0s and 1s. Color: far left green. Dim: darkens the camera.'
+    'Count, Size: how many and how big. Bristles: the streaks of rushing particles. Rate: breaths a minute with no hand. Speed: how fast the particles travel and breathe. Fluidity: how liquid it feels — particles trail further behind your hand, the shell sloshes after each breath and ripples on its surface. Glow: a soft bloom around them. Flash: how bright the core flashes when it implodes (0: none). Dissipate: fades the particles away when no hand is up. Modes: tap the tile. Sphere: dots. Zero: digits counting 0–9 down the sphere. Binary: flickering 0s and 1s. Color: far left green. Dim: darkens the camera.'
   ],
   'word-space': [
     'How it works: characters strung together by red threads, like Word Box, but free in the room: they drift through the whole picture and through depth on a swirling flow (curl noise, so they eddy without bunching up).',
-    'Open hand: pushes the words away and stirs them around your palm. Fist: gathers them in. Pinch: grabs the words within reach; move to carry them, let go to throw them.',
+    'Open hand: a magnet; words are drawn to it and gather around your palm. Fist: scatters them. Pinch: grabs the words within reach; move to carry them, let go to throw them.',
     'Turn your hand: turns the space (Rotation sets how far). Swipe: changes the set (with no Text).',
     'Text: type anything, in any keyboard. Set: 0 Hiragana, 1 Kanji, 2 Latin, 3 Hangul, 4 Digits, 5 Emoji. Points, Links: how many characters and threads. Size, Flow, Depth: character size, drift speed, how deep the space is. Glow, Dim: thread glow, darkens the camera.'
   ],
@@ -800,18 +805,19 @@ Magi.effectGuides = {
   ],
   wisp: [
     'Move your fingers through the picture: the video itself swirls and drags like smoke where they pass, then settles. A still hand does nothing.',
-    'Pinch: sucks the picture back to normal quickly.',
+    'Fist: vacuums the picture back to normal around your hand; two fists vacuum two places.',
+    'Pinch: shifts the colors (in Smoke, the hue of the swirls; in Watercolor, through the palettes). Pinch with both hands: twice as fast.',
     'Trail: how long the swirl lasts. Flow: how strongly your motion drags the picture.',
     'Swirl: extra curling where you’ve moved. Rise: how much the disturbance drifts upward, like smoke.',
     'Watercolor (tap the tile): your fingers paint pigment that the same flow carries and bleeds, on paper. Colors mix like glazes and pool darker at their edges.',
-    'Colors: 0 takes colors from the camera; above it the slider runs through 23 palettes, blending between neighbors (Rothko, Indigo, Spring, Sunset, Earth, Water Lilies, Great Wave, Gold Leaf, Cutouts, Stain, Neon, Ocean, Forest, Desert, Sumi, Fauve, Klein, Candy, Ember, Aurora, Pop, Lagoon, Blossom; the name shows on screen). Pinch: washes the painting out and calms the stir while you hold it. Edges: how much pigment pools at the edges. Dark: black paper instead of white. Trail: how long the painting lasts. Flow, Swirl: how much your motion and the curls move the paint.'
+    'Colors: 0 takes colors from the camera; above it the slider runs through 23 palettes, blending between neighbors (Rothko, Indigo, Spring, Sunset, Earth, Water Lilies, Great Wave, Gold Leaf, Cutouts, Stain, Neon, Ocean, Forest, Desert, Sumi, Fauve, Klein, Candy, Ember, Aurora, Pop, Lagoon, Blossom; the name shows on screen). Fist: vacuums the painting away around your hand. Edges: how much pigment pools at the edges. Dark: black paper instead of white. Trail: how long the painting lasts. Flow, Swirl: how much your motion and the curls move the paint.'
   ],
   bubbles: [
     'Wave your fingers: faster fingers blow more bubbles.',
     'Pinch thumb and index and hold: a bubble grows at your fingertips; open to let it float off.',
     'Pop: a bubble pops when its life runs out (2–5 s, longer for blown ones) or, with Pop on, when a fingertip touches it.',
     'Modes: Soap (lit soap film), Neon (each rim a glowing neon tube in its film’s color), Inverse (inverts the video under each bubble), Electrokinetic (the video as dot glazing inside each bubble).',
-    'Amount, Size: how many and how big. Float: how fast they rise. Wind: how much the air swirls.'
+    'Amount, Size: how many and how big. Float: how fast they rise. Wind: how much the air swirls. Profile: the colors. In Soap and Neon it thickens the soap films, so the iridescence shifts as real bubbles do; in Inverse and Electrokinetic it tints them.'
   ],
   claw: [
     'Raise a hand: a 3D armature follows it, drawn slightly ahead so it keeps up. Curl a finger to retract its talon; open to extend it.',
@@ -839,7 +845,8 @@ Magi.effectGuides = {
   ],
   chromatic: [
     'The space stays where you leave it; it only moves when you act on it.',
-    'Point and hold (index finger, 0.3 s): selects the color nearest your fingertip and highlights it with its name and hex code.',
+    'Point: browse. The focus follows your fingertip to whichever color is nearest, highlighted with its name and hex code.',
+    'Pinch with your other hand while pointing: locks the selection until you open that pinch.',
     'Pinch with one hand: grabs the space; drag left–right to turn it about the vertical axis, up–down about the horizontal axis. Let go and it keeps turning, then slows. Pinching on a color selects it too.',
     'Open palm: zooms in, steadily, while you hold it open. Fist: zooms out.',
     'Swipe left or right: flings it into a spin. Tap the tile to change space (Lab, HSL, RGB).',
@@ -881,8 +888,8 @@ Magi.effectGuides = {
     'Raise a hand: threads run from your palm to each fingertip and between neighboring fingertips, with rings like an orb web.',
     'Two hands: threads join matching fingertips across your hands, with rings between them.',
     'Pinch: draws a taut thumb–index thread; let go and the web gets plucked.',
+    'Slingshot: pinch, pull back and let go: a web line shoots the opposite way (harder the further you pulled), sticks at the edge of the frame with a splat and holds to your hand. Pull too far and it snaps. A short pinch just plucks the web.',
     'Flick: the web lets go of your fingers and floats away, and a new one forms.',
-    'Thwip: make the web-shooter sign (index and pinky out, middle and ring folded) and flick: a web line shoots the way your index points, sticks at the edge of the frame with a splat and holds to your hand. Pull too far and it snaps. Up to five at once.',
     'Threads sag and swing as you move: real rope physics, pinned to your fingers.',
     'Rings: how many rings. Sag: how much threads droop. Particles: how many specks flow along the threads. Glow, Color: light and color.'
   ],

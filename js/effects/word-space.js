@@ -15,8 +15,8 @@
 // Characters: Text, any keyboard, split into user-perceived characters (shared with Word Box);
 // empty Text uses a set (Set).
 // Hands (forces in the picture's plane, falling off linearly to zero at 2.5 palm lengths):
-//   Open hand: pushes words away and stirs them around it (a vortex, tangential to the palm).
-//   Fist: gathers words toward it like gravity.
+//   Open hand: a magnet, drawing words in from up to 6 palm lengths into a loose shell around it.
+//   Fist: scatters them.
 //   Pinch: grabs the words within reach; they follow the pinch, drawn in closer, and keep your
 //     hand's velocity when you let go (a throw).
 //   Swipe: changes the set (with no Text).
@@ -84,11 +84,21 @@
           var ax = 0, ay = 0;
           hands.forEach(function (h) {
             if (h.pinched) return;
-            var dx = p.x - h.center.x, dy = p.y - h.center.y, r = Math.hypot(dx, dy) || 1, R0 = h.size * 2.5;
-            if (r > R0) return;
-            var f = (1 - r / R0) * H * 6;
-            if (h.fist) { ax -= dx / r * f; ay -= dy / r * f; }
-            else { ax += dx / r * f * 0.8 - dy / r * f * 0.6; ay += dy / r * f * 0.8 + dx / r * f * 0.6; }
+            var dx = p.x - h.center.x, dy = p.y - h.center.y, r = Math.hypot(dx, dy) || 1;
+            if (h.fist) {
+              // Fist: scatters them (a push falling to zero at 2.5 palm lengths).
+              var R1 = h.size * 2.5; if (r > R1) return;
+              var f1 = (1 - r / R1) * H * 6; ax += dx / r * f1; ay += dy / r * f1;
+            } else {
+              // Open hand: a magnet. Words within 6 palm lengths are pulled in with a softened
+              // inverse-square force, a = k / (r² + s²), and held off the palm by a stiff spring
+              // inside 1.3 palm lengths, so they settle into a loose shell around your hand, with a
+              // slight swirl so it stays alive.
+              var R2 = h.size * 6; if (r > R2) return;
+              var s2 = h.size * 0.8, f2 = H * 4 * h.size * h.size / (r * r + s2 * s2) * (1 - r / R2);
+              var shell = h.size * 1.3, push = r < shell ? (shell - r) / shell * H * 10 : 0;
+              ax += (-f2 + push) * dx / r - dy / r * f2 * 0.25; ay += (-f2 + push) * dy / r + dx / r * f2 * 0.25;
+            }
           });
           p.vx += (fx - p.vx) * ease + ax * dt; p.vy += (fy - p.vy) * ease + ay * dt;
           p.x += p.vx * dt; p.y += p.vy * dt;
@@ -135,7 +145,7 @@
         hud.restore();
         var tracker = Magi.tracking.hands;
         if (tracker.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, tracker, 'hand');
-        else if (!hands.length) frame.say('Words drift through the room. Push them with an open hand, gather them with a fist, pinch to grab and throw.');
+        else if (!hands.length) frame.say('Words drift through the room. Open your hand to draw them to it like a magnet, make a fist to scatter them, pinch to grab and throw.');
       },
       reset: function () { P = []; lastT = null; grabs = {}; }
     };

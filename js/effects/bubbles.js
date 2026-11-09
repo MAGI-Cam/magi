@@ -30,9 +30,11 @@
   var LAMBDA = [650, 532, 450], THICK = [380, 470, 560], SIZES = 12;
 
   var sprites = {};
-  // Sprite for radius bucket `b` and film thickness index `f`, drawn at radius rb pixels.
-  function sprite(b, f) {
-    var key = b + ':' + f;
+  // Sprite for radius bucket `b` and film thickness index `f`, drawn at radius rb pixels; films
+  // scaled by `k` (Profile).
+  function sprite(b, f, k) {
+    k = k || 1;
+    var key = b + ':' + f + ':' + k.toFixed(2);
     if (sprites[key]) return sprites[key];
     var rb = Math.round(4 * Math.pow(1.32, b)), size = rb * 2 + 2;
     var c = document.createElement('canvas');
@@ -44,7 +46,7 @@
         var o = (y * size + x) * 4;
         if (rho > 1) { d[o + 3] = 0; continue; }
         var cosI = Math.sqrt(1 - rho * rho), sinT = rho / N_FILM, cosT = Math.sqrt(1 - sinT * sinT);
-        var film = THICK[f] * (0.55 + 0.45 * (dy + 1) / 2); // thinner at the top
+        var film = THICK[f] * k * (0.55 + 0.45 * (dy + 1) / 2); // thinner at the top
         var F = F0 + (1 - F0) * Math.pow(1 - cosI, 5);
         var rgb = LAMBDA.map(function (l) { var s = Math.sin(2 * Math.PI * N_FILM * film * cosT / l); return s * s; });
         // Highlight (upper left) and its dim reflection (lower right).
@@ -58,6 +60,11 @@
     }
     g.putImageData(img, 0, 0);
     return (sprites[key] = { c: c, r: rb });
+  }
+  function hsvHex(h, s, v) {
+    var i = Math.floor(h * 6), f = h * 6 - i, p = v * (1 - s), q = v * (1 - f * s), t = v * (1 - (1 - f) * s), r, g, b;
+    switch (i % 6) { case 0: r = v; g = t; b = p; break; case 1: r = q; g = v; b = p; break; case 2: r = p; g = v; b = t; break; case 3: r = p; g = q; b = v; break; case 4: r = t; g = p; b = v; break; default: r = v; g = p; b = q; }
+    return 'rgb(' + Math.round(r * 255) + ',' + Math.round(g * 255) + ',' + Math.round(b * 255) + ')';
   }
   function bucketFor(r) { return Math.max(0, Math.min(SIZES - 1, Math.round(Math.log(Math.max(4, r) / 4) / Math.log(1.32)))); }
 
@@ -98,16 +105,18 @@
     // A film's neon color: its thin-film reflectance near the rim (cos θ = 0.3, sin θt = sin θ / n),
     // stretched so the strongest channel is 255 and the weakest 0 (full saturation).
     var neonCache = {};
-    function neonColor(f) {
-      if (neonCache[f]) return neonCache[f];
+    function neonColor(f, k) {
+      var nk = f + ':' + k.toFixed(2);
+      if (neonCache[nk]) return neonCache[nk];
       var sinT = Math.sqrt(1 - 0.09) / N_FILM, cosT = Math.sqrt(1 - sinT * sinT);
-      var rgb = LAMBDA.map(function (l) { var s = Math.sin(2 * Math.PI * N_FILM * THICK[f] * 0.8 * cosT / l); return s * s; });
+      var rgb = LAMBDA.map(function (l) { var s = Math.sin(2 * Math.PI * N_FILM * THICK[f] * k * 0.8 * cosT / l); return s * s; });
       var lo = Math.min.apply(null, rgb), hi = Math.max.apply(null, rgb);
-      return (neonCache[f] = rgb.map(function (v) { return Math.round((v - lo) / Math.max(1e-3, hi - lo) * 255); }));
+      return (neonCache[nk] = rgb.map(function (v) { return Math.round((v - lo) / Math.max(1e-3, hi - lo) * 255); }));
     }
+    var filmK = 1;
     function drawBubble(ctx, x, y, r, film, spin, wob) {
       if (r < 1.5) return;
-      var sp = sprite(bucketFor(r), film), k = r / sp.r;
+      var sp = sprite(bucketFor(r), film, filmK), k = r / sp.r;
       ctx.setTransform(k * (1 + wob), 0, 0, k * (1 - wob), x, y);
       ctx.rotate(spin * 0.15);
       ctx.drawImage(sp.c, -sp.c.width / 2, -sp.c.height / 2);
@@ -203,6 +212,12 @@
         });
         bubbles = keep;
 
+        // Profile: Soap and Neon scale every film's thickness (×1 to ×2.6 in 20 steps): thicker films
+        // reach higher interference orders, so the colors change the way real bubbles' do as they
+        // vary, pastel pinks and greens rather than a tint. Inverse and Electrokinetic take a hue.
+        var prof = (params.profile || 0) / 100;
+        filmK = 1 + Math.round(prof * 20) / 20 * 1.6;
+        var tint = prof > 0 ? hsvHex(prof, 0.65, 1) : '#fff';
         ctx.save();
         var all = bubbles.map(function (b) { return { x: b.x, y: b.y, r: b.r * Math.min(1, b.age / 0.2) * (1 + 0.03 * Math.sin(t * 5 + b.phase)), film: b.film, spin: b.spin + t * 0.5, wob: 0.03 * Math.sin(t * 5 + b.phase) }; });
         Object.keys(wands).forEach(function (k) { var w = wands[k]; all.push({ x: w.x, y: w.y, r: w.r, film: w.film, spin: w.phase + t, wob: 0.06 * Math.sin(t * 7 + w.phase) }); });
@@ -218,6 +233,7 @@
             ctx.save();
             ctx.clip();
             ctx.drawImage(ekPass.canvas, 0, 0);
+            if (prof > 0) { ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = tint; ctx.fillRect(0, 0, W, H); ctx.globalCompositeOperation = 'source-over'; }
             ctx.restore();
           }
           ctx.strokeStyle = 'rgba(255,255,255,0.9)';
@@ -230,7 +246,7 @@
           ctx.globalCompositeOperation = 'lighter';
           ctx.lineCap = 'round';
           [0, 1, 2].forEach(function (f) {
-            var c = neonColor(f), list = all.filter(function (b) { return b.film === f && b.r >= 2; });
+            var c = neonColor(f, filmK), list = all.filter(function (b) { return b.film === f && b.r >= 2; });
             if (!list.length) return;
             ctx.beginPath();
             list.forEach(function (b) { var rr = b.r * (1 + b.wob); ctx.moveTo(b.x + rr, b.y); ctx.arc(b.x, b.y, rr, 0, Math.PI * 2); });
@@ -246,7 +262,7 @@
           // Inverse: each bubble inverts the video beneath it (difference with white: c → 1 − c),
           // edged with a crisp 1 px rim.
           ctx.globalCompositeOperation = 'difference';
-          ctx.fillStyle = '#fff';
+          ctx.fillStyle = tint;
           ctx.beginPath();
           all.forEach(function (b) { if (b.r >= 1) { ctx.moveTo(b.x + b.r, b.y); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); } });
           ctx.fill();

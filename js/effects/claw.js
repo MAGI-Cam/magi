@@ -22,6 +22,11 @@
 // palm); it retracts as the
 // finger curls, by (1 − curl)^1.5, curl from the Interaction Engine. Lines glow: each path is stroked
 // wide and faint, then narrower, then crisp, a cheap stand-in for a Gaussian bloom.
+// Stabilized: on top of tracking's own smoothing, every joint, each talon's crosshair and the
+// glyphs' orbit (palm center, size and roll) pass through an adaptive low-pass, the One Euro idea
+// (Casiez et al. 2012): cutoff f = f_min + β·speed, speed in palm lengths per second, so a still
+// hand is held steady (f_min: joints 1.2 Hz, crosshairs 0.9 Hz, glyph orbit 0.6 Hz) and a fast one
+// still follows without lag (β = 2.5 Hz per palm/s).
 (function () {
   var FINGERS = [[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12], [13, 14, 15, 16], [17, 18, 19, 20]];
   var WRIST = 0, MIDDLE_MCP = 9;
@@ -104,8 +109,22 @@
     else { ctx.moveTo(x - w * 0.5, y - h); ctx.lineTo(x - w * 0.5, y - h * 0.3); ctx.moveTo(x + w * 0.5, y - h); ctx.lineTo(x + w * 0.5, y - h * 0.3); }
   }
 
+  // Adaptive low-pass on a vector (see the header): x ← x + (target − x)·(1 − e^(−2π·f·dt)).
+  function stabilizer() {
+    var st = {};
+    return function (key, v, dt, unit, fmin) {
+      var s = st[key];
+      if (!s || s.v.length !== v.length) { st[key] = { v: v.slice(), t: 0 }; return v.slice(); }
+      var d = 0;
+      for (var i = 0; i < v.length; i++) d = Math.max(d, Math.abs(v[i] - s.v[i]));
+      var speed = d / Math.max(dt, 1e-3) / Math.max(unit, 1), f = fmin + 2.5 * speed, a = 1 - Math.exp(-2 * Math.PI * f * dt);
+      for (var j = 0; j < v.length; j++) s.v[j] += (v[j] - s.v[j]) * a;
+      return s.v.slice();
+    };
+  }
+
   function createClaw() {
-    var glyphs = [];
+    var glyphs = [], stab = stabilizer(), lastT = null;
     // Glyphs orbit the palm on ellipses (radius 1.3–2.6 palm lengths, 0.25–0.6 rad/s, half of them
     // the other way), fading in and out slowly instead of blinking.
     for (var i = 0; i < GLYPHS_PER_HAND * 2; i++) {
@@ -125,6 +144,15 @@
         var tracker = Magi.tracking.hands, raw = tracker.detect(frame), ix = Magi.interaction.read(frame);
         var pred = tracker.predicted ? tracker.predicted(frame, 0.03) : null;
         var hands = pred && pred.length === raw.length ? pred : raw;
+        var dt = lastT === null ? 1 / 60 : Math.max(1 / 240, Math.min(0.1, t - lastT));
+        lastT = t;
+        // Steady the joints (adaptive low-pass, see the header).
+        hands = hands.map(function (p, h) {
+          var palm0 = Math.hypot(p[MIDDLE_MCP].x - p[WRIST].x, p[MIDDLE_MCP].y - p[WRIST].y) || 1, flat = [];
+          p.forEach(function (q) { flat.push(q.x, q.y, (q.z || 0) * W); });
+          var sm = stab('j' + h, flat, dt, palm0, 1.2);
+          return p.map(function (q, i) { return { x: sm[i * 3], y: sm[i * 3 + 1], z: sm[i * 3 + 2] / W }; });
+        });
         var ink = Magi.fx.inkColor(params.color);
         var accent = ink.map(function (v) { return Math.round(v * 255); }), white = [255, 255, 255];
         var reach = (params.claw / 100) * 4, glow = params.glow / 100, scale = Math.pow(2, (params.size - 50) / 50);
@@ -136,6 +164,9 @@
           // Size scales the rig about the palm's center (0.5× to 2×).
           var ox = params.offsetX / 50 * palm, oy = params.offsetY / 50 * palm;
           var pcx = (p[0].x + p[5].x + p[9].x + p[13].x + p[17].x) / 5, pcy = (p[0].y + p[5].y + p[9].y + p[13].y + p[17].y) / 5;
+          // The glyphs' orbit (palm center, palm length, roll) is held steadier still.
+          var roll0 = Math.atan2(p[MIDDLE_MCP].x - p[WRIST].x, -(p[MIDDLE_MCP].y - p[WRIST].y));
+          var orbit = stab('o' + h, [pcx, pcy, palm * 50, Math.cos(roll0) * palm * 20, Math.sin(roll0) * palm * 20], dt, palm, 0.6);
           p = p.map(function (q) { return { x: pcx + (q.x - pcx) * scale + ox, y: pcy + (q.y - pcy) * scale + oy, z: (q.z || 0) * scale }; });
           palm *= scale;
           var P = p.map(function (q) { return [q.x, q.y, q.z * W]; });
@@ -167,7 +198,7 @@
             // The talon leaves from the sleeve's front cap (80% along the last segment).
             var front = [a[0] + d[0] * 0.8, a[1] + d[1] * 0.8, a[2] + d[2] * 0.8];
             if (len > 1) bone(ctx, front, end, 0.07, normal, 0.2);
-            tips.push({ a: a, b: b, d: d, end: end, out: len > 1 });
+            tips.push({ a: a, b: b, d: d, end: end, out: len > 1, k: fi });
           });
           glowStroke(ctx, white, Math.max(1, 1.3 * u), glow);
 
@@ -178,20 +209,20 @@
             // A sleeve on the last segment, centered just past its middle.
             var c = [tp.a[0] + tp.d[0] * 0.45, tp.a[1] + tp.d[1] * 0.45, tp.a[2] + tp.d[2] * 0.45];
             cylinder(ctx, c, ax, L * 0.7, Math.min(palm * 0.12, Math.max(L * 0.4, palm * 0.07)));
-            if (tp.out) cross(ctx, tp.end[0], tp.end[1], palm * 0.065);
+            if (tp.out) { var ce = stab('c' + h + '_' + tp.k, [tp.end[0], tp.end[1]], dt, palm, 0.9); cross(ctx, ce[0], ce[1], palm * 0.065); }
           });
           glowStroke(ctx, accent, Math.max(1, 1.4 * u), glow * 0.8);
 
           if (params.glyphs) {
             // HUD marks orbiting the palm's center, the ellipse turned with the hand.
-            var roll = Math.atan2(p[MIDDLE_MCP].x - p[WRIST].x, -(p[MIDDLE_MCP].y - p[WRIST].y)), cr = Math.cos(roll), sr = Math.sin(roll);
+            var oPalm = orbit[2] / 50 * scale, rl = Math.hypot(orbit[3], orbit[4]) || 1, cr = orbit[3] / rl, sr = orbit[4] / rl;
             glyphs.slice(h * GLYPHS_PER_HAND, (h + 1) * GLYPHS_PER_HAND).forEach(function (g) {
               var fade = 0.5 + 0.5 * Math.sin(t * g.rate + g.phase);
               if (fade < 0.05) return;
-              var a = g.a0 + g.w * t, ex = Math.cos(a) * g.r * palm, ey = Math.sin(a) * g.r * palm * g.squash;
+              var a = g.a0 + g.w * t, ex = Math.cos(a) * g.r * oPalm, ey = Math.sin(a) * g.r * oPalm * g.squash;
               ctx.globalAlpha = fade;
               ctx.beginPath();
-              bracket(ctx, pcx + ox + ex * cr - ey * sr, pcy + oy + ex * sr + ey * cr, palm * 0.06, g.shape);
+              bracket(ctx, orbit[0] + ox + ex * cr - ey * sr, orbit[1] + oy + ex * sr + ey * cr, oPalm * 0.06, g.shape);
               glowStroke(ctx, white, Math.max(1, 1.2 * u), glow * 0.6);
             });
             ctx.globalAlpha = 1;
@@ -202,7 +233,7 @@
         if (tracker.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, tracker, 'hand');
         else if (!hands.length) Magi.tracking.hint(ctx, frame, 'Raise a hand.');
       },
-      reset: function () {}
+      reset: function () { stab = stabilizer(); lastT = null; }
     };
   }
 

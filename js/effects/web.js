@@ -13,10 +13,12 @@
 // Flick: the web lets go of your fingers. Its pins are released, it is thrown along the flick and
 // floats up (buoyancy, with air drag), keeping its shape through the same constraints, and fades
 // over 4 s while a new web forms on your hands.
-// Throw (thwip): make the web-shooter sign (index and pinky out, middle and ring folded onto the
-// palm) and flick or thrust the hand: a web line shoots from your palm the way your index finger
-// points, sticks where it meets the edge of the frame with a small splat web, and holds between
-// your hand and that point (see newShot). Up to five lines; a sixth snaps the oldest back.
+// Throw (slingshot): pinch, pull back and let go. The pull, from where the pinch closed to where it
+// opens, is drawn as a taut band with an aiming line; released past 8% of the frame height, a web
+// line shoots the opposite way at 1.5 + 3·(pull ÷ frame height) frame heights a second, like a
+// slingshot, sticks where it meets the edge of the frame with a small splat web, and holds between
+// your hand and that point (see newShot). A shorter pinch just plucks the web. Up to five lines;
+// a sixth snaps the oldest back.
 // Particles flow along every thread in one direction (outward from the palm, along the fingers,
 // left hand to right) at a steady speed measured along the curve, so they don't speed up on long
 // threads, spaced by the thread's length, fading in and out at the ends.
@@ -68,7 +70,7 @@
   }
 
   function createWeb() {
-    var ropes = [], topology = '', lastT = null, wasPinched = {}, flows = [], flying = [], seen = 0, bornAt = 0, shots = [], lastThrow = {};
+    var ropes = [], topology = '', lastT = null, wasPinched = {}, flows = [], flying = [], seen = 0, bornAt = 0, shots = [], lastThrow = {}, pullFrom = {};
 
     // A web line: a 16-point rope from the palm to a projectile. The projectile flies with a little
     // gravity (0.6 frame heights/s²); the rope is pinned at both ends and kept at its length. At the
@@ -195,26 +197,29 @@
         var tracker = Magi.tracking.hands, ix = Magi.interaction.read(frame);
         var hands = ix.hands.map(function (h) { return h.points; }), cs = hands.map(center);
 
-        // Thwip sign: index and pinky out, middle and ring folded. A flick (or a fast thrust) while
-        // making it throws a web line along the index finger (knuckle → tip) at 3 frame heights a
-        // second.
-        var thwip = function (hd) { var f = hd.fingers; return f.index.extended && f.pinky.extended && !f.middle.extended && !f.ring.extended && !hd.pinched; };
-        var shoot = function (hd, hi) {
-          if (t - (lastThrow[hd.id] || -9) < 0.45) return;
+        // Slingshot: remember where each pinch closed; on release, shoot against the pull.
+        var shoot = function (hd, hi, vx, vy) {
+          if (t - (lastThrow[hd.id] || -9) < 0.3) return;
           lastThrow[hd.id] = t;
-          var q = hd.points, dx = q[8].x - q[5].x, dy = q[8].y - q[5].y, dl = Math.hypot(dx, dy) || 1, sp = H * 3;
-          shots.push(newShot(hd.id, cs[hi], dx / dl * sp, dy / dl * sp, t));
+          shots.push(newShot(hd.id, cs[hi], vx, vy, t));
           if (shots.length > MAX_SHOTS) shots[0].state = 'snap';
         };
-        ix.hands.forEach(function (hd, hi) { if (thwip(hd) && hd.speed > H * 1.2) shoot(hd, hi); });
-        // Flick: the whole web lets go and floats away; a new one forms (with the thwip sign, a
-        // flick throws a line instead).
+        var pm = function (hd) { return { x: (hd.points[4].x + hd.points[8].x) / 2, y: (hd.points[4].y + hd.points[8].y) / 2 }; };
+        var released = {};
+        ix.hands.forEach(function (hd, hi) {
+          if (hd.pinched && !pullFrom[hd.id]) pullFrom[hd.id] = pm(hd);
+          if (!hd.pinched && pullFrom[hd.id]) {
+            var a = pullFrom[hd.id], b = pm(hd), px = a.x - b.x, py = a.y - b.y, pl = Math.hypot(px, py);
+            if (pl > H * 0.08) { var sp = H * (1.5 + 3 * pl / H); shoot(hd, hi, px / pl * sp, py / pl * sp); released[hd.id] = true; }
+            delete pullFrom[hd.id];
+          }
+        });
+        Object.keys(pullFrom).forEach(function (id) { if (!ix.hands.some(function (h) { return String(h.id) === id; })) delete pullFrom[id]; });
+        // Flick: the whole web lets go and floats away; a new one forms.
         ix.events.forEach(function (e) {
           if (e.n <= seen) return;
           seen = e.n;
           if (e.type !== 'flick') return;
-          var fh = ix.hands.filter(function (h) { return h.id === e.hand; })[0];
-          if (fh && thwip(fh)) { shoot(fh, ix.hands.indexOf(fh)); return; }
           if (!ropes.length) return;
           var d = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[e.dir] || [0, -1];
           var vx = d[0] * H * 0.25, vy = d[1] * H * 0.25 - H * 0.05;
@@ -234,7 +239,7 @@
         var pinched = {};
         ix.hands.forEach(function (h, i) {
           pinched[i] = h.pinched;
-          if (wasPinched[h.id] && !h.pinched) {
+          if (wasPinched[h.id] && !h.pinched && !released[h.id]) {
             ropes.forEach(function (R) {
               for (var k = 1; k < R.pts.length - 1; k++) { R.pts[k].px -= (Math.random() - 0.5) * H * 0.02; R.pts[k].py -= (Math.random() - 0.5) * H * 0.02; }
             });
@@ -295,6 +300,21 @@
           }
         });
         strokeSet(ropes, form, function (R) { return R.kind !== 'pinch' || pinched[R.a.hand]; });
+        // Slingshot band while pulling: from where the pinch closed to the pinch, and a faint aiming
+        // line the other way, as long as the shot will be strong.
+        ix.hands.forEach(function (hd) {
+          var a0 = pullFrom[hd.id];
+          if (!a0 || !hd.pinched) return;
+          var b0 = pm(hd), px = a0.x - b0.x, py = a0.y - b0.y, pl = Math.hypot(px, py);
+          if (pl < H * 0.03) return;
+          var ready = pl > H * 0.08;
+          ctx.strokeStyle = 'rgba(' + rgb + ',' + (ready ? 0.9 : 0.5) + ')'; ctx.lineWidth = Math.max(1, 1.2 * u);
+          ctx.beginPath(); ctx.moveTo(a0.x, a0.y); ctx.lineTo(b0.x, b0.y); ctx.stroke();
+          if (ready) {
+            ctx.save(); ctx.setLineDash([4 * u, 6 * u]); ctx.strokeStyle = 'rgba(' + rgb + ',0.45)';
+            ctx.beginPath(); ctx.moveTo(a0.x, a0.y); ctx.lineTo(a0.x + px / pl * pl * 2.5, a0.y + py / pl * pl * 2.5); ctx.stroke(); ctx.restore();
+          }
+        });
         // Pinch threads, taut and bright.
         ctx.beginPath();
         ropes.forEach(function (R) { if (R.kind === 'pinch' && pinched[R.a.hand]) curve(ctx, R.pts); });
@@ -336,9 +356,9 @@
         ctx.restore();
 
         if (tracker.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, tracker, 'hand');
-        else if (!hands.length && !flying.length && !shots.length) Magi.tracking.hint(ctx, frame, 'Raise your hands and spread your fingers. Flick to let the web go; make the web-shooter sign and flick to throw a line.');
+        else if (!hands.length && !flying.length && !shots.length) Magi.tracking.hint(ctx, frame, 'Raise your hands and spread your fingers. Pinch, pull back and let go to shoot a web line; flick to let the web go.');
       },
-      reset: function () { ropes = []; topology = ''; lastT = null; wasPinched = {}; flying = []; flows = []; shots = []; lastThrow = {}; }
+      reset: function () { ropes = []; topology = ''; lastT = null; wasPinched = {}; flying = []; flows = []; shots = []; lastThrow = {}; pullFrom = {}; }
     };
   }
 

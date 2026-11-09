@@ -9,9 +9,11 @@
 //   HSL — a cylinder: hue is the angle, saturation the radius, lightness the height.
 //   RGB — the cube, red, green and blue on the three axes.
 // Hands (the space is untethered: it stays where you leave it and only moves when you act on it):
-//   Point and hold (index out, the others in, 0.3 s on the same color): selects the name nearest
-//     your fingertip; it stays highlighted with its hex code until you select another. A new
-//     nearest name only takes over when it is clearly nearer (30%), so it doesn't flicker.
+//   Point (index out, the others in): browses. The focus follows your fingertip to whichever name
+//     is nearest (within 70 px; a new one takes over once it is 15% nearer, so it doesn't flicker),
+//     highlighted with its hex code.
+//   Pinch with the other hand while pointing: locks the selection until that pinch opens (that
+//     pinch doesn't turn the space).
 //   Pinch with one hand: grabs the space. Dragging turns it like a trackball: left–right about the
 //     vertical (y) axis, up–down about the horizontal (x) axis, 1.6π and 0.9π across the frame.
 //     Let go and it keeps turning, slowing with a 0.8 s time constant (v ← v·e^(−dt/0.8)).
@@ -103,8 +105,14 @@
         });
         wantZoom = Math.max(0.4, Math.min(5, wantZoom));
         view.zoom += (wantZoom - view.zoom) * (1 - Math.exp(-dt / 0.1));
+        // Pointing: index out, middle and ring in, not pinched.
+        var pointer = null;
+        hands.forEach(function (h) { if (!pointer && !h.pinched && h.fingers.index.extended && !h.fingers.middle.extended && !h.fingers.ring.extended) pointer = h; });
+        // Lock: pointing with one hand and pinching with the other holds the selection until the
+        // pinch opens (and that pinch doesn't turn the space).
+        var locked = !!pointer && pinchers.some(function (h) { return h !== pointer; });
         // One pinch: grab and turn.
-        var grabber = pinchers[0] || null, startedGrab = false;
+        var grabber = locked ? null : pinchers[0] || null, startedGrab = false;
         if (grabber) {
           var m = mid(grabber);
           if (grab && grab.id === grabber.id) {
@@ -126,9 +134,6 @@
           lastSwipe = ev.n;
           if (ev.dir === 'left' || ev.dir === 'right') vel.yaw = (ev.dir === 'right' ? 1 : -1) * 6;
         });
-        // Pointing: index out, middle and ring in, not pinched.
-        var pointer = null;
-        hands.forEach(function (h) { if (!pointer && !h.pinched && h.fingers.index.extended && !h.fingers.middle.extended && !h.fingers.ring.extended) pointer = h; });
         var tip = pointer ? pointer.points[INDEX_TIP] : startedGrab ? mid(grabber) : null;
 
         var space = override || params.mode || 'lab';
@@ -158,7 +163,7 @@
         var pts = COLORS.map(function (c) { var q = project(c.pos[space]); return { c: c, x: q[0], y: q[1], z: q[2], k: q[3] }; });
         pts.sort(function (a, b) { return b.z - a.z; }); // far to near
         var fs = Math.max(6, (params.text / 100) * 16 * u), show = params.labels / 100;
-        var box = Math.max(3, 5 * u), near = null, nearD = 28 * u;
+        var box = Math.max(3, 5 * u), near = null, nearD = 70 * u;
         // Names are text, so they go on the HUD layer, sharp at the screen's resolution.
         var hud = frame.hud;
         hud.font = '400 ' + Math.round(fs) + 'px ' + Magi.fx.MONO;
@@ -176,14 +181,18 @@
           }
         });
         ctx.globalAlpha = hud.globalAlpha = 1;
-        // Selecting: at the start of a pinch, at once; pointing, after 0.3 s on the same name, and a
-        // new nearest name only replaces the candidate when it is 30% nearer.
-        var candD = function () { var cq = project(cand.pos[space]); return Math.hypot(cq[0] - tip.x, cq[1] - tip.y); };
+        // Browsing: pointing, the focus jumps to whichever name is nearest the fingertip (a new one
+        // takes over once it is 15% nearer than the current one, so it doesn't flicker between
+        // neighbors). Locked (the other hand pinched), it stays put. A pinch selects what it closes on.
+        var selD = function () { var cq = project(selected.pos[space]); return Math.hypot(cq[0] - tip.x, cq[1] - tip.y); };
         if (startedGrab && near) selected = near.c;
-        else if (pointer && near) {
-          if (!cand || (cand !== near.c && nearD < 0.7 * candD())) { cand = near.c; candAt = now; }
-          if (cand && now - candAt > 0.3) selected = cand;
-        } else if (!pointer) cand = null;
+        else if (pointer && near && !locked) {
+          if (!selected || (selected !== near.c && nearD < 0.85 * selD())) selected = near.c;
+        }
+        if (locked && selected) {
+          hud.save(); hud.fillStyle = '#fff'; hud.font = '500 ' + Math.round(9 * u) + 'px ' + Magi.fx.MONO;
+          var lq = project(selected.pos[space]); hud.fillText('LOCKED', lq[0] + box * 3, lq[1] + fs * 1.6); hud.restore();
+        }
         if (now - switchedAt < 1.2) frame.say(SPACE_NAMES[space]);
         if (selected) {
           // The selected color, highlighted where it sits in the space, named with its hex code.
@@ -208,7 +217,7 @@
         }
 
         if (tracker.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, tracker, 'hand');
-        else if (!hands.length) Magi.tracking.hint(ctx, frame, 'Pinch and drag to turn the colors, point and hold to pick one, open palm to zoom in, fist to zoom out.');
+        else if (!hands.length) Magi.tracking.hint(ctx, frame, 'Pinch and drag to turn the colors, point to browse them (pinch your other hand to lock), open palm to zoom in, fist to zoom out.');
       },
       reset: function () { last = 0; override = null; grab = null; zoomRef = null; selected = null; vel = { yaw: 0, pitch: 0 }; pinchedAt = {}; }
     };

@@ -19,11 +19,22 @@
 // Look (modes): Worms, each particle trailing its last few positions as a short worm (Trail), like
 // the reference. Glow, like neon: the same worms drawn as light, added together ('lighter'
 // compositing sums the colors, so dense clusters burn toward white): a wide faint halo, a brighter
-// band and a white-hot core (the color mixed 60% toward white), the halo's strength set by Glow.
+// band and a white-hot core (the color mixed toward white); Glow sets all three (at 0 only a plain
+// line remains). Profile: the species' palette (Original, Pastel, Neon, Ember, Ocean, Forest, Mono).
 // Size: each particle's head, a round dot of radius 0.5–8 px (screen) at its current position.
 (function () {
   var BETA = 0.3, MAXN = 2000;
-  var COLORS = ['#ff4d2e', '#ffd23f', '#3fa7ff', '#8cff5a', '#c06bff', '#ff6bd1', '#5affe9', '#ffffff'];
+  // Color profiles (Profile slider): eight species colors each, in the same order of roles.
+  var PROFILES = [
+    ['#ff4d2e', '#ffd23f', '#3fa7ff', '#8cff5a', '#c06bff', '#ff6bd1', '#5affe9', '#ffffff'], // Original
+    ['#ffadad', '#ffd6a5', '#9bf6ff', '#caffbf', '#bdb2ff', '#ffc6ff', '#a0c4ff', '#fdffb6'], // Pastel
+    ['#ff006e', '#ffbe0b', '#3a86ff', '#06d6a0', '#8338ec', '#fb5607', '#00f5d4', '#f8f8f8'], // Neon
+    ['#ff5400', '#ff8500', '#ffb700', '#d00000', '#9d0208', '#ffd166', '#e85d04', '#fff3b0'], // Ember
+    ['#03045e', '#0077b6', '#00b4d8', '#90e0ef', '#48cae4', '#023e8a', '#caf0f8', '#ade8f4'], // Ocean
+    ['#2d6a4f', '#52b788', '#95d5b2', '#d8f3dc', '#b7e4c7', '#40916c', '#74c69d', '#1b4332'], // Forest
+    ['#ffffff', '#d9d9d9', '#b0b0b0', '#8a8a8a', '#666666', '#f2f2f2', '#c4c4c4', '#9e9e9e']  // Mono
+  ];
+  var COLORS = PROFILES[0];
 
   function createParticleLife() {
     var P = [], A = [], key = '', lastT = null, seenClap = 0, grid = null;
@@ -41,6 +52,7 @@
     return {
       animated: true,
       render: function (frame, out, params) {
+        COLORS = PROFILES[Math.max(0, Math.min(PROFILES.length - 1, Math.round((params.profile || 0) / 100 * (PROFILES.length - 1))))];
         var W = frame.width, H = frame.height, u = frame.pxPerCss, t = frame.time / 1000;
         if (out.width !== W || out.height !== H) { out.width = W; out.height = H; }
         var ctx = out.getContext('2d');
@@ -119,7 +131,7 @@
           });
         };
         var passes = glowMode
-          ? [{ w: lw * 6, a: 0.07 * gk, white: 0 }, { w: lw * 2.6, a: 0.12 + 0.25 * gk, white: 0 }, { w: Math.max(1, lw * 0.7), a: 0.9, white: 0.6 }]
+          ? [{ w: lw * 6, a: 0.07 * gk, white: 0 }, { w: lw * 2.6, a: 0.04 + 0.3 * gk, white: 0 }, { w: Math.max(1, lw * 0.7), a: 0.35 + 0.55 * gk, white: 0.6 * gk }]
           : [{ w: lw, a: 1, white: 0 }];
         if (glowMode) ctx.globalCompositeOperation = 'lighter';
         passes.forEach(function (ps) {

@@ -39,6 +39,15 @@
 // (ζ = 0.5 − 0.5f, at least 0.08), so the shell sloshes and rings after each breath, and a
 // standing surface wave rides on the shell, two low modes of a drop,
 // δr = 0.12f·sin(4x + 2.1t)·cos(3y − 1.6t) in the sphere's own frame, so it turns with it.
+// Separating with two hands: pinch and hold with both and each sphere is torn to its own pinch
+// (the split happens at once, the shared particles cross in 0.25 s and stream with short lags);
+// two open palms pulled apart separate it magnetically, slowly (1.6 s), particles stretching
+// across like iron filings between two poles. A fist pulls its particles in faster (the inhale's
+// time constant drops from 0.18 s to 0.07 s and the particles' lag halves).
+// Flash: how bright and wide the core flashes when a sphere implodes (and how much the shell
+// brightens as it collapses); 0 turns the flash off.
+// Dissipate: with it on, when no hand is up the particles drift outward and fade away (0.6 s), and
+// gather back when a hand returns.
 // Speed scales all of that motion and the breath, ×0.35 to ×2.9 (2^((Speed − 50)/33)).
 // Looks (modes): Sphere (dots), Zero (each particle a digit, its latitude band on its own sphere
 // counted 0–9 from the top pole, as in the Zero landmark) and Binary (each particle a bit, 0 or 1,
@@ -70,7 +79,7 @@
   }
 
   function createExhale() {
-    var groups = [], key = '', lastT = null, seenEvents = 0, m = 1, mergedFlag = true, splitAt = -9;
+    var groups = [], key = '', lastT = null, seenEvents = 0, m = 1, mergedFlag = true, splitAt = -9, vis = 1;
     var layer = document.createElement('canvas'), lctx = layer.getContext('2d'), img = null, buf = null, u32 = null;
     return {
       animated: true,
@@ -94,19 +103,25 @@
         events.forEach(function (e) { seenEvents = Math.max(seenEvents, e.n); });
         var two = hands.length >= 2;
         // Each group's hands: its own with two hands; with one, both groups share it.
-        var handsOf = function (g) { return two ? (m > 0.5 ? hands : [hands[g]]) : hands; };
+        var bothPinched = two && hands[0].pinched && hands[1].pinched, bothOpen = two && hands.every(function (h) { return h.count >= 4 && !h.pinched; });
+        var handsOf = function (g) { return two ? (m > 0.5 && !bothPinched ? hands : [hands[g]]) : hands; };
         var ownHand = function (g) { return two ? hands[g] : hands[0]; };
         var home = { x: W / 2, y: H / 2 };
 
         // Merge state: one hand or none, merged; two hands, merge on touch and split when pulled apart.
         if (!two) mergedFlag = true;
+        else if (mergedFlag && bothPinched) { mergedFlag = false; splitAt = t; }
         else if (mergedFlag && Math.hypot(hands[0].center.x - hands[1].center.x, hands[0].center.y - hands[1].center.y) > 3.4 * Rsep) { mergedFlag = false; splitAt = t; }
         groups.forEach(function (G, g) { if (!G.center) { var h0 = ownHand(g); G.center = h0 ? { x: h0.center.x, y: h0.center.y } : { x: home.x, y: home.y }; } });
-        if (two && !mergedFlag && t - splitAt > 1) {
+        if (two && !mergedFlag && !bothPinched && t - splitAt > 1) {
           var rr0 = Rsep * (0.02 + 1.03 * groups[0].breath), rr1 = Rsep * (0.02 + 1.03 * groups[1].breath);
           if (Math.hypot(groups[0].center.x - groups[1].center.x, groups[0].center.y - groups[1].center.y) < 0.9 * (rr0 + rr1)) mergedFlag = true;
         }
-        m += ((mergedFlag ? 1 : 0) - m) * (1 - Math.exp(-dt / 0.8));
+        var tauM = bothPinched ? 0.25 : bothOpen && !mergedFlag ? 1.6 : 0.8;
+        m += ((mergedFlag ? 1 : 0) - m) * (1 - Math.exp(-dt / tauM));
+        // Dissipate: fade away with no hands, gather back when one returns.
+        var visT = params.dissipate && !hands.length ? 0 : 1;
+        vis += (visT - vis) * (1 - Math.exp(-dt / (visT ? 0.4 : 0.6)));
         if (Math.abs(m - (mergedFlag ? 1 : 0)) < 0.002) m = mergedFlag ? 1 : 0;
 
         // Pinches: a pinched group's center goes straight to the pinch (its particles follow with lag).
@@ -137,7 +152,9 @@
         groups.forEach(function (G, g) {
           var hs = handsOf(g), hd = ownHand(g);
           var target = hs.length ? hs.reduce(function (a, h) { return a + bOf(h); }, 0) / hs.length : 0.5 - 0.5 * Math.cos(2 * Math.PI * (params.rate / 60) * t);
-          G.breath += (target - G.breath) * (1 - Math.exp(-dt * spd / (target < G.breath ? 0.18 : 0.35)));
+          var fistIn = hs.some(function (h) { return h.fist; });
+          G.fist = fistIn;
+          G.breath += (target - G.breath) * (1 - Math.exp(-dt * spd / (target < G.breath ? (fistIn ? 0.07 : 0.18) : 0.35)));
           if (hd) {
             var R = Rsep + (Rbase - Rsep) * m, c = m > 0.5 ? cm : G.center;
             var near = Math.hypot(hd.center.x - c.x, hd.center.y - c.y) < R * 1.3;
@@ -186,7 +203,8 @@
         var Mm = groups[0].M, bm = (groups[0].breath + groups[1].breath) / 2;
         var tightOf = function (b) { return Math.max(0, 1 - b / 0.15); };
         var tightAll = Math.max(tightOf(groups[0].breath), tightOf(groups[1].breath));
-        var bandK = [0.95, 0.4 + 0.5 * tightAll, 0.1 + 0.8 * tightAll], flip = dt * 0.4;
+        var flash = (params.flash === undefined ? 50 : params.flash) / 50, ft = Math.min(1, tightAll * flash);
+        var bandK = [0.95, 0.4 + 0.5 * ft, 0.1 + 0.8 * ft], flip = dt * 0.4;
         groups.forEach(function (G, g) {
           var O = groups[1 - g].center, ox0 = O.x - G.center.x, oy0 = O.y - G.center.y, ol = Math.hypot(ox0, oy0) || 1;
           var h = dt * spd / 2, M = G.M, flowing = t < G.flowUntil, fl = (params.fluidity === undefined ? 30 : params.fluidity) / 100, zeta = Math.max(0.08, 0.5 - 0.5 * fl), lagK = 1 + 8 * fl * fl, waveA = 0.12 * fl;
@@ -205,9 +223,9 @@
             // Each particle follows the center through its own lag (long while flowing to or from a pinch).
             var tcx = G.center.x + (cm.x - G.center.x) * w0, tcy = G.center.y + (cm.y - G.center.y) * w0;
             if (q.cx === null) { q.cx = tcx; q.cy = tcy; }
-            var tau = flowing ? (0.05 + 0.9 * q.lag) / spd * (0.4 + 1.6 * fl) : (0.04 + 0.08 * q.lag) * lagK, kf = 1 - Math.exp(-dt / tau);
+            var tau = (flowing ? (0.05 + 0.9 * q.lag) / spd * (0.4 + 1.6 * fl) * (bothPinched ? 0.4 : 1) : (0.04 + 0.08 * q.lag) * lagK * (bothOpen && m > 0 && m < 1 ? 3 : 1)) * (G.fist ? 0.5 : 1), kf = 1 - Math.exp(-dt / tau);
             q.cx += (tcx - q.cx) * kf; q.cy += (tcy - q.cy) * kf;
-            var sx = q.cx + ox, sy = q.cy + oy, band = Math.abs(zz) < 0.35 ? 0 : Math.abs(zz) < 0.7 ? 1 : 2, kb = bandK[band];
+            var spread = 1 + (1 - vis) * (0.8 + q.lag), sx = q.cx + ox * spread, sy = q.cy + oy * spread, band = Math.abs(zz) < 0.35 ? 0 : Math.abs(zz) < 0.7 ? 1 : 2, kb = bandK[band] * vis;
             if (masks) {
               if (look === 'binary' && Math.random() < flip) q.bit ^= 1;
               glyph(sx, sy, masks[look === 'binary' ? q.bit : q.digit], kb);
@@ -236,13 +254,14 @@
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
         var core = function (cx, cy, R, tight, wgt) {
-          if (tight * wgt < 0.2) return;
-          var gr = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 0.12), k = tight * wgt;
-          gr.addColorStop(0, 'rgba(255,255,255,' + (0.7 * k).toFixed(3) + ')');
-          gr.addColorStop(0.4, 'rgba(' + rgb + ',' + (0.5 * k).toFixed(3) + ')');
+          var k = Math.min(1.5, tight * tight * wgt * flash) * vis, cr = R * (0.06 + 0.06 * Math.min(2, flash));
+          if (k < 0.05) return;
+          var gr = ctx.createRadialGradient(cx, cy, 0, cx, cy, cr);
+          gr.addColorStop(0, 'rgba(255,255,255,' + Math.min(1, 0.7 * k).toFixed(3) + ')');
+          gr.addColorStop(0.4, 'rgba(' + rgb + ',' + Math.min(1, 0.5 * k).toFixed(3) + ')');
           gr.addColorStop(1, 'rgba(' + rgb + ',0)');
           ctx.fillStyle = gr;
-          ctx.beginPath(); ctx.arc(cx, cy, R * 0.12, 0, Math.PI * 2); ctx.fill();
+          ctx.beginPath(); ctx.arc(cx, cy, cr, 0, Math.PI * 2); ctx.fill();
         };
         core(cm.x, cm.y, Rbase, tightOf(bm), m);
         groups.forEach(function (G) { core(G.center.x, G.center.y, Rsep, tightOf(G.breath), 1 - m); });
@@ -250,7 +269,7 @@
         var tracker = Magi.tracking.hands;
         if (tracker.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, tracker, 'hand');
       },
-      reset: function () { key = ''; lastT = null; groups = []; m = 1; mergedFlag = true; splitAt = -9; }
+      reset: function () { key = ''; lastT = null; groups = []; m = 1; mergedFlag = true; splitAt = -9; vis = 1; }
     };
   }
 

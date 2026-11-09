@@ -10,9 +10,13 @@
 //          k = 1 − Spikiness/50, so 0 is fully rounded and 50 is a straight polyline;
 //   50–100 the polyline with spikes: every point pushed out along the line's normal, alternately
 //          left and right, by up to 6% of the frame height × a random factor per point.
-// Thickness: 0.5–8 px (screen). Texture: a dry brush. The stroke is laid down in three passes, each
-// broken by its own random dash pattern (gaps up to 4× the width, where the bristles skip the
-// paper's tooth), thinned, faded and offset by up to 0.6× the width; 0 is one clean line.
+// Thickness: 0.5–8 px (screen). Texture: a highlighter / marker stroke, fixed to the line (nothing in
+// it is random per frame, so it never crawls along the path). A marker's felt chisel tip lays down
+// translucent ink, a little heavier along both edges where the felt meets the paper first, with fine
+// streaks parallel to the stroke from the felt's fibres. So: a translucent body (opacity falling
+// from 1 to 0.55 as Texture rises), two darker edge lines at ±0.42 of the width, and two faint
+// streaks at ±0.15, each offset across the stroke along the chisel's angle (45°), so the stroke
+// looks broader on diagonals, like a real chisel tip; the ends are cut square. 0 is one clean line.
 // Color: far left lime; then the hue wheel. Dim: darkens the camera behind the drawing.
 // Size scales the drawing about each hand's palm center (×0.5–×2); closing your palm shrinks it
 // and opening it expands it (×0.45–×1.6 more). Connect: one tour through both
@@ -108,17 +112,20 @@
             ctx.lineWidth = w;
             ctx.stroke(path);
           } else {
-            for (var pass = 0; pass < 3; pass++) {
-              var r1 = rnd(n, pass + 1), r2 = rnd(n, pass + 7), r3 = rnd(n, pass + 13);
+            // Marker: body, edge lines and streaks, each the whole path shifted across the chisel.
+            var cx45 = Math.SQRT1_2, wide = w * (1 + 0.35 * tex);
+            ctx.lineCap = 'butt'; ctx.lineJoin = 'round';
+            var pass = function (off, width, alpha) {
               ctx.save();
-              ctx.translate((r1 - 0.5) * 1.2 * tex * w, (r2 - 0.5) * 1.2 * tex * w);
-              ctx.strokeStyle = 'rgba(' + rgb + ',' + (0.95 - 0.4 * tex * r3).toFixed(3) + ')';
-              ctx.lineWidth = w * (1 - 0.45 * tex * r2);
-              ctx.setLineDash([w * (4 + 22 * (1 - tex) + 10 * r1), w * 4 * tex * (0.3 + r3)]);
-              ctx.lineDashOffset = r2 * 100 * w;
+              ctx.translate(off * wide * cx45, -off * wide * cx45);
+              ctx.strokeStyle = 'rgba(' + rgb + ',' + alpha.toFixed(3) + ')';
+              ctx.lineWidth = width;
               ctx.stroke(path);
               ctx.restore();
-            }
+            };
+            pass(0, wide, 1 - 0.45 * tex);
+            [-0.42, 0.42].forEach(function (o) { pass(o, Math.max(1, wide * 0.16), 0.35 * tex); });
+            [-0.15, 0.15].forEach(function (o) { pass(o, Math.max(0.6, wide * 0.06), 0.18 * tex); });
           }
           ctx.restore();
         }
