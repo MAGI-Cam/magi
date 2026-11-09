@@ -18,8 +18,13 @@
 // octaves; amplitudes follow Kolmogorov's spectrum E(k) ∝ k^(−5/3), |Aₙ| ∝ √(E(kₙ)Δkₙ) ∝ kₙ^(−1/3);
 // each mode turns over at its eddy frequency ωₙ ∝ kₙ^(2/3). It costs eight sin/cos pairs per
 // particle, cheap enough for a phone.
+//     + T·(3(r·n̂)n̂ − r)                    tidal acceleration from a distant mass in direction n̂
+//                                         (r = p − c): the differential pull that raises two
+//                                         opposite bulges, the ocean's tides (T = GM/d³)
+//     − P·((p − q)·m)·m                    a spring to a plane through q with normal m (Horizon)
 // Life: age counts up; past its lifespan (random between two bounds) a particle is reborn on the
-// emitter: a sphere's surface, a line segment, or up to eight points (fingertips), with no velocity.
+// emitter: a sphere's surface, a line segment, points (landmarks) or a solid ball (uniform in
+// volume: radius ∝ ∛u), with no velocity. With emission off, the reborn wait out of sight.
 // Drawing: each particle is a 1–3 px point, faded in and out over its life and brighter nearer the
 // eye, added ('one, one' blending) into a half-float image, so brightness is density. Trails are
 // frame feedback: before drawing, the image is multiplied by Trails (decay per frame), so old
@@ -44,8 +49,8 @@
     'precision highp float;',
     'in vec2 uv;',
     'uniform sampler2D posTex, velTex;',
-    'uniform float dt, time, seed, amp, kscale, follow, shellK, radius, lifeMin, lifeMax, reset, soft, jitter;',
-    'uniform vec3 center, gravity, lineA, lineB;',
+    'uniform float dt, time, seed, amp, kscale, follow, shellK, radius, lifeMin, lifeMax, reset, soft, jitter, tideK, planeK, emitOn;',
+    'uniform vec3 center, gravity, lineA, lineB, tideN, planeP, planeN;',
     'uniform int emitShape, nAttract, nEmit, side;',
     'uniform float emitByIndex;',
     'uniform vec4 attract[8];',
@@ -71,7 +76,9 @@
     '    else if (emitShape == 2 && nEmit > 0) { int idx = int(gl_FragCoord.y) * side + int(gl_FragCoord.x);',
     '      int k = emitByIndex > 0.5 ? idx % nEmit : min(nEmit - 1, int(floor(hash(s + 5.3) * float(nEmit))));',
     '      pos = emitPts[k] + unitVec(s + 9.7) * jitter * pow(hash(s + 2.2), 0.5); }',
+    '    else if (emitShape == 3) pos = center + unitVec(s) * radius * pow(hash(s + 4.4), 1.0 / 3.0);',
     '    else pos = center + unitVec(s) * radius * (1.0 + jitter * (hash(s + 4.4) - 0.5));',
+    '    if (emitOn < 0.5) { oPos = vec4(1e4, 1e4, 1e4, 0.0); oVel = vec4(0.0, 0.0, 0.0, 0.05 + 0.1 * hash(s + 6.6)); return; }',
     '    float life = mix(lifeMin, lifeMax, hash(s + 7.7));',
     '    oPos = vec4(pos, reset > 0.5 ? hash(s + 8.8) * life : 0.0);',
     '    oVel = vec4(0.0, 0.0, 0.0, life);',
@@ -80,6 +87,8 @@
     '  vec3 p = P.xyz, v = V.xyz;',
     '  vec3 a = (flow(p, time) * amp - v) * follow + gravity;',
     '  if (shellK > 0.0) { vec3 d = p - center; float r = length(d) + 1e-5; a -= shellK * (r - radius) * d / r; }',
+    '  if (tideK > 0.0) { vec3 r = p - center; a += tideK * (3.0 * dot(r, tideN) * tideN - r); }',
+    '  if (planeK > 0.0) a -= planeK * dot(p - planeP, planeN) * planeN;',
     '  for (int i = 0; i < 8; i++) { if (i >= nAttract) break; vec3 e = attract[i].xyz - p; float l2 = dot(e, e) + soft * soft; a += attract[i].w * e / (l2 * sqrt(l2)); }',
     '  v += a * dt;',
     '  p += v * dt;',
@@ -95,8 +104,10 @@
     'uniform int side;',
     'uniform mat3 view;',
     'uniform vec3 pivot, color;',
-    'uniform float aspect, focal, psize, useCam, bright, depthK;',
+    'uniform float aspect, focal, psize, useCam, bright, depthK, accentShare, coreK, coreR;',
+    'uniform vec3 accent, coreColor, coreC;',
     'out vec3 vC;',
+    'float h1(float n) { return fract(sin(n * 12.9898) * 43758.5453); }',
     'void main() {',
     '  ivec2 c = ivec2(gl_VertexID % side, gl_VertexID / side);',
     '  vec4 P = texelFetch(posTex, c, 0), V = texelFetch(velTex, c, 0);',
@@ -108,6 +119,8 @@
     '  float f = P.w / max(1e-3, V.w), fade = smoothstep(0.0, 0.12, f) * (1.0 - smoothstep(0.7, 1.0, f));',
     '  float depth = clamp(1.0 - depthK * q.z, 0.15, 1.6);',
     '  vec3 col = useCam > 0.5 ? texture(camTex, vec2(s.x * 0.5 + 0.5, 0.5 - s.y * 0.5)).rgb : color;',
+    '  if (accentShare > 0.0 && h1(float(gl_VertexID)) < accentShare) col = accent;',
+    '  if (coreK > 0.0) col = mix(col, coreColor * coreK, smoothstep(coreR, coreR * 0.15, distance(P.xyz, coreC)));',
     '  vC = col * fade * depth * bright;',
     '}'
   ].join('\n');
@@ -291,6 +304,7 @@
           posTex: src.pos, velTex: src.vel, dt: o.dt, time: o.time, seed: Math.random() * 100, amp: o.amp, kscale: o.kscale || 1, follow: o.follow || 2,
           shellK: o.shellK || 0, radius: o.radius || 0.5, lifeMin: o.lifeMin || 2, lifeMax: o.lifeMax || 6, reset: needReset ? 1 : 0, soft: o.soft || 0.08, jitter: o.jitter || 0,
           center: o.center || [0, 0, 0], gravity: o.gravity || [0, 0, 0], lineA: o.lineA || [0, 0, 0], lineB: o.lineB || [0, 0, 0],
+          tideK: o.tideK || 0, tideN: o.tideN || [1, 0, 0], planeK: o.planeK || 0, planeP: o.planeP || [0, 0, 0], planeN: o.planeN || [0, 1, 0], emitOn: o.emitOn === false ? 0 : 1,
           emitShape: { int: o.emitShape || 0 }, nAttract: { int: at.length }, nEmit: { int: em.length }, side: { int: side }, emitByIndex: o.emitByIndex ? 1 : 0,
           attract: { v4: av4 }, emitPts: { v3: ep },
           kv: { v3: modes.kv }, av: { v3: modes.av }, bv: { v3: modes.bv }, wv: { f1: modes.wv }
@@ -322,7 +336,8 @@
         gl.blendFunc(gl.ONE, gl.ONE);
         uniforms(P.points, {
           posTex: state[cur].pos, velTex: state[cur].vel, camTex: camTex || state[cur].pos, side: { int: side }, view: { mat3: o.view }, pivot: o.pivot,
-          color: o.color, aspect: w / h, focal: o.focal || 3, psize: o.psize || 1, useCam: o.useCam && o.cam ? 1 : 0, bright: o.bright, depthK: o.depthK === undefined ? 0.5 : o.depthK
+          color: o.color, aspect: w / h, focal: o.focal || 3, psize: o.psize || 1, useCam: o.useCam && o.cam ? 1 : 0, bright: o.bright, depthK: o.depthK === undefined ? 0.5 : o.depthK,
+          accent: o.accent || [1, 1, 1], accentShare: o.accentShare || 0, coreColor: o.coreColor || [1, 1, 1], coreK: o.coreK || 0, coreR: o.coreR || 0.5, coreC: o.coreC || [0, 0, 0]
         });
         gl.bindVertexArray(emptyVao);
         gl.bindFramebuffer(gl.FRAMEBUFFER, accum.fbo);

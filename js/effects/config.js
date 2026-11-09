@@ -499,8 +499,12 @@ Magi.effectConfig = [
     ready: true,
     photoType: 'image/jpeg',
     modes: [
-      { id: 'light', name: 'Light' },
-      { id: 'ink', name: 'Ink' }
+      { id: 'fibre', name: 'Fibre' },
+      { id: 'tidal', name: 'Tidal' },
+      { id: 'horizon', name: 'Horizon' },
+      { id: 'lightbeam', name: 'Lightbeam' },
+      { id: 'thundercloud', name: 'Thundercloud' },
+      { id: 'symbiote', name: 'Symbiote' }
     ],
     params: [
       range('count', 'Count', 20, 1000, 250),
@@ -512,6 +516,9 @@ Magi.effectConfig = [
       range('exposure', 'Exposure', 0, 100, 50),
       range('glow', 'Glow', 0, 100, 35),
       toggle('camera', 'Camera', false, 'Each particle takes the color of the video under it.'),
+      { id: 'ink', label: 'Ink', type: 'toggle', default: false, modes: ['fibre', 'tidal', 'horizon', 'thundercloud'], hint: 'Dark strands on white paper instead of light on dark.' },
+      { id: 'leak', label: 'Leak', type: 'toggle', default: true, modes: ['lightbeam'], hint: 'Warm light leaks at the edges and some red-orange strokes.' },
+      { id: 'flash', label: 'Flash', type: 'toggle', default: true, modes: ['lightbeam'], hint: 'A pinch fires a white flash over the background.' },
       { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
       range('dim', 'Dim', 0, 100, 90)
     ]
@@ -947,11 +954,14 @@ Magi.effectGuides = {
     'Rings: how many rings. Sag: how much threads droop. Particles: how many specks flow along the threads. Glow, Color: light and color.'
   ],
   fibre: [
-    'How it works: hundreds of thousands of particles on the graphics card, stirred by synthetic turbulence (a sum of swirling waves with the energy spectrum of real turbulence) and held to a sphere by a spring. Their paths fade slowly, so each one draws a fibre.',
-    'One hand: the sphere follows your palm. Two hands: it sits between them, as wide as they are apart. Open palm: the fibres fly loose. Fist: it pulls tight.',
-    'Pinch and drag: turns it, and it keeps turning when you let go. Swipe: spins it. Sweep your hand through it fast: the fibres blow away.',
-    'Modes: tap the tile. Light: glowing points on the dark camera. Ink: dark fibres on white paper.',
-    'Count: particles, in thousands (fewer if your phone stutters). Size, Turbulence, Scale: sphere size, how hard and how fine the swirl is. Hold: how strongly the shell pulls them back (low: fur, high: a smooth ball). Trails: how long the paths last. Exposure, Glow: brightness and bloom. Camera: color from the video. Color: tint (far left white, or black ink). Dim: darkens (or, in Ink, whitens) the camera.'
+    'How it works: hundreds of thousands of particles on the graphics card, stirred by synthetic turbulence (waves with the energy spectrum of real turbulence); their paths fade slowly, so each draws a strand. Six modes (tap the tile).',
+    'Fibre: a sphere held by a spring. One hand moves it, two hands hold it between them. Open palm: fibres fly loose. Fist: it pulls tight. Pinch and drag: turns it. A fast sweep blows the fibres away.',
+    'Tidal: your hand is a moon. Its tidal pull (stronger the closer it is, by the inverse cube of the distance) raises two opposite bulges that stream toward and away from it. Open palm: a heavier moon; fist: lighter.',
+    'Horizon: particles pour along a line, lifted off it like smoke. Close a fist to set the line through it and turn the fist to tilt it. Open palm: raises a plume.',
+    'Lightbeam: draw with light with your index finger; strokes glow and fade (Trails sets how long). Fist: wipes the drawing. Leak: warm light leaks and red-orange strokes. Flash: a pinch flashes the background white.',
+    'Thundercloud: a churning cloud, grey outside and glowing at its heart. It follows your hand; fist heats and compresses it, open palm swells it, pinch throws lightning to your fingertips.',
+    'Symbiote: black ink grows from your hands and clings to them, lashing out when you move fast.',
+    'Count: particles, in thousands (fewer if your phone stutters). Size, Turbulence, Scale, Hold (how strongly the shape pulls particles back), Trails, Exposure, Glow. Camera: color from the video. Ink: dark on white. Color: tint. Dim: darkens (or, in ink, whitens) the camera.'
   ],
   'particle-cloud': [
     'How it works: hundreds of thousands of particles on the graphics card, born at the 21 points of each hand, stirred by turbulence and added like light, so your hands give off a soft luminous cloud. Your palms pull drifting particles back.',
