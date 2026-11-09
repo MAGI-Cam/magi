@@ -23,11 +23,16 @@
 //     plane spring (Hold) and lifted off it by turbulence, so it reads as a horizon breathing smoke.
 //     A closed fist sets the line: it passes through your fist at your fist's angle (roll). An open
 //     palm pushes the particles away from it (a repelling attractor), raising a plume where it is.
-//   Lightbeam — light painting with your index finger: while your index finger is out, particles are
-//     born all along the segment your fingertip moved this frame (so the stroke is continuous at
-//     any speed) and stay where they are, glowing, for 2–12 s (Trails). Leak (switch): warm light
-//     leaks drift at the picture's edges and some strokes come out red-orange. Flash (switch): a
-//     pinch fires a white flash over the background. Fist: wipes the drawing.
+//   Lightbeam — a blade of light that follows your index finger, fluid like a sword trail in a
+//     slicing game. The fingertip's recent path (smoothed by an adaptive low-pass, then a
+//     Catmull-Rom spline through the samples) is drawn as a ribbon that is widest at the finger and
+//     tapers to nothing at its tail, as each point ages over the trail's lifetime (0.25 s with
+//     Trails at 0, up to 4 s for long-exposure loops). Faster strokes draw thinner and brighter.
+//     Three passes added like light: a wide colored glow, a band and a white-hot core. Each new
+//     stroke takes the next color (white, then, with Leak, gold, red and ice blue), and sparks fly
+//     off fast strokes (short-lived GPU particles thrown along and across the motion). Leak (switch):
+//     warm light leaks drift at the picture's edges. Flash (switch): a pinch flashes the background
+//     white. Fist: wipes every stroke.
 //   Thundercloud — a dense ball of particles (born uniformly in its volume, radius ∝ ∛u) churned
 //     slowly by fine turbulence and held hard by a pull to its center, grey at the edge and glowing at
 //     its heart: each particle's color blends toward the Core color the nearer it is to the center
@@ -38,13 +43,34 @@
 //     light rippling out through the cloud at 2.2 units a second, flickering through four return
 //     strokes (0, 90, 200 and 360 ms, each decaying in 50 ms), as real lightning does, with a faint
 //     flash of the sky behind.
-//   Symbiote — always ink: black strands that grow from your hands (born at your 21 landmarks) and
-//     cling to them (attractors at your palms), lashing out when you move fast (turbulence × hand
-//     speed) and leaving long wet strokes (long trails). No hand: a restless blob in the middle.
+//   Symbiote — always ink, after an ink-on-paper particle reference: hundreds of thousands of fine
+//     particles thrown off your hands (born at your 21 landmarks with your hand's velocity plus a
+//     random push) keep their momentum (weak drag) through a broad, slow turbulence, so each one's
+//     path is a long fine curve; the long trails turn the bundles of curves into feathery strokes,
+//     dark where they crowd. Your palms pull gently, so the ink curls back around you. The faster
+//     you move, the harder it lashes. No hand: it streams from a slowly wandering point.
 (function () {
+  // Blade colors for Lightbeam's strokes (white first; with Leak the rest in turn).
+  var BLADE = [[255, 255, 255], [255, 196, 64], [255, 70, 40], [150, 210, 255]];
+  // Catmull-Rom through the points (centripetal enough at these spacings), 4 samples a span.
+  function spline(P) {
+    if (P.length < 3) return P.slice();
+    var out = [];
+    for (var i = 0; i < P.length - 1; i++) {
+      var p0 = P[Math.max(0, i - 1)], p1 = P[i], p2 = P[i + 1], p3 = P[Math.min(P.length - 1, i + 2)];
+      for (var k = 0; k < 4; k++) {
+        var s = k / 4, s2 = s * s, s3 = s2 * s;
+        var f = function (a, b, c, d) { return 0.5 * (2 * b + (-a + c) * s + (2 * a - 5 * b + 4 * c - d) * s2 + (-a + 3 * b - 3 * c + d) * s3); };
+        out.push({ x: f(p0.x, p1.x, p2.x, p3.x), y: f(p0.y, p1.y, p2.y, p3.y), t: p1.t + (p2.t - p1.t) * s });
+      }
+    }
+    out.push(P[P.length - 1]);
+    return out;
+  }
+
   function createFibre() {
     var sys = undefined, camCopy = document.createElement('canvas'), lastT = null, center = [0, 0, 0], radius = 0.5, view = { yaw: 0, pitch: 0.2 }, vel = { yaw: 0.15, pitch: 0 }, grab = null, seen = 0;
-    var tk = { amp: 1, hold: 1, rad: 1, tide: 1, heat: 1 }, cvel = [0, 0, 0], strike = null, lastMode = null, prevTip = null, lineAng = 0, lineY = 0, flash = 0, wasPinched = {}, wasFist = false;
+    var tk = { amp: 1, hold: 1, rad: 1, tide: 1, heat: 1 }, cvel = [0, 0, 0], strike = null, strokes = [], curStroke = null, strokeN = 0, tipS = null, lastMode = null, prevTip = null, lineAng = 0, lineY = 0, flash = 0, wasPinched = {}, wasFist = false;
     return {
       animated: true,
       render: function (frame, out, params) {
@@ -53,7 +79,7 @@
         var ctx = out.getContext('2d');
         frame.draw(ctx, W, H);
         if (sys === undefined) sys = Magi.gpuParticles();
-        if (mode !== lastMode) { lastMode = mode; if (sys) sys.reset(); prevTip = null; }
+        if (mode !== lastMode) { lastMode = mode; if (sys) sys.reset(); prevTip = null; strokes = []; curStroke = null; tipS = null; }
         // Camera colors are looked up in an undimmed quarter-size copy of the picture.
         if (params.camera) {
           var cw = Math.max(1, Math.round(W / 4)), ch = Math.max(1, Math.round(H / 4));
@@ -115,18 +141,32 @@
           hands.forEach(function (h) { if (!h.fist && h.count >= 4) attract.push(toW(h.center).concat([-0.02 - 0.03 * Math.min(2, h.speed / H)])); });
           look.areaR = 0.25; look.pivot = [0, 0, 0]; look.spin = false; look.depthK = 0.2;
         } else if (mode === 'lightbeam') {
-          // Light painting: emit along the fingertip's path while the index finger is out.
+          // The blade: smooth the fingertip, extend the current stroke, age every stroke.
           var painter = hands.filter(function (h) { return h.fingers.index.extended && !h.pinched && !h.fist; })[0];
-          var tip = painter ? toW(painter.points[8]) : null;
-          step.emitShape = 1; step.emitOn = !!tip;
-          if (tip) { var from = prevTip || tip; step.lineA = from; step.lineB = tip; }
-          prevTip = tip;
+          var lifeS = 0.25 + params.trails / 100 * 3.75;
+          if (painter) {
+            var raw = painter.points[8];
+            if (!tipS) tipS = { x: raw.x, y: raw.y };
+            var spd = Math.hypot(raw.x - tipS.x, raw.y - tipS.y) / Math.max(dt, 1e-3) / H, fc = 3 + 12 * spd, al = 1 - Math.exp(-2 * Math.PI * fc * dt);
+            tipS.x += (raw.x - tipS.x) * al; tipS.y += (raw.y - tipS.y) * al;
+            if (!curStroke) { curStroke = { pts: [], color: BLADE[strokeN++ % (params.leak ? BLADE.length : 1)] }; strokes.push(curStroke); }
+            var lp = curStroke.pts[curStroke.pts.length - 1];
+            if (!lp || Math.hypot(tipS.x - lp.x, tipS.y - lp.y) > 1.5) curStroke.pts.push({ x: tipS.x, y: tipS.y, t: t });
+          } else { curStroke = null; tipS = null; }
+          strokes.forEach(function (S2) { S2.pts = S2.pts.filter(function (q) { return t - q.t < lifeS; }); });
+          strokes = strokes.filter(function (S2) { return S2.pts.length > 1 || S2 === curStroke; });
           var fistNow = hands.some(function (h) { return h.fist; });
-          if (fistNow && !wasFist) sys.reset();
+          if (fistNow && !wasFist) { strokes = []; curStroke = null; }
           wasFist = fistNow;
-          var lifeS = 2 + params.trails / 100 * 10;
-          step.amp = 0.004 + turb * 0.02; step.follow = 1; step.jitter = 0.003; step.lifeMin = lifeS * 0.8; step.lifeMax = lifeS;
-          look.areaR = 0.08; look.pivot = [0, 0, 0]; look.spin = false; look.depthK = 0; look.trailsOverride = 0.55;
+          // Sparks off fast strokes.
+          var tipW = tipS ? toW(tipS) : null, spdW = 0, dir = [0, 0, 0];
+          if (tipW && prevTip) { dir = [(tipW[0] - prevTip[0]) / dt, (tipW[1] - prevTip[1]) / dt, 0]; spdW = Math.hypot(dir[0], dir[1]); }
+          step.emitShape = 1; step.emitOn = !!tipW && spdW > 0.8;
+          if (tipW) { step.lineA = prevTip || tipW; step.lineB = tipW; }
+          prevTip = tipW;
+          step.birthVel = [dir[0] * 0.15, dir[1] * 0.15, 0]; step.birthSpread = 0.5; step.amp = 0.05; step.follow = 0.6; step.gravity = [0, -0.6, 0];
+          step.jitter = 0.004; step.lifeMin = 0.2; step.lifeMax = 0.7;
+          look.areaR = 0.08; look.pivot = [0, 0, 0]; look.spin = false; look.depthK = 0; look.trailsOverride = 0.6; look.lifeS = lifeS;
           if (params.flash && pinchStart) flash = 1;
         } else if (mode === 'thundercloud') {
           if (hd) want.c = toW(hd.center);
@@ -143,16 +183,19 @@
           look.coreK = 0.75 * tk.heat; look.depthK = 0.5; look.areaR = radius * tk.rad * 0.75;
           heavy = true;
         } else if (mode === 'symbiote') {
-          var emit = [];
+          var emit = [], hv = [0, 0, 0], hs = 0;
           hands.forEach(function (h) {
             h.points.forEach(function (q) { emit.push(toW(q)); });
-            attract.push(toW(h.center).concat([0.015 * (0.4 + hold)]));
-            want.amp *= 1 + Math.min(3, h.speed / H * 2);
+            attract.push(toW(h.center).concat([0.008 * (0.4 + hold)]));
+            hv[0] += h.velocity.x / W * 2 * aspect; hv[1] -= h.velocity.y / H * 2; hs = Math.max(hs, h.speed / H);
           });
-          if (emit.length) { step.emitShape = 2; step.emitPoints = emit; step.jitter = 0.03; }
-          else { step.emitShape = 0; step.center = [Math.sin(t * 0.5) * 0.1, Math.cos(t * 0.37) * 0.08, 0]; step.radius = 0.18; step.jitter = 0.6; attract.push([0, 0, 0, 0.02]); }
-          step.amp = (0.15 + turb * 0.9) * tk.amp; step.follow = 4; step.lifeMin = 1.5; step.lifeMax = 5; step.kscale = kscale * 1.6;
-          look.areaR = 0.5; look.pivot = [0, 0, 0]; look.spin = false; look.depthK = 0.2; look.trailsOverride = 0.985;
+          if (hands.length) hv = hv.map(function (v) { return v / hands.length; });
+          want.amp *= 1 + Math.min(3, hs * 1.5);
+          if (emit.length) { step.emitShape = 2; step.emitPoints = emit; step.jitter = 0.06; }
+          else { step.emitShape = 2; step.emitPoints = [[Math.sin(t * 0.5) * 0.25, Math.cos(t * 0.37) * 0.15, 0]]; step.jitter = 0.04; }
+          step.birthVel = [hv[0] * 0.35, hv[1] * 0.35, 0]; step.birthSpread = 0.25 + Math.min(0.6, hs * 0.3);
+          step.amp = (0.1 + turb * 0.5) * tk.amp; step.follow = 0.7; step.lifeMin = 2; step.lifeMax = 6; step.kscale = kscale * 0.7;
+          look.areaR = 0.6; look.pivot = [0, 0, 0]; look.spin = false; look.depthK = 0.2; look.trailsOverride = 0.985;
         }
         if (heavy) {
           // A mass on a soft spring: 1.2 Hz, damping ratio 0.45, so it lags and overshoots.
@@ -194,6 +237,7 @@
 
         // Simulate.
         var N = Math.round(params.count) * 1000;
+        if (mode === 'lightbeam') N = Math.min(N, 40000);
         sys.setCount(N);
         step.count = N; step.attract = attract;
         sys.step(step);
@@ -208,13 +252,13 @@
         var nEff = sys.count() / (1 - decay);
         var col = params.color ? Magi.fx.inkColor(params.color) : mode === 'thundercloud' ? [0.62, 0.62, 0.66] : [1, 1, 1];
         if (ink) col = col.map(function (v) { return params.color ? 1 - v : 1; });
-        var brightK = mode === 'lightbeam' ? 0.06 * (N / 250000) : mode === 'thundercloud' ? 0.1 : mode === 'symbiote' ? 0.2 : 0.45;
+        var brightK = mode === 'lightbeam' ? 0.5 : mode === 'thundercloud' ? 0.1 : mode === 'symbiote' ? 0.05 : 0.45;
         sys.draw({
           w: w, h: h, view: M, pivot: look.pivot, color: col, focal: 3, psize: Math.max(1, Math.round((mode === 'lightbeam' ? 1.2 : 0.8) * u * sL)),
-          bright: mode === 'lightbeam' ? brightK * 250000 / sys.count() : brightK * areaPx / nEff, decay: decay, exposure: 0.3 + params.exposure / 100 * 2.4,
+          bright: mode === 'lightbeam' ? brightK : brightK * areaPx / nEff, decay: decay, exposure: 0.3 + params.exposure / 100 * 2.4,
           glow: (params.glow / 100) * (mode === 'lightbeam' || mode === 'thundercloud' ? 2.2 : 1.5) * (1 + flashI * 1.5), ink: ink,
           useCam: params.camera, cam: params.camera ? camCopy : null, depthK: look.depthK,
-          accent: [1, 0.3, 0.12], accentShare: mode === 'lightbeam' && params.leak ? 0.14 : 0,
+          accent: [1, 0.6, 0.2], accentShare: mode === 'lightbeam' ? 0.4 : 0,
           coreColor: params.core ? Magi.fx.inkColor(params.core) : [1, 0.36, 0.12], coreK: look.coreK || 0, coreR: radius * tk.rad * 0.75 * 0.9, coreC: center,
           flashI: flashI, waveR: waveR, flashC: strike ? strike.c : [0, 0, 0]
         });
@@ -224,6 +268,31 @@
         ctx.globalCompositeOperation = ink ? 'multiply' : 'lighter';
         ctx.imageSmoothingEnabled = true;
         ctx.drawImage(sys.canvas, 0, 0, W, H);
+        // The blades (Lightbeam): each stroke a tapered ribbon, glow, band and core, added like light.
+        if (mode === 'lightbeam') {
+          ctx.globalCompositeOperation = 'lighter';
+          var W0 = (4 + params.size / 100 * 16) * u;
+          strokes.forEach(function (S2) {
+            var P = spline(S2.pts);
+            if (P.length < 2) return;
+            var L = [], R = [];
+            for (var i = 0; i < P.length; i++) {
+              var a = P[Math.max(0, i - 1)], b = P[Math.min(P.length - 1, i + 1)], nx = -(b.y - a.y), ny = b.x - a.x, nl = Math.hypot(nx, ny) || 1;
+              var age = Math.max(0, Math.min(1, (t - P[i].t) / look.lifeS)), sp2 = Math.hypot(b.x - a.x, b.y - a.y) / Math.max(1e-3, Math.abs(b.t - a.t) || dt) / H;
+              var wdt = W0 * Math.pow(1 - age, 0.9) / (1 + 0.25 * Math.min(4, sp2));
+              L.push([P[i].x + nx / nl * wdt, P[i].y + ny / nl * wdt]); R.push([P[i].x - nx / nl * wdt, P[i].y - ny / nl * wdt]);
+            }
+            var c = S2.color;
+            [[1, 3.2, 0.18], [0, 1.6, 0.55], [1, 0.55, 1]].forEach(function (ps) {
+              var cc = ps[0] && ps[2] === 1 ? [255, 255, 255] : c, k = ps[1];
+              ctx.fillStyle = 'rgba(' + cc.join(',') + ',' + ps[2] + ')';
+              ctx.beginPath();
+              L.forEach(function (q, i) { var m = P[i], x = m.x + (q[0] - m.x) * k, y = m.y + (q[1] - m.y) * k; i ? ctx.lineTo(x, y) : ctx.moveTo(x, y); });
+              for (var j = R.length - 1; j >= 0; j--) { var m2 = P[j]; ctx.lineTo(m2.x + (R[j][0] - m2.x) * k, m2.y + (R[j][1] - m2.y) * k); }
+              ctx.closePath(); ctx.fill();
+            });
+          });
+        }
         // Light leaks (Lightbeam): warm gradients drifting along the edges, added like light.
         if (mode === 'lightbeam' && params.leak) {
           ctx.globalCompositeOperation = 'lighter';
@@ -245,7 +314,7 @@
           symbiote: 'Raise your hands: the ink grows from them and lashes when you move.'
         }[mode]);
       },
-      reset: function () { lastT = null; grab = null; prevTip = null; strike = null; if (sys) sys.reset(); }
+      reset: function () { lastT = null; grab = null; prevTip = null; strike = null; strokes = []; curStroke = null; tipS = null; if (sys) sys.reset(); }
     };
   }
 

@@ -961,9 +961,9 @@ Magi.effectGuides = {
     'Fibre: a sphere held by a spring. One hand moves it, two hands hold it between them. Open palm: fibres fly loose. Fist: it pulls tight. Pinch and drag: turns it. A fast sweep blows the fibres away.',
     'Tidal: your hand is a moon. Its tidal pull (stronger the closer it is, by the inverse cube of the distance) raises two opposite bulges that stream toward and away from it. Open palm: a heavier moon; fist: lighter.',
     'Horizon: particles pour along a line, lifted off it like smoke. Close a fist to set the line through it and turn the fist to tilt it. Open palm: raises a plume.',
-    'Lightbeam: draw with light with your index finger; strokes glow and fade (Trails sets how long). Fist: wipes the drawing. Leak: warm light leaks and red-orange strokes. Flash: a pinch flashes the background white.',
+    'Lightbeam: a blade of light follows your index finger, fluid like a sword trail in a slicing game: widest at your fingertip, tapering away behind, thinner and brighter the faster you slash; sparks fly off fast strokes. Trails: how long the light lingers (short slashes to long-exposure loops). Size: blade width. Leak: strokes take turns in gold, red and ice blue, with warm light leaks at the edges. Flash: a pinch flashes the background. Fist: wipes it.',
     'Thundercloud: a dense, heavy cloud, grey outside and glowing at its heart; the nearer a particle is to the center, the more it takes the Core color (far left: ember orange). It follows your hand slowly, like a heavy mass. Fist heats and compresses it, open palm swells it. Pinch: lightning that lights up the cloud from inside, a searing flash and a ripple of light through the particles, flickering like real lightning.',
-    'Symbiote: black ink grows from your hands and clings to them, lashing out when you move fast.',
+    'Symbiote: ink thrown off your hands in fine feathery strokes that keep their momentum and curl back toward your palms; move fast and it lashes out.',
     'Count: particles, in thousands (fewer if your phone stutters). Size, Turbulence, Scale, Hold (how strongly the shape pulls particles back), Trails, Exposure, Glow. Camera: color from the video. Ink: dark on white. Color: tint. Dim: darkens (or, in ink, whitens) the camera.'
   ],
   'particle-cloud': [
