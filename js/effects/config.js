@@ -46,6 +46,8 @@ Magi.effectGroups = [
   { id: 'hand', name: 'Hand Tracking', parent: 'gesture' },
   { id: 'face', name: 'Face Tracking', parent: 'gesture' },
   { id: 'body', name: 'Body Tracking', parent: 'gesture' },
+  // Spacenet: words strung through space (on your body, or free in the room).
+  { id: 'spacenet', name: 'Spacenet', parent: 'gesture' },
   { id: 'facade', name: 'Facade' }
 ];
 
@@ -159,15 +161,15 @@ Magi.effectConfig = [
     ready: true,
     photoType: 'image/jpeg',
     params: [
-      range('size', 'Size', 0, 100, 50),
-      range('thickness', 'Thickness', 0, 100, 15),
-      range('texture', 'Texture', 0, 100, 0),
-      range('spikiness', 'Spikiness', 0, 100, 30),
+      range('size', 'Size', 0, 100, 10),
+      range('thickness', 'Thickness', 0, 100, 100),
+      range('texture', 'Texture', 0, 100, 75),
+      range('spikiness', 'Spikiness', 0, 100, 100),
       range('rate', 'Rate', 0, 100, 30),
-      range('points', 'Points', 40, 600, 220),
+      range('points', 'Points', 40, 600, 200),
       { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
       range('dim', 'Dim', 0, 100, 0),
-      toggle('connect', 'Connect', true, 'One line through both hands, with strands between matching fingertips. Off: a line per hand.')
+      toggle('connect', 'Connect', false, 'One line through both hands, with strands between matching fingertips. Off: a line per hand.')
     ]
   },
   {
@@ -208,6 +210,7 @@ Magi.effectConfig = [
       range('friction', 'Friction', 0, 100, 30),
       range('trail', 'Trail', 0, 100, 60),
       range('thickness', 'Thickness', 0, 100, 30),
+      range('size', 'Size', 0, 100, 20),
       { id: 'glow', label: 'Glow', min: 0, max: 100, step: 1, default: 60, modes: ['glow'] },
       range('dim', 'Dim', 0, 100, 40)
     ]
@@ -219,11 +222,11 @@ Magi.effectConfig = [
     ready: true,
     photoType: 'image/jpeg',
     params: [
-      range('count', 'Count', 500, 6000, 2600),
-      range('size', 'Size', 0, 100, 50),
+      range('count', 'Count', 500, 6000, 1800),
+      range('size', 'Size', 0, 100, 100),
       range('bristles', 'Bristles', 0, 100, 60),
       range('rate', 'Rate', 2, 20, 6),
-      range('speed', 'Speed', 0, 100, 50),
+      range('speed', 'Speed', 0, 100, 10),
       { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
       range('dim', 'Dim', 0, 100, 90)
     ]
@@ -395,7 +398,7 @@ Magi.effectConfig = [
     params: [
       range('panels', 'Panels', 0, 100, 50),
       range('waist', 'Waist', 0, 100, 60),
-      range('size', 'Size', 10, 100, 50),
+      range('size', 'Size', 10, 100, 30),
       { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 55, track: 'hue' },
       range('spread', 'Spread', 0, 100, 45),
       range('opacity', 'Opacity', 10, 100, 50),
@@ -461,6 +464,42 @@ Magi.effectConfig = [
       range('length', 'Length', 0, 100, 50),
       range('glow', 'Glow', 0, 100, 60),
       { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' }
+    ]
+  },
+  {
+    id: 'flower',
+    name: 'Flower',
+    group: 'hand',
+    ready: true,
+    photoType: 'image/jpeg',
+    params: [
+      range('petals', 'Petals', 12, 60, 34),
+      range('density', 'Density', 4, 30, 12),
+      range('size', 'Size', 0, 100, 50),
+      range('bloom', 'Bloom', 0, 100, 60),
+      range('sway', 'Sway', 0, 100, 50),
+      range('heads', 'Heads', 1, 8, 6),
+      toggle('seeds', 'Seeds', true, 'A flick blows the nearest flower’s digits away as seeds; it regrows.'),
+      { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
+      range('dim', 'Dim', 0, 100, 60)
+    ]
+  },
+  {
+    id: 'zero',
+    name: 'Zero',
+    group: 'hand',
+    ready: true,
+    photoType: 'image/jpeg',
+    params: [
+      range('count', 'Count', 300, 3000, 1200),
+      range('size', 'Size', 0, 100, 50),
+      range('text', 'Text', 0, 100, 40),
+      range('twist', 'Twist', 0, 100, 60),
+      range('curl', 'Curl', 0, 100, 60),
+      range('spin', 'Spin', 0, 100, 30),
+      toggle('cube', 'Cube', true, 'The wireframe cube and the lines inside the sphere.'),
+      { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
+      range('dim', 'Dim', 0, 100, 35)
     ]
   },
   {
@@ -535,7 +574,7 @@ Magi.effectConfig = [
   {
     id: 'word-box',
     name: 'Word Box',
-    group: 'body',
+    group: 'spacenet',
     ready: true,
     photoType: 'image/jpeg',
     params: [
@@ -548,8 +587,27 @@ Magi.effectConfig = [
       range('zoom', 'Zoom', 0, 100, 50),
       range('rotation', 'Rotation', 0, 100, 50),
       range('glow', 'Glow', 0, 100, 60),
-      toggle('box', 'Box', true, 'The turning wireframe box under the figure.'),
+      toggle('box', 'Box', false, 'The turning wireframe box under the figure.'),
       range('dim', 'Dim', 0, 100, 100)
+    ]
+  },
+  {
+    id: 'word-space',
+    name: 'Word Space',
+    group: 'spacenet',
+    ready: true,
+    photoType: 'image/jpeg',
+    params: [
+      { id: 'text', label: 'Text', type: 'text', default: '', placeholder: 'Type in any language or keyboard', maxLength: 400 },
+      range('set', 'Set', 0, 5, 0),
+      range('points', 'Points', 60, 700, 260),
+      range('links', 'Links', 1, 6, 3),
+      range('size', 'Size', 0, 100, 30),
+      range('flow', 'Flow', 0, 100, 40),
+      range('depth', 'Depth', 0, 100, 60),
+      range('rotation', 'Rotation', 0, 100, 50),
+      range('glow', 'Glow', 0, 100, 60),
+      range('dim', 'Dim', 0, 100, 20)
     ]
   },
   {
@@ -580,7 +638,7 @@ Magi.effectConfig = [
     name: 'Interactive',
     group: 'facade',
     ready: true,
-    params: facadeParams(true, 13, 9).concat([range('opacity', 'Opacity', 0, 100, 100)], tintParams(0))
+    params: facadeParams(true, 13, 9).concat([range('opacity', 'Opacity', 0, 100, 75)], tintParams(100))
   },
   {
     id: 'facade-electrokinetic',
@@ -669,7 +727,7 @@ Magi.effectGuides = {
     'Sequencer: three rings of Euclidean rhythms (events spread as evenly as possible over the steps). Grip and turn like a knob to change a ring’s number of events: thumb and index out for red, add the middle finger for yellow, all five for blue. Close your hand to randomize where the events sit. Tempo: speed. Sound: kick, snare and hi-hat, recorded into videos. Dim: darkens the camera.',
     'Rabinovich: thousands of points ride the Rabinovich–Fabrikant equations. Open thumb and index to raise α (0.1 → 1.3) and reshape the attractor; turn and raise your hand to turn the view. Two hands: two attractors, one per hand. Speed, Trail, Size, Dim. Strength: how bright and thick the trails are.',
     'Cohesion: a chord diagram of your hand’s 21 landmarks. Pairs close together are joined, so a fist fills the circle and spread fingers thin it; the level reads at the top with its recent history. Two hands: all 42 landmarks, chords across the hands in white as they come together, and each hand’s level plus the hands’ cohesion.',
-    'Pollinate: concepts orbit in a spiral galaxy. Point with your index finger: a small pad appears there, and only your index finger moves it (by pushing past an edge). Your fingertip’s place on it picks two concepts (across, down). Hold still on a cell for half a second: the cell is marked in red and they pollinate into “A + B = ?” and an idea that decodes on the right. Fist: clears the marks. Open palm: spins the galaxy faster.'
+    'Pollinate: point with your index finger: a small pad appears there, and only your index finger moves it (by pushing past an edge). Your fingertip’s place on it picks two concepts (across, down). Hold still on a cell for half a second: the cell is marked in red and they pollinate into “A + B = ?” and an idea that decodes on the right. Fist: clears the marks. The two concepts under the crosshair are named beside the pad.'
   ],
   'line-art': [
     'How it works: points gather on the outlines of your hands and arms (where the picture’s edges are strongest) and one continuous line runs through them, always to the nearest point, redrawn as you move.',
@@ -688,15 +746,21 @@ Magi.effectGuides = {
     'What you see: species that attract their own kind clump into cells; a species chasing one that flees forms worms and trails; mutual attraction makes orbits and swirls; mutual repulsion spreads them apart.',
     'Your fingertip shows the color it holds: hold up 1 to 5 fingers to pick it (1 red … 5 violet). Pinch: particles near the pinch become that color, so you add a species where you want it.',
     'Point (index only): your fingertip pulls particles in like a current. Fist: they flee your hand. Clap: a new random table, a new world.',
-    'Modes: tap the tile. Worms: colored trails. Glow: the trails drawn as neon light that adds up, so dense clusters burn white. Glow: the halo’s strength.',
+    'Size: how big each particle is (a round head on its trail). Thickness: the trail’s width. Modes: tap the tile. Worms: colored trails. Glow: the trails drawn as neon light that adds up, so dense clusters burn white. Glow: the halo’s strength.',
     'Count, Types: how many particles and species. Radius: how far they sense each other. Force: how strongly they pull. Friction: how quickly they slow. Trail, Thickness: the worms. Dim: darkens the camera.'
   ],
   exhale: [
     'How it works: a sphere of particles that breathes. Each particle springs toward the breath at its own pace, so exhales bloom bristled and inhales rush back.',
     'Open palm: exhale. Fist: inhale all the way and the sphere implodes into a bright core; open your hand and it blooms back out.',
-    'Two hands: two spheres, one per hand, each following and breathing with its own hand. They pull on each other like gravity; bring them together and when they touch they merge into one. Pull your hands apart to split it.',
-    'Pinch: the particles stream to your pinch, burst outward when they reach it, then fall back into the sphere. Brush your hand across it to spin it like a ball; roll your hand to turn it; swipe to fling it. No hand: it breathes on its own at Rate.',
+    'Two hands: pull them apart and the sphere divides gradually into two, one per hand, each breathing with its own hand. The two pull on each other like gravity; bring them together and when they touch, particles cross over where they meet and the two blend into one shared sphere.',
+    'Pinch: the particles flow to your pinch in a stream, nearest first, and swirl around it while you hold; let go and they bloom outward and flow back into the sphere. Brush your hand across it to spin it like a ball; roll your hand to turn it; swipe to fling it. No hand: it breathes on its own at Rate.',
     'Count, Size: how many and how big. Bristles: the streaks of rushing particles. Rate: breaths a minute with no hand. Speed: how fast the particles travel, burst, return and breathe. Color: far left green. Dim: darkens the camera.'
+  ],
+  'word-space': [
+    'How it works: characters strung together by red threads, like Word Box, but free in the room: they drift through the whole picture and through depth on a swirling flow (curl noise, so they eddy without bunching up).',
+    'Open hand: pushes the words away and stirs them around your palm. Fist: gathers them in. Pinch: grabs the words within reach; move to carry them, let go to throw them.',
+    'Turn your hand: turns the space (Rotation sets how far). Swipe: changes the set (with no Text).',
+    'Text: type anything, in any keyboard. Set: 0 Hiragana, 1 Kanji, 2 Latin, 3 Hangul, 4 Digits, 5 Emoji. Points, Links: how many characters and threads. Size, Flow, Depth: character size, drift speed, how deep the space is. Glow, Dim: thread glow, darkens the camera.'
   ],
   'word-box': [
     'How it works: your body (from the segmenter) filled with characters strung together by red threads, above a wireframe box. The characters keep their places on your body, head to toe, and move with you; a share of them ride your hands.',
@@ -768,9 +832,9 @@ Magi.effectGuides = {
   ],
   chromatic: [
     'The space stays where you leave it; it only moves when you act on it.',
-    'Point (index finger): selects the color nearest your fingertip and highlights it with its name and hex code.',
-    'Pinch: grabs the space; drag left–right to turn it about the vertical axis, up–down about the horizontal axis. Let go and it keeps turning, then slows. Pinching on a color selects it too.',
-    'Second hand: close thumb and index to zoom out, open them to zoom in.',
+    'Point and hold (index finger, 0.3 s): selects the color nearest your fingertip and highlights it with its name and hex code.',
+    'Pinch with one hand: grabs the space; drag left–right to turn it about the vertical axis, up–down about the horizontal axis. Let go and it keeps turning, then slows. Pinching on a color selects it too.',
+    'Pinch with both hands: zoom like a photo on a phone; pull your pinches apart to zoom in, together to zoom out.',
     'Swipe left or right: flings it into a spin. Swipe up or down: next space (Lab, HSL, RGB; tapping the tile does too).',
     'Labels, Text: how many names and how big. Spin: turning with no hand. Dim, Squares, Axes: background, color squares, axes.'
   ],
@@ -814,6 +878,18 @@ Magi.effectGuides = {
     'Thwip: make the web-shooter sign (index and pinky out, middle and ring folded) and flick: a web line shoots the way your index points, sticks at the edge of the frame with a splat and holds to your hand. Pull too far and it snaps. Up to five at once.',
     'Threads sag and swing as you move: real rope physics, pinned to your fingers.',
     'Rings: how many rings. Sag: how much threads droop. Particles: how many specks flow along the threads. Glow, Color: light and color.'
+  ],
+  flower: [
+    'How it works: flower heads made of digits. Fronds radiate at the golden angle (phyllotaxis) and branch like a small L-system, with a red + at every tip; red stems are ropes that sag and sway.',
+    'Pinch: plants a new flower at the pinch, on a stem from the nearest one. Open hand near a flower: it blooms. Fist near it: it closes; open again and it bursts open.',
+    'Move your hand through them: they lean away and the stems swing. Flick: the nearest flower blows away as seeds and regrows. Two hands: a flower on each palm, joined by a stem; pull apart and new ones sprout along it.',
+    'Petals, Density: fronds per flower and digits per frond. Size, Bloom, Sway: how big, how open, how much they move. Heads: how many flowers at once. Color: stems and markers (far left red). Dim: darkens the camera.'
+  ],
+  zero: [
+    'How it works: a sphere of digits (each latitude band counts 0–9) with a wireframe cube inside, bent by real shape operators: twist, bend and a collapse onto its equator.',
+    'Pinch and drag: turns it, with momentum. Spread thumb and index: twists it (roll your hand left to twist the other way). Fist: collapses it into a flat ring of digits, a zero; open palm: it blooms back out.',
+    'Two hands: the closer they are, the tighter it curls. Swipe left or right: shuffles the digits. Swipe up or down: new lines inside the cube.',
+    'Count, Size, Text: digits, sphere size, digit size. Twist, Curl: how far each goes. Spin: turning with no hand. Cube: the cube and its lines. Color: digit and line tint (far left white). Dim: darkens the camera.'
   ],
   cards: [
     'How it works: a collection of images built into 3D structures. Without a feed, the cards are snapshots of the camera.',

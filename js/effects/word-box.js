@@ -189,5 +189,7 @@
     };
   }
 
+  // Shared with Word Space.
+  Magi.wordSets = { SETS: SETS, graphemes: graphemes };
   Magi.renderers['word-box'] = createWordBox;
 })();

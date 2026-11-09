@@ -20,6 +20,7 @@
 // the reference. Glow, like neon: the same worms drawn as light, added together ('lighter'
 // compositing sums the colors, so dense clusters burn toward white): a wide faint halo, a brighter
 // band and a white-hot core (the color mixed 60% toward white), the halo's strength set by Glow.
+// Size: each particle's head, a round dot of radius 0.5–8 px (screen) at its current position.
 (function () {
   var BETA = 0.3, MAXN = 2000;
   var COLORS = ['#ff4d2e', '#ffd23f', '#3fa7ff', '#8cff5a', '#c06bff', '#ff6bd1', '#5affe9', '#ffffff'];
@@ -131,6 +132,18 @@
             ctx.stroke();
           }
         });
+        // Heads: one path of dots per color.
+        var hr = (0.5 + (params.size === undefined ? 20 : params.size) / 100 * 7.5) * u;
+        if (hr > 0.6 * u) {
+          ctx.globalAlpha = 1;
+          for (var ty2 = 0; ty2 < types; ty2++) {
+            var hx2 = COLORS[ty2 % COLORS.length];
+            ctx.fillStyle = glowMode ? 'rgb(' + [1, 3, 5].map(function (i) { var v = parseInt(hx2.slice(i, i + 2), 16); return Math.round(v + (255 - v) * 0.5); }).join(',') + ')' : hx2;
+            ctx.beginPath();
+            P.forEach(function (q) { if (q.t !== ty2) return; ctx.moveTo(q.x + hr, q.y); ctx.arc(q.x, q.y, hr, 0, Math.PI * 2); });
+            ctx.fill();
+          }
+        }
         ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
         // The color your index fingertip holds.
         if (hd) {

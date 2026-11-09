@@ -9,14 +9,16 @@
 //   HSL — a cylinder: hue is the angle, saturation the radius, lightness the height.
 //   RGB — the cube, red, green and blue on the three axes.
 // Hands (the space is untethered: it stays where you leave it and only moves when you act on it):
-//   Point (index out, the others in): selects the name nearest your fingertip; it stays highlighted
-//     with its hex code until you select another.
-//   Pinch: grabs the space. If a name is under the pinch it is selected too. Dragging turns the space
-//     like a trackball: left–right about the vertical (y) axis, up–down about the horizontal (x)
-//     axis, 1.6π and 0.9π across the frame. Let go and it keeps turning, slowing with a 0.8 s time
-//     constant (exponential decay, v ← v·e^(−dt/0.8)).
-//   Second hand: its thumb–index spread zooms, relative to where it started, zoom ← zoom·e^(2.2·Δd)
-//     (d the spread in palm widths), so closing it zooms out and opening it zooms in, 0.4×–5×.
+//   Point and hold (index out, the others in, 0.3 s on the same color): selects the name nearest
+//     your fingertip; it stays highlighted with its hex code until you select another. A new
+//     nearest name only takes over when it is clearly nearer (30%), so it doesn't flicker.
+//   Pinch with one hand: grabs the space. Dragging turns it like a trackball: left–right about the
+//     vertical (y) axis, up–down about the horizontal (x) axis, 1.6π and 0.9π across the frame.
+//     Let go and it keeps turning, slowing with a 0.8 s time constant (v ← v·e^(−dt/0.8)).
+//     Pinching on a name selects it too.
+//   Pinch with both hands: zoom like a photo on a phone. The zoom is the distance between the two
+//     pinches over its distance when the second pinch closed, zoom = zoom₀·d/d₀ (0.4×–5×). The gap
+//     between two hands is large next to tracking noise, so it holds steady.
 //   Swipe: left or right flings the space into a spin; up or down switches to the next space.
 // With no hand the space turns slowly on its own (Spin). Tapping the tile cycles the spaces too.
 (function () {
@@ -71,7 +73,7 @@
 
   function createChromatic() {
     var view = { yaw: 0.6, pitch: 0.25, zoom: 1 }, last = 0;
-    var vel = { yaw: 0, pitch: 0 }, grab = null, pinchedAt = {}, zoomRef = null, selected = null, lastSwipe = 0;
+    var vel = { yaw: 0, pitch: 0 }, grab = null, pinchedAt = {}, zoomRef = null, selected = null, lastSwipe = 0, cand = null, candAt = 0, wantZoom = 1;
     var override = null, switchedAt = -9;
     var SPACES = ['lab', 'hsl', 'rgb'], SPACE_NAMES = { lab: 'Lab', hsl: 'HSL', rgb: 'RGB' };
     return {
@@ -91,12 +93,17 @@
         var tracker = Magi.tracking.hands, ix = Magi.interaction.read(frame), hands = ix.hands, now = frame.time / 1000;
         hands.forEach(function (h) { if (!h.pinched) delete pinchedAt[h.id]; else if (!(h.id in pinchedAt)) pinchedAt[h.id] = now; });
         var mid = function (h) { var q = h.points; return { x: (q[THUMB_TIP].x + q[INDEX_TIP].x) / 2, y: (q[THUMB_TIP].y + q[INDEX_TIP].y) / 2 }; };
-        // The grabbing hand: the one that pinched first. Any other hand zooms.
-        var grabber = null;
-        hands.forEach(function (h) { if (h.pinched && (!grabber || pinchedAt[h.id] < pinchedAt[grabber.id])) grabber = h; });
-        // With two hands up, every hand that isn't grabbing zooms by its own spread's change.
-        var zoomers = hands.length >= 2 ? hands.filter(function (h) { return h !== grabber; }) : [];
-        var startedGrab = false;
+        var pinchers = hands.filter(function (h) { return h.pinched; });
+        // Two pinches: phone-style zoom (no turning meanwhile).
+        if (pinchers.length >= 2) {
+          var pa = mid(pinchers[0]), pb = mid(pinchers[1]), dd = Math.max(1, Math.hypot(pa.x - pb.x, pa.y - pb.y));
+          if (!zoomRef) zoomRef = { d: dd, zoom: wantZoom };
+          wantZoom = Math.max(0.4, Math.min(5, zoomRef.zoom * dd / zoomRef.d));
+          grab = null; vel.yaw = vel.pitch = 0;
+        } else zoomRef = null;
+        view.zoom += (wantZoom - view.zoom) * (1 - Math.exp(-dt / 0.1));
+        // One pinch: grab and turn.
+        var grabber = pinchers.length === 1 ? pinchers[0] : null, startedGrab = false;
         if (grabber) {
           var m = mid(grabber);
           if (grab && grab.id === grabber.id) {
@@ -105,7 +112,7 @@
             vel.yaw += (dy / Math.max(dt, 1e-3) - vel.yaw) * 0.3; vel.pitch += (dp / Math.max(dt, 1e-3) - vel.pitch) * 0.3;
           } else { startedGrab = true; vel.yaw = vel.pitch = 0; }
           grab = { id: grabber.id, x: m.x, y: m.y };
-        } else {
+        } else if (pinchers.length < 2) {
           grab = null;
           var decay = Math.exp(-dt / 0.8);
           view.yaw += vel.yaw * dt; view.pitch += vel.pitch * dt;
@@ -113,15 +120,8 @@
           if (!hands.length) view.yaw += (params.spin / 100) * 0.6 * dt;
         }
         view.pitch = Math.max(-1.5, Math.min(1.5, view.pitch));
-        var refs = {};
-        zoomers.forEach(function (h) {
-          var d = h.pinchWith.index.distance;
-          if (zoomRef && zoomRef[h.id] !== undefined) view.zoom = Math.max(0.4, Math.min(5, view.zoom * Math.exp(2.2 * (d - zoomRef[h.id]))));
-          refs[h.id] = d;
-        });
-        zoomRef = refs;
         ix.events.forEach(function (ev) {
-          if (ev.type !== 'swipe' || ev.n === lastSwipe || grabber) return;
+          if (ev.type !== 'swipe' || ev.n === lastSwipe || pinchers.length) return;
           lastSwipe = ev.n;
           if (ev.dir === 'left' || ev.dir === 'right') vel.yaw = (ev.dir === 'right' ? 1 : -1) * 6;
           else { override = SPACES[(SPACES.indexOf(override || params.mode || 'lab') + 1) % 3]; switchedAt = now; }
@@ -176,7 +176,14 @@
           }
         });
         ctx.globalAlpha = hud.globalAlpha = 1;
-        if (near) selected = near.c;
+        // Selecting: at the start of a pinch, at once; pointing, after 0.3 s on the same name, and a
+        // new nearest name only replaces the candidate when it is 30% nearer.
+        var candD = function () { var cq = project(cand.pos[space]); return Math.hypot(cq[0] - tip.x, cq[1] - tip.y); };
+        if (startedGrab && near) selected = near.c;
+        else if (pointer && near) {
+          if (!cand || (cand !== near.c && nearD < 0.7 * candD())) { cand = near.c; candAt = now; }
+          if (cand && now - candAt > 0.3) selected = cand;
+        } else if (!pointer) cand = null;
         if (now - switchedAt < 1.2) frame.say(SPACE_NAMES[space]);
         if (selected) {
           // The selected color, highlighted where it sits in the space, named with its hex code.
@@ -201,7 +208,7 @@
         }
 
         if (tracker.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, tracker, 'hand');
-        else if (!hands.length) Magi.tracking.hint(ctx, frame, 'Pinch and drag to turn the colors, point to pick one, open and close your other hand to zoom.');
+        else if (!hands.length) Magi.tracking.hint(ctx, frame, 'Pinch and drag to turn the colors, point and hold to pick one, pinch with both hands to zoom.');
       },
       reset: function () { last = 0; override = null; grab = null; zoomRef = null; selected = null; vel = { yaw: 0, pitch: 0 }; pinchedAt = {}; }
     };
