@@ -16,7 +16,10 @@
 // Pinch: particles near the pinch become that color, so you inject a species. Point (index only):
 // your fingertip pulls particles in like a current. Make a fist: particles flee your hand. Clap:
 // a new random table, a new world.
-// Look: each particle trails its last few positions as a short worm (Trail), like the reference.
+// Look (modes): Worms, each particle trailing its last few positions as a short worm (Trail), like
+// the reference. Glow, like neon: the same worms drawn as light, added together ('lighter'
+// compositing sums the colors, so dense clusters burn toward white): a wide faint halo, a brighter
+// band and a white-hot core (the color mixed 60% toward white), the halo's strength set by Glow.
 (function () {
   var BETA = 0.3, MAXN = 2000;
   var COLORS = ['#ff4d2e', '#ffd23f', '#3fa7ff', '#8cff5a', '#c06bff', '#ff6bd1', '#5affe9', '#ffffff'];
@@ -101,12 +104,11 @@
           if (wrapped) q.h = [];
         });
 
-        // Drawing: worms, one path per color.
+        // Drawing: worms, one path per color (per pass in Glow).
         ctx.save();
         ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-        ctx.lineWidth = Math.max(1, (1 + params.thickness / 100 * 3) * u);
-        for (var ty = 0; ty < types; ty++) {
-          ctx.strokeStyle = COLORS[ty % COLORS.length];
+        var lw = Math.max(1, (1 + params.thickness / 100 * 3) * u), glowMode = params.mode === 'glow', gk = (params.glow === undefined ? 60 : params.glow) / 100;
+        var trace = function (ty) {
           ctx.beginPath();
           P.forEach(function (q) {
             if (q.t !== ty) return;
@@ -114,8 +116,22 @@
             if (h.length) { ctx.moveTo(h[0], h[1]); for (var k = 2; k < h.length; k += 2) ctx.lineTo(h[k], h[k + 1]); ctx.lineTo(q.x, q.y); }
             else { ctx.moveTo(q.x, q.y); ctx.lineTo(q.x + 0.1, q.y); }
           });
-          ctx.stroke();
-        }
+        };
+        var passes = glowMode
+          ? [{ w: lw * 6, a: 0.07 * gk, white: 0 }, { w: lw * 2.6, a: 0.12 + 0.25 * gk, white: 0 }, { w: Math.max(1, lw * 0.7), a: 0.9, white: 0.6 }]
+          : [{ w: lw, a: 1, white: 0 }];
+        if (glowMode) ctx.globalCompositeOperation = 'lighter';
+        passes.forEach(function (ps) {
+          if (ps.a <= 0) return;
+          ctx.lineWidth = ps.w; ctx.globalAlpha = Math.min(1, ps.a);
+          for (var ty = 0; ty < types; ty++) {
+            var hx = COLORS[ty % COLORS.length], c = [1, 3, 5].map(function (i) { var v = parseInt(hx.slice(i, i + 2), 16); return Math.round(v + (255 - v) * ps.white); });
+            ctx.strokeStyle = 'rgb(' + c.join(',') + ')';
+            trace(ty);
+            ctx.stroke();
+          }
+        });
+        ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
         // The color your index fingertip holds.
         if (hd) {
           var tp = hd.points[8];

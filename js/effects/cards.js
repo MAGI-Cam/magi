@@ -2,7 +2,7 @@
 //
 // Images come from the media library (Feed: a JSON feed URL or a public Are.na channel; see
 // js/library.js). Without a feed, the cards are snapshots of the camera, taken every half second.
-// Structures (modes; hold up 1, 2 or 3 fingers, still, for 0.7 s to switch, or tap the tile):
+// Structures (modes; swipe to switch, or tap the tile):
 //   Ribbon  — cards stand side by side along a wave, x ∈ [−1.6, 1.6], z = 0.45·sin(πx),
 //             y = 0.18·sin(2πx), each turned to face across the path (normal to its tangent), so
 //             they overlap like a fanned deck.
@@ -14,9 +14,17 @@
 // Projection: perspective with focal length F = 3 (in structure units): a point at depth z is
 // scaled by F / (F + z). Each card is drawn by the affine map that takes the image's corners to
 // three of its projected corners (top-left, top-right, bottom-left), back to front.
-// Hand (thumb–index line, after the reference's "zoom/rotate"): its length zooms (0.25–1.6 palm
-// lengths → 0.6×–1.8×) and its angle turns the structure; the hand's height tips it. No hand: the
-// structure turns slowly on its own (Spin).
+// Hand (after the reference's "zoom/rotate"). The structure is untethered: it stays as you leave it.
+//   L (thumb and index out, the other fingers in): the line between the two tips is a handle. While
+//     you hold the L, turning the line turns the structure (yaw = yaw₀ + 1.4·(θ − θ₀)) and
+//     lengthening it zooms (zoom = zoom₀·ℓ/ℓ₀, 0.4×–3×), both relative to where the L started, so
+//     nothing jumps when you form it.
+//   Pinch and drag: up–down tips the structure, left–right turns it; let go and it coasts to a stop
+//     (velocity decays with a 0.6 s time constant).
+//   Swipe (open hand): right for the next structure, left for the previous.
+// A lime widget above the structure, turning with it, mirrors the current structure: a line
+// (Ribbon), a ring of nodes (Ring) or a small cube graph (Lattice); while you hold the L, the
+// thumb–index line is drawn on it too. No hand: the structure turns slowly on its own (Spin).
 // Text: one line of lime letters in 3D below and in front of the structure, turning with it,
 // on the HUD so it stays sharp.
 // Inset: on, the background is a flat color (Color) and the camera sits in a small window with a
@@ -46,7 +54,7 @@
 
   function createCards() {
     var cards = [], mode = null, since = 0, snaps = [], lastSnap = -9, cam = document.createElement('canvas');
-    var view = { yaw: 0.5, pitch: 0.2, zoom: 1, spin: 0 }, cand = null, candSince = 0, lastT = null;
+    var view = { yaw: 0.5, pitch: 0.2, zoom: 1 }, vel = { yaw: 0, pitch: 0 }, handle = null, drag = null, lastSwipe = 0, lastT = null;
 
     return {
       animated: true,
@@ -80,25 +88,42 @@
           ctx.fillRect(0, 0, W, H);
         } else ctx.drawImage(cam, 0, 0);
 
-        // Hand: zoom and turn from the thumb–index line; 1–3 fingers held still switch structure.
-        var ix = Magi.interaction.read(frame), hd = ix.hands[0], e = 1 - Math.exp(-dt / 0.15);
-        if (hd && !hd.fist) {
-          var p = hd.points, th = p[4], ind = p[8];
-          var dl = Math.hypot(ind.x - th.x, ind.y - th.y) / hd.size;
-          view.zoom += (0.6 + 1.2 * Math.max(0, Math.min(1, (dl - 0.25) / 1.35)) - view.zoom) * e;
-          view.yaw += (Math.atan2(ind.y - th.y, ind.x - th.x) * 1.4 - view.yaw) * e;
-          view.pitch += ((hd.center.y / H - 0.5) * 1.2 - view.pitch) * e;
-          if (hd.count >= 1 && hd.count <= 3 && hd.speed < 0.3 * H && !hd.pinched) {
-            if (cand !== hd.count) { cand = hd.count; candSince = t; }
-            else if (t - candSince > 0.7) {
-              var want = ['ribbon', 'ring', 'lattice'][cand - 1];
-              if (want !== params.mode) frame.setParam('mode', want);
+        // Hand: the L handle turns and zooms, a pinch drags, a swipe switches structure.
+        var ix = Magi.interaction.read(frame), hd = ix.hands[0], MODES = ['ribbon', 'ring', 'lattice'], lHeld = false;
+        if (hd) {
+          var p = hd.points, th = p[4], ind = p[8], F2 = hd.fingers;
+          var isL = !hd.pinched && F2.index.extended && !F2.middle.extended && !F2.ring.extended && !F2.pinky.extended && hd.pinchWith.index.distance > 0.45;
+          if (isL) {
+            var ang = Math.atan2(ind.y - th.y, ind.x - th.x), len = Math.hypot(ind.x - th.x, ind.y - th.y);
+            if (!handle) handle = { ang: ang, len: len, yaw: view.yaw, zoom: view.zoom };
+            var da = Math.atan2(Math.sin(ang - handle.ang), Math.cos(ang - handle.ang));
+            var wantYaw = handle.yaw + 1.4 * da, wantZoom = Math.max(0.4, Math.min(3, handle.zoom * len / Math.max(1, handle.len)));
+            var e = 1 - Math.exp(-dt / 0.08);
+            view.yaw += (wantYaw - view.yaw) * e; view.zoom += (wantZoom - view.zoom) * e;
+            vel.yaw = vel.pitch = 0; lHeld = true;
+          } else handle = null;
+          if (hd.pinched) {
+            var m2 = { x: (th.x + ind.x) / 2, y: (th.y + ind.y) / 2 };
+            if (drag) {
+              var dy = (m2.x - drag.x) / W * Math.PI * 1.6, dp = (m2.y - drag.y) / H * Math.PI * 0.9;
+              view.yaw += dy; view.pitch = Math.max(-1.3, Math.min(1.3, view.pitch + dp));
+              vel.yaw += (dy / Math.max(dt, 1e-3) - vel.yaw) * 0.3; vel.pitch += (dp / Math.max(dt, 1e-3) - vel.pitch) * 0.3;
             }
-          } else cand = null;
-        } else {
-          cand = null;
-          view.yaw += (params.spin / 100) * 0.5 * dt;
+            drag = m2;
+          } else drag = null;
+        } else { handle = null; drag = null; }
+        if (!drag && !lHeld) {
+          var decay = Math.exp(-dt / 0.6);
+          view.yaw += vel.yaw * dt; view.pitch = Math.max(-1.3, Math.min(1.3, view.pitch + vel.pitch * dt));
+          vel.yaw *= decay; vel.pitch *= decay;
+          if (!hd) view.yaw += (params.spin / 100) * 0.5 * dt;
         }
+        ix.events.forEach(function (ev) {
+          if (ev.type !== 'swipe' || ev.n === lastSwipe || (ev.dir !== 'left' && ev.dir !== 'right')) return;
+          lastSwipe = ev.n;
+          var k = MODES.indexOf(params.mode || 'ribbon');
+          frame.setParam('mode', MODES[(k + (ev.dir === 'right' ? 1 : 2)) % 3]);
+        });
 
         // Cards: targets for the current structure; glide on change.
         var n = Math.max(1, Math.min(Math.round(params.count), imgs.length || 1)), m = params.mode || 'ribbon';
@@ -150,6 +175,28 @@
           ctx.fillStyle = LIME;
           Object.keys(at).forEach(function (key) { var q = at[key]; ctx.beginPath(); ctx.arc(q.x, q.y, Math.max(2, 3 * u), 0, Math.PI * 2); ctx.fill(); });
         }
+        // The widget above the structure: the structure's shape in lime, turning with it.
+        (function () {
+          var c0 = [0, 1.35, 0], wk = 0.38, segs = [], nodes = [];
+          var P = function (v) { return proj([c0[0] + v[0] * wk, c0[1] + v[1] * wk, c0[2] + v[2] * wk]); };
+          if (m === 'ring') {
+            for (var r = 0; r < 14; r++) { var a0 = r / 14 * Math.PI * 2, a1 = (r + 1) / 14 * Math.PI * 2; segs.push([[Math.cos(a0), 0, Math.sin(a0)], [Math.cos(a1), 0, Math.sin(a1)]]); nodes.push([Math.cos(a0), 0, Math.sin(a0)]); }
+          } else if (m === 'lattice') {
+            for (var a = -1; a <= 1; a++) for (var b = -1; b <= 1; b++) for (var c = -1; c <= 1; c++) {
+              var q0 = [a * 0.6, b * 0.6, c * 0.6]; nodes.push(q0);
+              if (a < 1) segs.push([q0, [q0[0] + 0.6, q0[1], q0[2]]]);
+              if (b < 1) segs.push([q0, [q0[0], q0[1] + 0.6, q0[2]]]);
+              if (c < 1) segs.push([q0, [q0[0], q0[1], q0[2] + 0.6]]);
+            }
+          } else { segs.push([[-1.2, 0, 0], [1.2, 0, 0]]); nodes.push([-1.2, 0, 0], [1.2, 0, 0]); }
+          ctx.save();
+          ctx.strokeStyle = LIME; ctx.fillStyle = LIME; ctx.lineWidth = Math.max(1, 1.5 * u);
+          ctx.beginPath();
+          segs.forEach(function (sg) { var A = P(sg[0]), B = P(sg[1]); ctx.moveTo(A.x, A.y); ctx.lineTo(B.x, B.y); });
+          ctx.stroke();
+          nodes.forEach(function (nd) { var A = P(nd); ctx.beginPath(); ctx.arc(A.x, A.y, Math.max(2, 3 * u), 0, Math.PI * 2); ctx.fill(); });
+          ctx.restore();
+        })();
         list.forEach(function (q) {
           if (!q.img) return;
           var iw = q.img.width, ih = q.img.height;
@@ -183,7 +230,7 @@
           ctx.drawImage(cam, ix0, iy0 + bar, iw2, ih2);
           ctx.strokeStyle = '#000'; ctx.lineWidth = Math.max(1, u);
           for (var b2 = 0; b2 < 3; b2++) ctx.strokeRect(ix0 + iw2 - (b2 + 1) * bar * 1.1, iy0 + bar * 0.2, bar * 0.7, bar * 0.6);
-          if (hd) {
+          if (hd && lHeld) {
             var sc = iw2 / W, a1 = { x: ix0 + hd.points[4].x * sc, y: iy0 + bar + hd.points[4].y * sc }, a2 = { x: ix0 + hd.points[8].x * sc, y: iy0 + bar + hd.points[8].y * sc };
             ctx.strokeStyle = LIME; ctx.beginPath(); ctx.moveTo(a1.x, a1.y); ctx.lineTo(a2.x, a2.y); ctx.stroke();
             ctx.fillStyle = LIME; [a1, a2].forEach(function (q) { ctx.beginPath(); ctx.arc(q.x, q.y, Math.max(2, 2.5 * u), 0, Math.PI * 2); ctx.fill(); });
@@ -194,8 +241,9 @@
 
         if (lib.status === 'loading' || lib.status === 'failed') frame.say(lib.message);
         else if (Magi.tracking.hands.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, Magi.tracking.hands, 'hand');
+        else if (!hd) frame.say('Make an L with thumb and index: turn it to rotate, open it to zoom. Swipe to change structure.');
       },
-      reset: function () { cards = []; mode = null; snaps = []; lastSnap = -9; lastT = null; }
+      reset: function () { cards = []; mode = null; snaps = []; lastSnap = -9; lastT = null; handle = null; drag = null; vel = { yaw: 0, pitch: 0 }; }
     };
   }
 

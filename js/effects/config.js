@@ -195,6 +195,10 @@ Magi.effectConfig = [
     group: 'hand',
     ready: true,
     photoType: 'image/jpeg',
+    modes: [
+      { id: 'worms', name: 'Worms' },
+      { id: 'glow', name: 'Glow' }
+    ],
     params: [
       range('count', 'Count', 200, 2000, 900),
       range('types', 'Types', 2, 8, 5),
@@ -203,6 +207,7 @@ Magi.effectConfig = [
       range('friction', 'Friction', 0, 100, 30),
       range('trail', 'Trail', 0, 100, 60),
       range('thickness', 'Thickness', 0, 100, 30),
+      { id: 'glow', label: 'Glow', min: 0, max: 100, step: 1, default: 60, modes: ['glow'] },
       range('dim', 'Dim', 0, 100, 40)
     ]
   },
@@ -681,6 +686,7 @@ Magi.effectGuides = {
     'What you see: species that attract their own kind clump into cells; a species chasing one that flees forms worms and trails; mutual attraction makes orbits and swirls; mutual repulsion spreads them apart.',
     'Your fingertip shows the color it holds: hold up 1 to 5 fingers to pick it (1 red … 5 violet). Pinch: particles near the pinch become that color, so you add a species where you want it.',
     'Point (index only): your fingertip pulls particles in like a current. Fist: they flee your hand. Clap: a new random table, a new world.',
+    'Modes: tap the tile. Worms: colored trails. Glow: the trails drawn as neon light that adds up, so dense clusters burn white. Glow: the halo’s strength.',
     'Count, Types: how many particles and species. Radius: how far they sense each other. Force: how strongly they pull. Friction: how quickly they slow. Trail, Thickness: the worms. Dim: darkens the camera.'
   ],
   exhale: [
@@ -759,10 +765,11 @@ Magi.effectGuides = {
     'Tiles, Size, Fan, Depth, Drift: count, tile size, page turn, perspective, float. Squish: packs the tiles closer together. Dim: darkens the camera. Edges: tile outlines.'
   ],
   chromatic: [
-    'Point: your index fingertip turns the space (left–right spins it, up–down tips it).',
-    'Two hands: keep one pinched and pinch with the other; moving that pinch spins the space, and letting go keeps it spinning.',
-    'Spread thumb and index: zooms. Pinch: grabs the name under your fingertip and pulls it out.',
-    'Hold up 1, 2 or 3 fingers, still: switches to Lab, HSL or RGB (tapping the tile does too).',
+    'The space stays where you leave it; it only moves when you act on it.',
+    'Point (index finger): selects the color nearest your fingertip and highlights it with its name and hex code.',
+    'Pinch: grabs the space; drag left–right to turn it about the vertical axis, up–down about the horizontal axis. Let go and it keeps turning, then slows. Pinching on a color selects it too.',
+    'Second hand: close thumb and index to zoom out, open them to zoom in.',
+    'Swipe left or right: flings it into a spin. Swipe up or down: next space (Lab, HSL, RGB; tapping the tile does too).',
     'Labels, Text: how many names and how big. Spin: turning with no hand. Dim, Squares, Axes: background, color squares, axes.'
   ],
   'face-landmarks': [
@@ -802,13 +809,15 @@ Magi.effectGuides = {
     'Two hands: threads join matching fingertips across your hands, with rings between them.',
     'Pinch: draws a taut thumb–index thread; let go and the web gets plucked.',
     'Flick: the web lets go of your fingers and floats away, and a new one forms.',
+    'Thwip: make the web-shooter sign (index and pinky out, middle and ring folded) and flick: a web line shoots the way your index points, sticks at the edge of the frame with a splat and holds to your hand. Pull too far and it snaps. Up to five at once.',
     'Threads sag and swing as you move: real rope physics, pinned to your fingers.',
     'Rings: how many rings. Sag: how much threads droop. Particles: how many specks flow along the threads. Glow, Color: light and color.'
   ],
   cards: [
     'How it works: a collection of images built into 3D structures. Without a feed, the cards are snapshots of the camera.',
-    'Thumb and index: the line between them zooms (its length) and turns the structure (its angle); your hand’s height tips it.',
-    'Hold up 1, 2 or 3 fingers, still: Ribbon, Ring or Lattice (tapping the tile does too).',
+    'L (thumb and index out, other fingers in): a zoom/rotate handle. Turn the line to turn the structure; open or close it to zoom. Let go and it stays as you left it.',
+    'Pinch and drag: up–down tips the structure, left–right turns it; it coasts when you let go.',
+    'Swipe right or left: next or previous structure (Ribbon, Ring, Lattice; tapping the tile does too). The lime widget above shows which.',
     'Count, Size, Spin: how many cards, how big, turning with no hand. Inset: flat background (Color) with the camera in a window. Text: words along the structure.',
     'Feed: a JSON feed URL (items with src) or a public Are.na channel URL. Images must be served with CORS; ones that aren’t are skipped.'
   ],
