@@ -485,6 +485,30 @@ Magi.effectConfig = [
     ]
   },
   {
+    id: 'fibre',
+    name: 'Fibre',
+    group: 'hand',
+    ready: true,
+    photoType: 'image/jpeg',
+    modes: [
+      { id: 'light', name: 'Light' },
+      { id: 'ink', name: 'Ink' }
+    ],
+    params: [
+      range('count', 'Count', 20, 1000, 250),
+      range('size', 'Size', 0, 100, 50),
+      range('turbulence', 'Turbulence', 0, 100, 65),
+      range('scale', 'Scale', 0, 100, 60),
+      range('hold', 'Hold', 0, 100, 30),
+      range('trails', 'Trails', 0, 100, 75),
+      range('exposure', 'Exposure', 0, 100, 50),
+      range('glow', 'Glow', 0, 100, 35),
+      toggle('camera', 'Camera', false, 'Each particle takes the color of the video under it.'),
+      { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
+      range('dim', 'Dim', 0, 100, 90)
+    ]
+  },
+  {
     id: 'cards',
     name: 'Cards',
     group: 'hand',
@@ -861,6 +885,13 @@ Magi.effectGuides = {
     'Thwip: make the web-shooter sign (index and pinky out, middle and ring folded) and flick: a web line shoots the way your index points, sticks at the edge of the frame with a splat and holds to your hand. Pull too far and it snaps. Up to five at once.',
     'Threads sag and swing as you move: real rope physics, pinned to your fingers.',
     'Rings: how many rings. Sag: how much threads droop. Particles: how many specks flow along the threads. Glow, Color: light and color.'
+  ],
+  fibre: [
+    'How it works: hundreds of thousands of particles on the graphics card, stirred by synthetic turbulence (a sum of swirling waves with the energy spectrum of real turbulence) and held to a sphere by a spring. Their paths fade slowly, so each one draws a fibre.',
+    'One hand: the sphere follows your palm. Two hands: it sits between them, as wide as they are apart. Open palm: the fibres fly loose. Fist: it pulls tight.',
+    'Pinch and drag: turns it, and it keeps turning when you let go. Swipe: spins it. Sweep your hand through it fast: the fibres blow away.',
+    'Modes: tap the tile. Light: glowing points on the dark camera. Ink: dark fibres on white paper.',
+    'Count: particles, in thousands (fewer if your phone stutters). Size, Turbulence, Scale: sphere size, how hard and how fine the swirl is. Hold: how strongly the shell pulls them back (low: fur, high: a smooth ball). Trails: how long the paths last. Exposure, Glow: brightness and bloom. Camera: color from the video. Color: tint (far left white, or black ink). Dim: darkens (or, in Ink, whitens) the camera.'
   ],
   cards: [
     'How it works: a collection of images built into 3D structures. Without a feed, the cards are snapshots of the camera.',
