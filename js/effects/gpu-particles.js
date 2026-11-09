@@ -27,6 +27,13 @@
 // (9 taps, two passes), added back. Tone mapping: light = 1 − e^(−E·x) (never clips, keeps the
 // density gradient); ink = e^(−E·x), Beer–Lambert absorption, so dense particles go dark on paper.
 // Lookup (Lookup Texture POP): a particle can take its color from the camera at its place on screen.
+// Emitters can be up to 42 points (two hands' landmarks); with emitByIndex each particle is always
+// born at point (index mod count), so particles a multiple of that count apart share a birthplace.
+// Pseudo plexus (lines): each particle i is joined to particle (i + stride) mod N, and the line's
+// brightness falls with its length, (1 − smoothstep(0, maxLen, d))², so only partners that happen
+// to be near draw: the plexus look (lines between near neighbors) without a neighbor search, after
+// TouchDesigner's "pseudo plexus" trick. Strides that are multiples of the emitter count join
+// particles from the same birthplace; one more joins the next landmark along the hand.
 (function () {
   var MODES = 8;
 
@@ -39,9 +46,10 @@
     'uniform sampler2D posTex, velTex;',
     'uniform float dt, time, seed, amp, kscale, follow, shellK, radius, lifeMin, lifeMax, reset, soft, jitter;',
     'uniform vec3 center, gravity, lineA, lineB;',
-    'uniform int emitShape, nAttract, nEmit;',
+    'uniform int emitShape, nAttract, nEmit, side;',
+    'uniform float emitByIndex;',
     'uniform vec4 attract[8];',
-    'uniform vec3 emitPts[8];',
+    'uniform vec3 emitPts[42];',
     'uniform vec3 kv[' + MODES + '], av[' + MODES + '], bv[' + MODES + '];',
     'uniform float wv[' + MODES + '];',
     'layout(location = 0) out vec4 oPos;',
@@ -60,9 +68,9 @@
     '    vec2 s = uv * 913.7 + vec2(seed, seed * 1.37);',
     '    vec3 pos;',
     '    if (emitShape == 1) pos = mix(lineA, lineB, hash(s + 3.1)) + unitVec(s + 9.7) * jitter;',
-    '    else if (emitShape == 2 && nEmit > 0) { int k = int(floor(hash(s + 5.3) * float(nEmit))); vec3 e = emitPts[0];',
-    '      for (int i = 0; i < 8; i++) if (i == k) e = emitPts[i];',
-    '      pos = e + unitVec(s + 9.7) * jitter * hash(s + 2.2); }',
+    '    else if (emitShape == 2 && nEmit > 0) { int idx = int(gl_FragCoord.y) * side + int(gl_FragCoord.x);',
+    '      int k = emitByIndex > 0.5 ? idx % nEmit : min(nEmit - 1, int(floor(hash(s + 5.3) * float(nEmit))));',
+    '      pos = emitPts[k] + unitVec(s + 9.7) * jitter * pow(hash(s + 2.2), 0.5); }',
     '    else pos = center + unitVec(s) * radius * (1.0 + jitter * (hash(s + 4.4) - 0.5));',
     '    float life = mix(lifeMin, lifeMax, hash(s + 7.7));',
     '    oPos = vec4(pos, reset > 0.5 ? hash(s + 8.8) * life : 0.0);',
@@ -104,6 +112,29 @@
     '}'
   ].join('\n');
   var FS_POINTS = '#version 300 es\nprecision highp float; in vec3 vC; out vec4 o; void main() { o = vec4(vC, 1.0); }';
+
+  var VS_LINES = [
+    '#version 300 es',
+    'precision highp float;',
+    'uniform sampler2D posTex, velTex;',
+    'uniform int side, stride;',
+    'uniform mat3 view;',
+    'uniform vec3 pivot, color;',
+    'uniform float aspect, focal, maxLen, bright;',
+    'out vec3 vC;',
+    'float fade(vec4 P, vec4 V) { float f = P.w / max(1e-3, V.w); return smoothstep(0.0, 0.12, f) * (1.0 - smoothstep(0.7, 1.0, f)); }',
+    'void main() {',
+    '  int N = side * side, i = gl_VertexID / 2, j = (i + stride) % N, me = (gl_VertexID % 2 == 0) ? i : j;',
+    '  vec4 A = texelFetch(posTex, ivec2(i % side, i / side), 0), B = texelFetch(posTex, ivec2(j % side, j / side), 0);',
+    '  vec4 VA = texelFetch(velTex, ivec2(i % side, i / side), 0), VB = texelFetch(velTex, ivec2(j % side, j / side), 0);',
+    '  float a = 1.0 - smoothstep(0.0, maxLen, distance(A.xyz, B.xyz)); a *= a * min(fade(A, VA), fade(B, VB));',
+    '  vec4 P = (me == i) ? A : B;',
+    '  vec3 q = view * (P.xyz - pivot) + pivot;',
+    '  float k = focal / max(0.05, focal + q.z);',
+    '  gl_Position = a > 0.002 ? vec4(q.x * k / aspect, q.y * k, 0.0, 1.0) : vec4(2.0, 2.0, 2.0, 1.0);',
+    '  vC = color * a * bright;',
+    '}'
+  ].join('\n');
 
   var FS_DECAY = '#version 300 es\nprecision highp float; uniform float decay; out vec4 o; void main() { o = vec4(0.0, 0.0, 0.0, decay); }';
   var FS_COPY = '#version 300 es\nprecision highp float; in vec2 uv; uniform sampler2D src; out vec4 o; void main() { o = texture(src, uv); }';
@@ -172,7 +203,7 @@
       return { p: pr, u: {} };
     }
     var P = {
-      update: program(VS_QUAD, FS_UPDATE), points: program(VS_POINTS, FS_POINTS), decay: program(VS_QUAD, FS_DECAY),
+      update: program(VS_QUAD, FS_UPDATE), points: program(VS_POINTS, FS_POINTS), lines: program(VS_LINES, FS_POINTS), decay: program(VS_QUAD, FS_DECAY),
       copy: program(VS_QUAD, FS_COPY), blur: program(VS_QUAD, FS_BLUR), composite: program(VS_QUAD, FS_COMPOSITE)
     };
     if (Object.keys(P).some(function (k) { return !P[k]; })) return null;
@@ -249,8 +280,8 @@
       // One simulation step; o carries the uniforms named in the header.
       step: function (o) {
         if (!state) makeState(o.count || 100000);
-        var src = state[cur], dst = state[1 - cur], at = (o.attract || []).slice(0, 8), em = (o.emitPoints || []).slice(0, 8);
-        var av4 = new Float32Array(32), ep = new Float32Array(24);
+        var src = state[cur], dst = state[1 - cur], at = (o.attract || []).slice(0, 8), em = (o.emitPoints || []).slice(0, 42);
+        var av4 = new Float32Array(32), ep = new Float32Array(126);
         at.forEach(function (a, i) { av4.set(a, i * 4); });
         em.forEach(function (e, i) { ep.set(e, i * 3); });
         gl.disable(gl.BLEND);
@@ -260,7 +291,7 @@
           posTex: src.pos, velTex: src.vel, dt: o.dt, time: o.time, seed: Math.random() * 100, amp: o.amp, kscale: o.kscale || 1, follow: o.follow || 2,
           shellK: o.shellK || 0, radius: o.radius || 0.5, lifeMin: o.lifeMin || 2, lifeMax: o.lifeMax || 6, reset: needReset ? 1 : 0, soft: o.soft || 0.08, jitter: o.jitter || 0,
           center: o.center || [0, 0, 0], gravity: o.gravity || [0, 0, 0], lineA: o.lineA || [0, 0, 0], lineB: o.lineB || [0, 0, 0],
-          emitShape: { int: o.emitShape || 0 }, nAttract: { int: at.length }, nEmit: { int: em.length },
+          emitShape: { int: o.emitShape || 0 }, nAttract: { int: at.length }, nEmit: { int: em.length }, side: { int: side }, emitByIndex: o.emitByIndex ? 1 : 0,
           attract: { v4: av4 }, emitPts: { v3: ep },
           kv: { v3: modes.kv }, av: { v3: modes.av }, bv: { v3: modes.bv }, wv: { f1: modes.wv }
         });
@@ -297,6 +328,15 @@
         gl.bindFramebuffer(gl.FRAMEBUFFER, accum.fbo);
         gl.viewport(0, 0, w, h);
         gl.drawArrays(gl.POINTS, 0, side * side);
+        // Pseudo plexus lines (see the header), one draw per stride.
+        (o.lines || []).forEach(function (L) {
+          uniforms(P.lines, {
+            posTex: state[cur].pos, velTex: state[cur].vel, side: { int: side }, stride: { int: Math.max(1, L.stride) }, view: { mat3: o.view }, pivot: o.pivot,
+            color: L.color || o.color, aspect: w / h, focal: o.focal || 3, maxLen: L.maxLen, bright: L.bright
+          });
+          gl.bindVertexArray(emptyVao);
+          gl.drawArrays(gl.LINES, 0, Math.min(side * side, L.count || side * side) * 2);
+        });
         gl.disable(gl.BLEND);
         // Bloom: quarter size, blurred across then down.
         if (o.glow > 0) {

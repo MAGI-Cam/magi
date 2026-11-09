@@ -513,6 +513,53 @@ Magi.effectConfig = [
     ]
   },
   {
+    id: 'particle-cloud',
+    name: 'Particle Cloud',
+    group: 'hand',
+    ready: true,
+    photoType: 'image/jpeg',
+    modes: [
+      { id: 'light', name: 'Light' },
+      { id: 'ink', name: 'Ink' }
+    ],
+    params: [
+      range('count', 'Count', 20, 1000, 300),
+      range('turbulence', 'Turbulence', 0, 100, 50),
+      range('scale', 'Scale', 0, 100, 40),
+      range('hold', 'Hold', 0, 100, 50),
+      range('trails', 'Trails', 0, 100, 40),
+      range('exposure', 'Exposure', 0, 100, 50),
+      range('glow', 'Glow', 0, 100, 40),
+      { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
+      range('dim', 'Dim', 0, 100, 85)
+    ]
+  },
+  {
+    id: 'pseudo-plexus',
+    name: 'Pseudo Plexus',
+    group: 'hand',
+    ready: true,
+    photoType: 'image/jpeg',
+    modes: [
+      { id: 'light', name: 'Light' },
+      { id: 'ink', name: 'Ink' }
+    ],
+    params: [
+      range('count', 'Count', 2, 100, 6),
+      range('links', 'Links', 1, 6, 4),
+      range('reach', 'Reach', 0, 100, 65),
+      range('lines', 'Lines', 0, 100, 70),
+      range('turbulence', 'Turbulence', 0, 100, 30),
+      range('scale', 'Scale', 0, 100, 40),
+      range('hold', 'Hold', 0, 100, 50),
+      range('trails', 'Trails', 0, 100, 0),
+      range('exposure', 'Exposure', 0, 100, 50),
+      range('glow', 'Glow', 0, 100, 15),
+      { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
+      range('dim', 'Dim', 0, 100, 90)
+    ]
+  },
+  {
     id: 'cards',
     name: 'Cards',
     group: 'hand',
@@ -899,6 +946,18 @@ Magi.effectGuides = {
     'Pinch and drag: turns it, and it keeps turning when you let go. Swipe: spins it. Sweep your hand through it fast: the fibres blow away.',
     'Modes: tap the tile. Light: glowing points on the dark camera. Ink: dark fibres on white paper.',
     'Count: particles, in thousands (fewer if your phone stutters). Size, Turbulence, Scale: sphere size, how hard and how fine the swirl is. Hold: how strongly the shell pulls them back (low: fur, high: a smooth ball). Trails: how long the paths last. Exposure, Glow: brightness and bloom. Camera: color from the video. Color: tint (far left white, or black ink). Dim: darkens (or, in Ink, whitens) the camera.'
+  ],
+  'particle-cloud': [
+    'How it works: hundreds of thousands of particles on the graphics card, born at the 21 points of each hand, stirred by turbulence and added like light, so your hands give off a soft luminous cloud. Your palms pull drifting particles back.',
+    'Open palm: the cloud blooms. Fist: it condenses onto your hand. Pinch: it is drawn to your fingertips. Move: it streams off you.',
+    'Modes: tap the tile. Light: glowing on the dark camera. Ink: dark on white.',
+    'Count: particles, in thousands (fewer if your phone stutters). Turbulence, Scale: how hard and how fine the swirl is. Hold: how strongly your palms pull it back. Trails, Exposure, Glow: streaks, brightness and bloom. Color: tint. Dim: darkens (or whitens) the camera.'
+  ],
+  'pseudo-plexus': [
+    'How it works: particles born at fixed points on your hands drift slowly, and each is joined by straight lines to a few partners further along the list; a line shows only when its two ends are close, so a web of lines grows between near points, the plexus look, without searching for neighbors.',
+    'Move your hands: the web grows from them and stretches. Fist: it pulls in. Open palm: it drifts loose. Pinch: drawn to your fingertips.',
+    'Modes: tap the tile. Light or Ink.',
+    'Count: particles, in thousands. Links: lines per particle. Reach: the longest line that still shows. Lines: their brightness. Turbulence, Scale, Hold, Trails, Exposure, Glow, Color, Dim: as in Particle Cloud.'
   ],
   cards: [
     'How it works: a collection of images built into 3D structures. Without a feed, the cards are snapshots of the camera.',
