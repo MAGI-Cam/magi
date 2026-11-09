@@ -50,7 +50,9 @@ Magi.effectGroups = [
   { id: 'particle', name: 'Particle', parent: 'gesture' },
   // Spacenet: words strung through space (on your body, or free in the room).
   { id: 'spacenet', name: 'Spacenet', parent: 'gesture' },
-  { id: 'facade', name: 'Facade' }
+  { id: 'facade', name: 'Facade' },
+  // Text: effects that read or set type.
+  { id: 'text', name: 'Text' }
 ];
 
 Magi.effectConfig = [
@@ -705,6 +707,22 @@ Magi.effectConfig = [
   },
 
   {
+    id: 'scanner',
+    name: 'Scanner',
+    group: 'text',
+    ready: true,
+    photoType: 'image/jpeg',
+    params: [
+      { id: 'text', label: 'Text', type: 'text', default: '', placeholder: 'Text to scan when none is found', maxLength: 200 },
+      range('speed', 'Speed', 0, 100, 50),
+      range('margin', 'Margin', 0, 100, 30),
+      toggle('labels', 'Labels', true, 'A tag above each box with the word that was read.'),
+      toggle('path', 'Path', true, 'A thin line through the centers of the words read so far.'),
+      { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
+      range('dim', 'Dim', 0, 100, 0)
+    ]
+  },
+  {
     id: 'facade-interactive',
     name: 'Interactive',
     group: 'facade',
@@ -977,6 +995,12 @@ Magi.effectGuides = {
     'Move your hands: the web grows from them and stretches. Fist: it pulls in. Open palm: it drifts loose. Pinch: drawn to your fingertips.',
     'Modes: tap the tile. Light or Ink.',
     'Count: particles, in thousands. Links: lines per particle. Reach: the longest line that still shows. Lines: their brightness. Turbulence, Scale, Hold, Trails, Exposure, Glow, Color, Dim: as in Particle Cloud.'
+  ],
+  scanner: [
+    'How it works: every word in the picture gets a box and a tag; a dark scan head moves from word to word, top to bottom and left to right, leaving the boxes it has read tinted and a line through them. Words are read in your browser (Tesseract OCR, about 3 MB the first time; nothing is uploaded). A photo is read once; live video is re-read about every second.',
+    'No text in the picture: type some in Text and it is set on the picture and scanned. Warped or slanted words are boxed whole, with a margin.',
+    'Point with your index finger: the scan head jumps to the word nearest your fingertip and carries on from there.',
+    'Speed: how fast it moves. Margin: space around each word. Labels, Path: the tags and the line. Color: box tint (far left: teal). Dim: whitens the picture behind.'
   ],
   cards: [
     'How it works: a collection of images built into 3D structures. Without a feed, the cards are snapshots of the camera.',
