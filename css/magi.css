@@ -49,7 +49,12 @@ svg {
 
 [hidden] { display: none !important; }
 
-.app { position: fixed; inset: 0; }
+.app { position: fixed; inset: 0; --tb: 1; transition: --tb 0.38s var(--ease); }
+/* The toolbar can be put away (a swipe down on it) and brought back (a swipe up where it was).
+   --tb runs 1 → 0 and is animated (registered below), so the toolbar slides down and fades while
+   the picture and tray move down into its space; browsers without @property just switch. */
+@property --tb { syntax: '<number>'; inherits: true; initial-value: 1; }
+.app.toolbar-hidden { --tb: 0; }
 
 /* Stage: the canvas is fitted (contained) in JS so the source aspect ratio is kept. */
 .stage {
@@ -57,7 +62,7 @@ svg {
   top: 0;
   left: 0;
   right: 0;
-  bottom: calc(var(--toolbar-h) + env(safe-area-inset-bottom, 0px));
+  bottom: calc((var(--toolbar-h) + env(safe-area-inset-bottom, 0px)) * var(--tb));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -224,7 +229,10 @@ svg {
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   background: var(--ink);
+  transform: translateY(calc((1 - var(--tb)) * 100%));
+  opacity: var(--tb);
 }
+.app.toolbar-hidden .toolbar { pointer-events: none; }
 
 .tb-left {
   justify-self: start;
@@ -362,9 +370,9 @@ svg {
   position: absolute;
   z-index: 15;
   right: max(16px, env(safe-area-inset-right, 0px));
-  bottom: calc(var(--toolbar-h) + env(safe-area-inset-bottom, 0px) + 8px);
+  bottom: calc((var(--toolbar-h) + env(safe-area-inset-bottom, 0px)) * var(--tb) + 8px);
   width: min(360px, calc(100% - 32px));
-  max-height: calc(100% - var(--toolbar-h) - 80px);
+  max-height: calc(100% - var(--toolbar-h) * var(--tb) - 80px);
   overflow-y: auto;
   display: grid;
   gap: 24px;

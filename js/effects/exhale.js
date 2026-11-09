@@ -34,6 +34,11 @@
 // lag (a first-order follower, time constant 0.05–0.95 s ÷ Speed, random per particle, for 1.6 s
 // after a pinch or a release; 0.04–0.12 s otherwise). So they set off in a stream and gather into
 // the sphere at the pinch, holding there while you pinch; let go and they stream back to your palm.
+// Fluidity (0–1) makes the sphere behave more like a liquid: the particles' follow lag grows
+// (×(1 + 8f²) at rest, ×(0.4 + 1.6f) while streaming), the breath springs lose damping
+// (ζ = 0.5 − 0.5f, at least 0.08), so the shell sloshes and rings after each breath, and a
+// standing surface wave rides on the shell, two low modes of a drop,
+// δr = 0.12f·sin(4x + 2.1t)·cos(3y − 1.6t) in the sphere's own frame, so it turns with it.
 // Speed scales all of that motion and the breath, ×0.35 to ×2.9 (2^((Speed − 50)/33)).
 // Looks (modes): Sphere (dots), Zero (each particle a digit, its latitude band on its own sphere
 // counted 0–9 from the top pole, as in the Zero landmark) and Binary (each particle a bit, 0 or 1,
@@ -184,15 +189,15 @@
         var bandK = [0.95, 0.4 + 0.5 * tightAll, 0.1 + 0.8 * tightAll], flip = dt * 0.4;
         groups.forEach(function (G, g) {
           var O = groups[1 - g].center, ox0 = O.x - G.center.x, oy0 = O.y - G.center.y, ol = Math.hypot(ox0, oy0) || 1;
-          var h = dt * spd / 2, M = G.M, flowing = t < G.flowUntil;
+          var h = dt * spd / 2, M = G.M, flowing = t < G.flowUntil, fl = (params.fluidity === undefined ? 30 : params.fluidity) / 100, zeta = Math.max(0.08, 0.5 - 0.5 * fl), lagK = 1 + 8 * fl * fl, waveA = 0.12 * fl;
           var mFull = m >= 1, mNone = m <= 0;
           G.P.forEach(function (q) {
             var d = q.d, dx = M[0] * d[0] + M[1] * d[1] + M[2] * d[2], dy = -(M[3] * d[0] + M[4] * d[1] + M[5] * d[2]), dz = M[6] * d[0] + M[7] * d[1] + M[8] * d[2];
             // Its share threshold: lowest facing the other sphere.
             var w0 = mFull ? 1 : mNone ? 0 : smooth((m - 0.25 * (1 - (dx * ox0 - dy * oy0) / ol)) / 0.5);
             var br = G.breath + (bm - G.breath) * w0;
-            for (var s = 0; s < 2; s++) { var a = -q.w * q.w * (q.r - br * q.jit) - 2 * 0.35 * q.w * q.v; q.v += a * h; q.r += q.v * h; }
-            var rr = 0.02 + 1.03 * Math.max(0, q.r), k1 = F / (F + dz), ox = dx * rr * Rsep * k1, oy = -dy * rr * Rsep * k1, zz = dz;
+            for (var s = 0; s < 2; s++) { var a = -q.w * q.w * (q.r - br * q.jit) - 2 * zeta * q.w * q.v; q.v += a * h; q.r += q.v * h; }
+            var rr = (0.02 + 1.03 * Math.max(0, q.r)) * (waveA ? 1 + waveA * Math.sin(4 * d[0] + 2.1 * t) * Math.cos(3 * d[1] - 1.6 * t) : 1), k1 = F / (F + dz), ox = dx * rr * Rsep * k1, oy = -dy * rr * Rsep * k1, zz = dz;
             if (w0 > 0) {
               var e = q.dm, mx = Mm[0] * e[0] + Mm[1] * e[1] + Mm[2] * e[2], my = -(Mm[3] * e[0] + Mm[4] * e[1] + Mm[5] * e[2]), mz = Mm[6] * e[0] + Mm[7] * e[1] + Mm[8] * e[2], k2 = F / (F + mz);
               ox += (mx * rr * Rbase * k2 - ox) * w0; oy += (-my * rr * Rbase * k2 - oy) * w0; zz += (mz - zz) * w0;
@@ -200,7 +205,7 @@
             // Each particle follows the center through its own lag (long while flowing to or from a pinch).
             var tcx = G.center.x + (cm.x - G.center.x) * w0, tcy = G.center.y + (cm.y - G.center.y) * w0;
             if (q.cx === null) { q.cx = tcx; q.cy = tcy; }
-            var tau = flowing ? (0.05 + 0.9 * q.lag) / spd : 0.04 + 0.08 * q.lag, kf = 1 - Math.exp(-dt / tau);
+            var tau = flowing ? (0.05 + 0.9 * q.lag) / spd * (0.4 + 1.6 * fl) : (0.04 + 0.08 * q.lag) * lagK, kf = 1 - Math.exp(-dt / tau);
             q.cx += (tcx - q.cx) * kf; q.cy += (tcy - q.cy) * kf;
             var sx = q.cx + ox, sy = q.cy + oy, band = Math.abs(zz) < 0.35 ? 0 : Math.abs(zz) < 0.7 ? 1 : 2, kb = bandK[band];
             if (masks) {

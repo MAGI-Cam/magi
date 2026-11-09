@@ -946,8 +946,27 @@
     drag = null;
   });
 
+  // The toolbar can be put away and brought back by swiping on the strip at the bottom where it
+  // sits (or sat): down hides it, sliding and fading out while the picture grows into its space;
+  // up shows it again. Trackpads: a two-finger swipe there; touch screens: a one-finger swipe.
+  var toolbarEl = document.querySelector('.toolbar');
+  function setToolbar(shown) { app.classList.toggle('toolbar-hidden', !shown); }
+  function inToolbarZone(y) { return y > window.innerHeight - toolbarEl.offsetHeight; }
+  var barDrag = null;
+  window.addEventListener('touchstart', function (e) {
+    barDrag = e.touches.length === 1 && !(e.target instanceof Node && tray.contains(e.target)) && inToolbarZone(e.touches[0].clientY) ? { y: e.touches[0].clientY, dy: 0 } : null;
+  }, { passive: true });
+  window.addEventListener('touchmove', function (e) { if (barDrag && e.touches.length === 1) barDrag.dy = e.touches[0].clientY - barDrag.y; }, { passive: true });
+  window.addEventListener('touchend', function () {
+    if (!barDrag) return;
+    if (barDrag.dy > 40) setToolbar(false);
+    else if (barDrag.dy < -40) setToolbar(true);
+    barDrag = null;
+  });
+
   // Trackpad: a two-finger swipe up opens the tray, down closes it, anywhere outside the tray.
-  // Inside it, swipes only scroll. Pinch-zoom (ctrl + wheel) is left alone.
+  // Inside it, swipes only scroll. Pinch-zoom (ctrl + wheel) is left alone. On the toolbar's strip
+  // a swipe down hides the toolbar and a swipe up brings it back (or, with it showing, opens the tray).
   var swipe = { sum: 0, last: 0, quietUntil: 0 };
   window.addEventListener('wheel', function (e) {
     if (e.ctrlKey || Math.abs(e.deltaY) < Math.abs(e.deltaX)) return;
@@ -957,6 +976,12 @@
     if (now - swipe.last > 250) swipe.sum = 0;
     swipe.last = now;
     swipe.sum += e.deltaY;
+    if (inToolbarZone(e.clientY)) {
+      var hidden = app.classList.contains('toolbar-hidden');
+      if (swipe.sum < -60 && !hidden) { setToolbar(false); swipe.sum = 0; swipe.quietUntil = now + 600; return; }
+      if (swipe.sum > 60 && hidden) { setToolbar(true); swipe.sum = 0; swipe.quietUntil = now + 600; return; }
+      if (hidden) return;
+    }
     // With natural scrolling, fingers moving up give positive deltaY.
     if (swipe.sum > 60 && !state.trayOpen && state.phase === 'live') {
       setTray(true);

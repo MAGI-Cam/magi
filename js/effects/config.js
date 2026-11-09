@@ -242,6 +242,7 @@ Magi.effectConfig = [
       range('bristles', 'Bristles', 0, 100, 60),
       range('rate', 'Rate', 2, 20, 6),
       range('speed', 'Speed', 0, 100, 10),
+      range('fluidity', 'Fluidity', 0, 100, 30),
       range('glow', 'Glow', 0, 100, 40),
       { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
       range('dim', 'Dim', 0, 100, 90)
@@ -736,7 +737,7 @@ Magi.effectGuides = {
     'Open palm: exhale. Fist: inhale all the way and the sphere implodes into a bright core; open your hand and it blooms back out.',
     'Two hands: pull them apart and the sphere divides gradually into two, one per hand, each breathing with its own hand. The two pull on each other like gravity; bring them together and when they touch, particles cross over where they meet and the two blend into one shared sphere.',
     'Pinch: the sphere moves to your pinch, its particles streaming there and forming it again around your fingers; let go and they stream back to your palm. Brush your hand across it to spin it like a ball; roll your hand to turn it; swipe to fling it. No hand: it breathes on its own at Rate.',
-    'Count, Size: how many and how big. Bristles: the streaks of rushing particles. Rate: breaths a minute with no hand. Speed: how fast the particles travel and breathe. Glow: a soft bloom around them. Modes: tap the tile. Sphere: dots. Zero: digits counting 0–9 down the sphere. Binary: flickering 0s and 1s. Color: far left green. Dim: darkens the camera.'
+    'Count, Size: how many and how big. Bristles: the streaks of rushing particles. Rate: breaths a minute with no hand. Speed: how fast the particles travel and breathe. Fluidity: how liquid it feels — particles trail further behind your hand, the shell sloshes after each breath and ripples on its surface. Glow: a soft bloom around them. Modes: tap the tile. Sphere: dots. Zero: digits counting 0–9 down the sphere. Binary: flickering 0s and 1s. Color: far left green. Dim: darkens the camera.'
   ],
   'word-space': [
     'How it works: characters strung together by red threads, like Word Box, but free in the room: they drift through the whole picture and through depth on a swirling flow (curl noise, so they eddy without bunching up).',
