@@ -18,8 +18,8 @@
 // Distortion: a map C(x) of where each pixel's image comes from, carried by the flow. Advecting
 // C(x) ← C(x − v·dt) as a texture of coordinates is the standard fluid image warp; stored as an
 // offset D = C − x, one step is D(x) ← D(x − v·dt) − v·dt. The offset then relaxes toward zero
-// with the same half-life, so the video settles back; around a fist it relaxes in 0.12 s and the
-// flow is damped, vacuuming the picture back to normal there. The output is the live camera sampled at C.
+// with the same half-life, so the video settles back; while you pinch it relaxes in 0.12 s and the
+// flow is damped, sucking the picture back to normal (Watercolor: a fist vacuums the paint). The output is the live camera sampled at C.
 //
 // Watercolor mode: the same flow carries pigment instead of the picture, painted on paper (see the
 // deposit, bleed and paint shaders): an abstract painting made by moving through the air.
@@ -88,9 +88,11 @@
       'void main() { vec2 st = dt * (texture(vel, uv).xy * velTexel + vacSink(uv)); o = vec4((texture(map, uv - st).xy - st) * mix(keep, vk, vacCore(uv)), 0.0, 1.0); }',
     // The stirred picture; where it is displaced, its hue turns by `hue` (a rotation about the gray
     // axis in YIQ), weighted by how far the pixel has been carried, so a pinch tints the swirls.
-    show: 'uniform sampler2D cam, map; uniform float hue;\nvoid main() { vec2 d = texture(map, uv).xy; vec3 c = texture(cam, clamp(uv + d, 0.0, 1.0)).rgb;\n' +
+    // Psychedelic adds `band`: the hue also turns with the distance the pixel was carried
+    // (band·|D| radians), so each swirl is striped through the spectrum.
+    show: 'uniform sampler2D cam, map; uniform float hue, band;\nvoid main() { vec2 d = texture(map, uv).xy; vec3 c = texture(cam, clamp(uv + d, 0.0, 1.0)).rgb;\n' +
       '  float w = smoothstep(0.0, 0.03, length(d)); mat3 toY = mat3(0.299, 0.596, 0.211, 0.587, -0.274, -0.523, 0.114, -0.322, 0.312);\n' +
-      '  vec3 y = toY * c; float cs = cos(hue * w), sn = sin(hue * w); y.yz = vec2(y.y * cs - y.z * sn, y.y * sn + y.z * cs);\n' +
+      '  vec3 y = toY * c; float ang = hue * w + band * length(d); float cs = cos(ang), sn = sin(ang); y.yz = vec2(y.y * cs - y.z * sn, y.y * sn + y.z * cs);\n' +
       '  mat3 toR = mat3(1.0, 1.0, 1.0, 0.956, -0.272, -1.106, 0.621, -0.647, 1.703);\n' +
       '  o = vec4(clamp(toR * y, 0.0, 1.0), 1.0); }',
     // Watercolor. Pigment is stored as optical density per channel, D = −ln(reflectance).
@@ -312,30 +314,29 @@
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, out);
         gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
 
-        // Fist: a vacuum at each closed hand. Within 35% of the frame height everything stirred
-        // (the picture's displacement, the activity, the pigment) is drawn into the fist by a point
-        // sink (see vacSink) and erased in its core, and the flow there is damped. Two fists, two
-        // vacuums.
-        // Pinch (Psychedelic, Watercolor): shifts the colors, one palette a second per pinching hand (two hands: twice as fast;
-        // real elapsed time, since the fluid's own step is capped); in Smoke it turns the hue of the
-        // swirls. The slider follows in Watercolor.
-        var ixW = Magi.interaction.read(frame), fists = ixW.hands.filter(function (h) { return h.fist; }).slice(0, 2);
+        // Watercolor — Fist: a vacuum at each closed hand. Within 35% of the frame height the paint
+        // (and the activity) is drawn into the fist by a point sink (see vacSink) and erased in its
+        // core, and the flow there is damped. Two fists, two vacuums. Pinch: shifts the palette, one
+        // palette a second per pinching hand (real elapsed time, since the fluid's own step is
+        // capped); the slider follows.
+        // Smoke, Psychedelic — Pinch: the whole stirred picture is sucked back to normal (its offset
+        // relaxes with a 0.12 s half-life) and the flow is damped. Fist: turns the hue of the swirls,
+        // one turn every 2.6 s per closed hand.
+        var ixW = Magi.interaction.read(frame), wc = params.mode === 'watercolor';
+        var fistN = ixW.hands.filter(function (h) { return h.fist; }).length, fists = wc ? ixW.hands.filter(function (h) { return h.fist; }).slice(0, 2) : [];
         var vacs = [0, 1].map(function (k) { var h = fists[k]; return h ? [h.center.x / W, 1 - h.center.y / H, 0.35] : [0, 0, 0]; });
-        var pinching = ixW.hands.filter(function (h) { return h.pinched; }).length;
+        var pinching = ixW.hands.filter(function (h) { return h.pinched; }).length, sucking = !wc && pinching > 0;
         var realDt = lastColorT === null ? dt : Math.min(0.25, t - lastColorT);
         lastColorT = t;
-        if (pinching && params.mode !== 'smoke') {
-          colorShift += pinching * realDt;
-          if (params.mode === 'watercolor') {
-            colorAcc += pinching * realDt * 100 / (PALETTES.length - 1);
-            if (Math.abs(colorAcc) >= 1) { var stepC = Math.trunc(colorAcc); colorAcc -= stepC; var nc = params.colors + stepC; if (nc > 100) nc = 1 + (nc - 101); frame.setParam('colors', nc); params = Object.assign({}, params, { colors: nc }); }
-          }
-        }
+        if (wc && pinching) {
+          colorAcc += pinching * realDt * 100 / (PALETTES.length - 1);
+          if (Math.abs(colorAcc) >= 1) { var stepC = Math.trunc(colorAcc); colorAcc -= stepC; var nc = params.colors + stepC; if (nc > 100) nc = 1 + (nc - 101); frame.setParam('colors', nc); params = Object.assign({}, params, { colors: nc }); }
+        } else if (!wc && fistN) colorShift += fistN * realDt;
         var vac = { vac0: vacs[0], vac1: vacs[1], aspect: W / H, vq: 0.25 };
-        var vt = [1 / sw, 1 / sh], keep = Math.pow(2, -dt / (0.15 * Math.pow(2, params.trail / 20))), vkeep = Math.pow(2, -dt / 0.12);
+        var vt = [1 / sw, 1 / sh], keep = Math.pow(2, -dt / (sucking ? 0.12 : 0.15 * Math.pow(2, params.trail / 20))), vkeep = Math.pow(2, -dt / 0.12);
         run('emit', { act: act.read, mask: maskTex }, act.write, vt); act.swap();
         run('force', { vel: vel.read, mask: maskTex, act: act.read, size: [sw, sh], flow: params.flow / 100, dt: dt,
-          swirl: params.swirl / 100 * 220, rise: params.rise / 100 * 160, t: t, damp: Math.exp(-dt * 0.8), vdamp: Math.exp(-dt * 8), vac0: vac.vac0, vac1: vac.vac1, aspect: vac.aspect }, vel.write, vt);
+          swirl: params.swirl / 100 * 220, rise: params.rise / 100 * 160, t: t, damp: Math.exp(-dt * (sucking ? 8 : 0.8)), vdamp: Math.exp(-dt * 8), vac0: vac.vac0, vac1: vac.vac1, aspect: vac.aspect }, vel.write, vt);
         vel.swap();
         run('curl', { vel: vel.read }, curl, vt);
         run('vorticity', { vel: vel.read, curl: curl, strength: 10 + params.swirl * 0.35, dt: dt }, vel.write, vt);
@@ -375,7 +376,7 @@
         } else {
           run('warp', { vel: vel.read, map: map.read, velTexel: vt, dt: dt, keep: keep, vk: vkeep, vq: vac.vq, vac0: vac.vac0, vac1: vac.vac1, aspect: vac.aspect }, map.write, [1 / map.read.w, 1 / map.read.h]);
           map.swap();
-          run('show', { cam: camTex, map: map.read, hue: params.mode === 'psychedelic' ? colorShift * 2.4 : 0 }, null, [1 / W, 1 / H]);
+          run('show', { cam: camTex, map: map.read, hue: (colorShift * 2.4) % (Math.PI * 2), band: params.mode === 'psychedelic' ? 60 : 0 }, null, [1 / W, 1 / H]);
         }
         ctx.drawImage(canvas, 0, 0);
 

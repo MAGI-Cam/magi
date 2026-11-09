@@ -927,9 +927,9 @@ Magi.effectGuides = {
   ],
   wisp: [
     'Move your fingers through the picture: the video itself swirls and drags like smoke where they pass, then settles. A still hand does nothing.',
-    'Fist: a vacuum: the swirls (or the paint) are sucked into your fist and disappear. Two fists, two vacuums.',
-    'Pinch (Psychedelic and Watercolor): shifts the colors, the hue of the swirls or the palette. Pinch with both hands: twice as fast. Smoke stays the picture’s own colors.',
-    'Modes: tap the tile. Smoke: the picture swirls in its own colors. Psychedelic: the same, and the swirls shift hue as you pinch. Watercolor: painting with pigment.',
+    'Pinch (Smoke, Psychedelic): sucks the swirls back up, and the picture settles straight back to normal.',
+    'Fist (Smoke, Psychedelic): changes the color: the swirls turn through the hues while your hand is closed. Two fists: twice as fast.',
+    'Modes: tap the tile. Smoke: the picture swirls in its own colors until you make a fist. Psychedelic: the same, and every swirl is striped through the spectrum by how far it has been carried. Watercolor: painting with pigment (Watercolor: a fist vacuums the paint, a pinch changes the palette).',
     'Trail: how long the swirl lasts. Flow: how strongly your motion drags the picture.',
     'Swirl: extra curling where you’ve moved. Rise: how much the disturbance drifts upward, like smoke.',
     'Watercolor (tap the tile): your fingers paint pigment that the same flow carries and bleeds, on paper. Colors mix like glazes and pool darker at their edges.',
