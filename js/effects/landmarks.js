@@ -282,7 +282,7 @@
           var mp = params.mode === 'filaments' ? Object.assign({}, params, { dim: params.fdim }) : params;
           (extra[params.mode] || (extra[params.mode] = Magi.landmarkModes[params.mode]()))(ctx, frame, ix, mp);
           if (tracker.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, tracker, 'hand');
-          else if (!hands.length && params.mode !== 'attention' && params.mode !== 'rabinovich' && params.mode !== 'pollinate') Magi.tracking.hint(ctx, frame, 'Raise your hands.');
+          else if (!hands.length && params.mode !== 'attention' && params.mode !== 'rabinovich' && params.mode !== 'pollinate' && params.mode !== 'cube') Magi.tracking.hint(ctx, frame, 'Raise your hands.');
           return;
         }
         hands.forEach(function (p, i) {

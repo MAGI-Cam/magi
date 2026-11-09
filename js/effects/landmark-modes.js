@@ -1183,4 +1183,50 @@
       if (!hands.length) frame.say('Make a fist to open the wheel, push it (or roll it) toward a slot, open your hand to equip.');
     };
   };
+  // Cube: your uploaded images (Magi.media; camera snapshots until you add some) as image cubes
+  // (Magi.mediaCubes, media-fx.js) held between your hands. Two hands frame it: their distance opens
+  // the n × n × n block into a lattice (gap 1.08 → 3.5 cube edges), the line between them sets its
+  // roll, and where their midpoint sits turns it (left–right yaw, up–down pitch). One hand: it
+  // follows your palm. Pinch: it snaps shut into the tight cube. Fist: it bursts into a loose
+  // scatter; open your hand to call it back. No hands: it turns slowly on its own. Every value is
+  // eased toward its target (first-order lag, rate 6/s) so it moves like an object.
+  Magi.landmarkModes.cube = function () {
+    var S = null, lastT = null, spin = 0;
+    return function (ctx, frame, ix, params) {
+      var W = frame.width, H = frame.height, t = frame.time / 1000, M = Math.min(W, H);
+      var dt = lastT === null ? 1 / 60 : Math.max(0, Math.min(0.1, t - lastT)); lastT = t;
+      ctx.fillStyle = 'rgba(0,0,0,' + (params.dim / 100).toFixed(3) + ')';
+      ctx.fillRect(0, 0, W, H);
+      var items = Magi.media.list(frame);
+      if (!items.length) return;
+      if (!S) S = { cx: W / 2, cy: H / 2, spread: 0, scatter: 0, yaw: 0.6, pitch: -0.45, roll: 0, scale: 1 };
+      var hands = ix.hands.slice(0, 2), T = { cx: W / 2, cy: H / 2, spread: S.spread, scatter: S.scatter, yaw: null, pitch: -0.45, roll: 0, scale: 1 };
+      spin += dt * (0.1 + params.cspin / 100 * 0.8);
+      if (hands.length === 2) {
+        var a = hands[0].center, b = hands[1].center, L = a.x < b.x ? a : b, R = L === a ? b : a, d = Math.hypot(R.x - L.x, R.y - L.y);
+        T.cx = (a.x + b.x) / 2; T.cy = (a.y + b.y) / 2;
+        T.spread = Math.max(0, Math.min(1, (d / W - 0.25) / 0.45));
+        T.roll = Math.atan2(R.y - L.y, R.x - L.x);
+        T.yaw = (T.cx / W - 0.5) * 2.4; T.pitch = -(T.cy / H - 0.5) * 2;
+        T.scale = 0.7 + Math.min(1.2, d / W);
+      } else if (hands.length === 1) {
+        var h = hands[0];
+        T.cx = h.center.x; T.cy = h.center.y;
+        T.yaw = (T.cx / W - 0.5) * 2.4; T.pitch = -(T.cy / H - 0.5) * 2;
+        T.roll = (h.rotation || 0) * Math.PI / 180 * 0.5;
+      }
+      var pinch = hands.some(function (q) { return q.pinched; }), fist = hands.some(function (q) { return q.fist; }), open = hands.some(function (q) { return q.count >= 4; });
+      if (pinch) { T.spread = 0; T.scatter = 0; }
+      else if (fist) T.scatter = 1;
+      else if (open || !hands.length) T.scatter = 0;
+      var k = 1 - Math.exp(-6 * dt);
+      ['cx', 'cy', 'spread', 'scatter', 'pitch', 'roll', 'scale'].forEach(function (key) { S[key] += (T[key] - S[key]) * k; });
+      // Yaw: the hands' target plus the slow spin, eased on the shortest way round.
+      var ty = (T.yaw === null ? 0 : T.yaw) + spin, dy = Math.atan2(Math.sin(ty - S.yaw), Math.cos(ty - S.yaw));
+      S.yaw += dy * k;
+      var n = Math.max(2, Math.min(5, Math.round(params.cn || 3))), edge = M * (0.03 + params.csize / 100 * 0.08) * S.scale * 3 / (n + 1.5);
+      Magi.mediaCubes(ctx, W, H, items, { n: n, spread: S.spread, scatter: S.scatter, yaw: S.yaw, pitch: S.pitch, roll: S.roll, size: edge, cx: S.cx, cy: S.cy, gray: !!params.cgray });
+      if (!Magi.media.items.length) frame.say(Magi.media.loading ? 'Loading your images…' : 'Showing camera snapshots. Add your own images in Media (any Media effect, upload button).');
+    };
+  };
 })();

@@ -14,6 +14,18 @@ function toggle(id, label, def, hint) {
 }
 var COLOR = { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' };
 
+// Shared by the Media effects. Format: 0 the source's shape, 1 4:5, 2 9:16, 3 1:1.
+function mediaParams(format, density, size, speed) {
+  return [
+    range('format', 'Format', 0, 3, format),
+    range('density', 'Density', 1, 44, density),
+    range('size', 'Size', 0, 100, size),
+    range('speed', 'Speed', 0, 100, speed),
+    toggle('dark', 'Dark', false, 'Black background instead of white.'),
+    toggle('gray', 'Grayscale', false, 'Show the images in gray.')
+  ];
+}
+
 function halftoneParams() {
   return [
     range('scale', 'Scale', 1, 9, 5),
@@ -52,7 +64,9 @@ Magi.effectGroups = [
   { id: 'spacenet', name: 'Spacenet', parent: 'gesture' },
   { id: 'facade', name: 'Facade' },
   // Text: effects that read or set type.
-  { id: 'text', name: 'Text' }
+  { id: 'text', name: 'Text' },
+  // Media: your uploaded images (kept for this session only) composed into moving posts.
+  { id: 'media', name: 'Media' }
 ];
 
 Magi.effectConfig = [
@@ -117,7 +131,8 @@ Magi.effectConfig = [
       { id: 'cohesion', name: 'Cohesion' },
       { id: 'pollinate', name: 'Pollinate' },
       { id: 'zero', name: 'Zero' },
-      { id: 'horizon', name: 'Horizon' }
+      { id: 'horizon', name: 'Horizon' },
+      { id: 'cube', name: 'Cube' }
     ],
     params: [
       { id: 'readouts', label: 'Readouts', type: 'toggle', default: true, modes: ['skeleton'], hint: 'Show which hand it is, the tracking score and rotation.' },
@@ -138,7 +153,7 @@ Magi.effectConfig = [
       { id: 'tempo', label: 'Tempo', min: 60, max: 180, step: 1, default: 110, modes: ['sequencer'] },
       { id: 'sound', label: 'Sound', type: 'toggle', default: false, modes: ['sequencer'], hint: 'Play the rings (kick, snare, hi-hat); recorded into videos.' },
       { id: 'fdim', label: 'Dim', min: 0, max: 100, step: 1, default: 0, modes: ['filaments'] },
-      { id: 'dim', label: 'Dim', min: 0, max: 100, step: 1, default: 45, modes: ['sequencer', 'rabinovich', 'cohesion', 'pollinate', 'zero', 'horizon'] },
+      { id: 'dim', label: 'Dim', min: 0, max: 100, step: 1, default: 45, modes: ['sequencer', 'rabinovich', 'cohesion', 'pollinate', 'zero', 'horizon', 'cube'] },
       { id: 'speed', label: 'Speed', min: 0, max: 100, step: 1, default: 50, modes: ['rabinovich'] },
       { id: 'trail', label: 'Trail', min: 0, max: 100, step: 1, default: 70, modes: ['rabinovich'] },
       { id: 'size', label: 'Size', min: 0, max: 100, step: 1, default: 50, modes: ['rabinovich'] },
@@ -153,7 +168,11 @@ Magi.effectConfig = [
       { id: 'zcube', label: 'Cube', type: 'toggle', default: true, modes: ['zero'], hint: 'The wireframe cube and the lines inside the sphere.' },
       { id: 'zcolor', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue', modes: ['zero'] },
       { id: 'hrays', label: 'Slots', min: 4, max: 12, step: 1, default: 8, modes: ['horizon'] },
-      { id: 'hpanel', label: 'Panel', type: 'toggle', default: true, modes: ['horizon'], hint: 'The loadout panel on the right: the equipped item, its stats and a dial.' }
+      { id: 'hpanel', label: 'Panel', type: 'toggle', default: true, modes: ['horizon'], hint: 'The loadout panel on the right: the equipped item, its stats and a dial.' },
+      { id: 'cn', label: 'Grid', min: 2, max: 5, step: 1, default: 3, modes: ['cube'] },
+      { id: 'csize', label: 'Size', min: 0, max: 100, step: 1, default: 50, modes: ['cube'] },
+      { id: 'cspin', label: 'Spin', min: 0, max: 100, step: 1, default: 20, modes: ['cube'] },
+      { id: 'cgray', label: 'Grayscale', type: 'toggle', default: false, modes: ['cube'], hint: 'Show the images in gray.' }
     ]
   },
   {
@@ -722,6 +741,28 @@ Magi.effectConfig = [
       range('dim', 'Dim', 0, 100, 0)
     ]
   },
+
+  // Media: effects on your uploaded images (library: the upload button adds several images to
+  // Magi.media instead of opening one photo). Format sizes the picture for posts.
+  {
+    id: 'media-drift', name: 'Drift', group: 'media', library: true, ready: true, photoType: 'image/jpeg',
+    params: mediaParams(1, 6, 40, 50).concat([
+      range('intensity', 'Intensity', 0, 100, 60),
+      toggle('captions', 'Captions', true, 'Each image’s file name under it.')
+    ])
+  },
+  {
+    id: 'media-crossing', name: 'Crossing', group: 'media', library: true, ready: true, photoType: 'image/jpeg',
+    params: mediaParams(1, 4, 40, 40)
+  },
+  {
+    id: 'media-anatomy', name: 'Anatomy', group: 'media', library: true, ready: true, photoType: 'image/jpeg',
+    params: mediaParams(1, 22, 40, 40).concat([range('pattern', 'Pattern', 0, 2, 0)])
+  },
+  {
+    id: 'media-cube', name: 'Cube', group: 'media', library: true, ready: true, photoType: 'image/jpeg',
+    params: mediaParams(1, 1, 50, 30).concat([range('hold', 'Hold', 0, 100, 40)])
+  },
   {
     id: 'facade-interactive',
     name: 'Interactive',
@@ -818,6 +859,7 @@ Magi.effectGuides = {
     'Cohesion: a chord diagram of your hand’s 21 landmarks. Pairs close together are joined, so a fist fills the circle and spread fingers thin it; the level reads at the top with its recent history. Two hands: all 42 landmarks, chords across the hands in white as they come together, and each hand’s level plus the hands’ cohesion.',
     'Pollinate: point with your index finger: a small pad appears there, and only your index finger moves it (by pushing past an edge). Your fingertip’s place on it picks two concepts (across, down). Hold still on a cell for half a second: the cell is marked in red and they pollinate into “A + B = ?” and an idea that decodes on the right. Fist: clears the marks. The two concepts under the crosshair are named beside the pad.',
     'Zero: a sphere of digits (each latitude band counts 0–9) with a wireframe cube inside, bent by real shape operators (twist, bend, and a collapse onto its equator), with the formulas and live values in the top-left corner. Pinch and drag: turns it. Spread thumb and index: twists it (roll left to reverse). Fist: collapses it into a flat ring, a zero; open palm: blooms back. Two hands: closer curls it tighter. Swipe left/right: shuffles the digits; up/down: new lines in the cube. Count, Size, Text, Twist, Curl, Spin, Glow, Cube, Color, Dim.',
+    'Cube: your Media images as cubes (an image on every face) held between your hands. Two hands: their distance opens the block into a lattice, the line between them tilts it, and moving them turns it. One hand: it follows your palm. Pinch: snaps shut into a tight cube. Fist: bursts it apart; open your hand to call it back. No hands: it turns slowly. Without uploaded images it uses camera snapshots (add images in any Media effect). Grid: cubes per side. Size, Spin, Grayscale, Dim.',
     'Horizon: a gesture selection wheel, like a game’s weapon wheel. Make a fist and the wheel opens around it. Push your fist toward a slot (like a game stick), or roll your wrist to sweep around the ring; the chosen slot lights up. Open your hand to equip it. The panel shows what you have equipped and its stats. Slots: how many. Panel: show the loadout. Dim.',
   ],
   'line-art': [
@@ -995,6 +1037,24 @@ Magi.effectGuides = {
     'Move your hands: the web grows from them and stretches. Fist: it pulls in. Open palm: it drifts loose. Pinch: drawn to your fingertips.',
     'Modes: tap the tile. Light or Ink.',
     'Count: particles, in thousands. Links: lines per particle. Reach: the longest line that still shows. Lines: their brightness. Turbulence, Scale, Hold, Trails, Exposure, Glow, Color, Dim: as in Particle Cloud.'
+  ],
+  'media-drift': [
+    'How it works: your images pop in at random places as captioned thumbnails, wander on a slow flow and fade, then come back somewhere new, like a desktop filling with screenshots.',
+    'Images: in any Media effect the upload button adds images (choose many at once). They stay for this session only, on this device; a new upload replaces them. Until you add some, snapshots of the camera stand in. Save with the shutter.',
+    'Format: 0 the source’s shape, 1 4:5 post, 2 9:16 story, 3 square. Density: copies of each image. Size, Speed. Intensity: how many show at once and how far they wander. Captions: file names. Dark: black background. Grayscale.'
+  ],
+  'media-crossing': [
+    'How it works: every image is a card on its own tilted elliptical orbit, so the paths cross in depth. Cards go round by Kepler’s third law (angular speed ∝ a^−3/2): inner orbits are faster. The whole cluster turns slowly.',
+    'Images, Format, Dark, Grayscale: as in Drift. Density: cards per image. Size: card size. Speed: orbit speed.'
+  ],
+  'media-anatomy': [
+    'How it works: small square crops of your images ride along lines across the poster like goods on conveyors. Pattern 0 a diamond lattice, 1 a grid, 2 waves.',
+    'Images, Format, Dark, Grayscale: as in Drift. Density: how close the tiles follow each other. Size: tile size (bigger tiles, wider lattice). Speed.'
+  ],
+  'media-cube': [
+    'How it works: cubes with one of your images on every face move between a loose scatter, a tight 3 × 3 × 3 cube and an open 5 × 5 × 5 lattice, morphing smoothly and turning.',
+    'The same cubes are a Landmarks mode (Hand Tracking › Landmarks › Cube) you hold and turn with your hands.',
+    'Images, Format, Dark, Grayscale: as in Drift. Size: cube size. Speed: turning. Hold: how long each shape stays. Density has no effect here.'
   ],
   scanner: [
     'How it works: every word in the picture gets a box and a tag; a dark scan head moves from word to word, top to bottom and left to right, leaving the boxes it has read tinted and a line through them. Words are read in your browser (Tesseract OCR, about 3 MB the first time; nothing is uploaded). A photo is read once; live video is re-read about every second.',

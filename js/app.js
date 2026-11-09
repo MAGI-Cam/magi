@@ -290,7 +290,9 @@
         if (hud.width !== hw || hud.height !== hh) { hud.width = hw; hud.height = hh; }
         hctx.setTransform(1, 0, 0, 1, 0, 0);
         hctx.clearRect(0, 0, hw, hh);
-        hctx.setTransform(hw / w, 0, 0, hh / h, 0, 0);
+        // In the picture's coordinates (the effect may size its picture differently from the frame,
+        // as Media effects do for a post format).
+        hctx.setTransform(hw / (view.width || w), 0, 0, hh / (view.height || h), 0, 0);
       }
       return hctx;
     } });
@@ -564,6 +566,7 @@
   function selectEffect(id) {
     state.effectId = id;
     hint.hidden = true;
+    syncUploadMode();
     resetRenderers();
     syncTiles();
     buildControls();
@@ -1017,12 +1020,22 @@
     }
   }, { passive: true });
 
+  // Effects that work from a set of images (config `library: true`, the Media effects) take many
+  // images per upload into the session library (Magi.media) instead of replacing the camera.
+  function syncUploadMode() {
+    var fx = effectById(state.effectId), lib = !!(fx && fx.library);
+    fileInput.multiple = lib;
+    fileInput.accept = lib ? 'image/*' : 'image/*,video/*';
+    uploadBtn.setAttribute('aria-label', lib ? 'Add images' : 'Upload photo or video');
+  }
   uploadBtn.addEventListener('click', function () { fileInput.click(); });
   cameraBtn.addEventListener('click', startCamera);
   fileInput.addEventListener('change', function () {
-    var file = fileInput.files && fileInput.files[0];
+    var files = fileInput.files ? Array.prototype.slice.call(fileInput.files) : [];
     fileInput.value = '';
-    if (file) openFile(file);
+    var fx = effectById(state.effectId);
+    if (fx && fx.library && Magi.media) { if (files.length) Magi.media.add(files); return; }
+    if (files[0]) openFile(files[0]);
   });
 
   window.addEventListener('resize', fitView);
