@@ -112,7 +112,8 @@ Magi.effectConfig = [
       { id: 'rabinovich', name: 'Rabinovich' },
       { id: 'cohesion', name: 'Cohesion' },
       { id: 'pollinate', name: 'Pollinate' },
-      { id: 'zero', name: 'Zero' }
+      { id: 'zero', name: 'Zero' },
+      { id: 'horizon', name: 'Horizon' }
     ],
     params: [
       { id: 'readouts', label: 'Readouts', type: 'toggle', default: true, modes: ['skeleton'], hint: 'Show which hand it is, the tracking score and rotation.' },
@@ -133,7 +134,7 @@ Magi.effectConfig = [
       { id: 'tempo', label: 'Tempo', min: 60, max: 180, step: 1, default: 110, modes: ['sequencer'] },
       { id: 'sound', label: 'Sound', type: 'toggle', default: false, modes: ['sequencer'], hint: 'Play the rings (kick, snare, hi-hat); recorded into videos.' },
       { id: 'fdim', label: 'Dim', min: 0, max: 100, step: 1, default: 0, modes: ['filaments'] },
-      { id: 'dim', label: 'Dim', min: 0, max: 100, step: 1, default: 45, modes: ['sequencer', 'rabinovich', 'cohesion', 'pollinate', 'zero'] },
+      { id: 'dim', label: 'Dim', min: 0, max: 100, step: 1, default: 45, modes: ['sequencer', 'rabinovich', 'cohesion', 'pollinate', 'zero', 'horizon'] },
       { id: 'speed', label: 'Speed', min: 0, max: 100, step: 1, default: 50, modes: ['rabinovich'] },
       { id: 'trail', label: 'Trail', min: 0, max: 100, step: 1, default: 70, modes: ['rabinovich'] },
       { id: 'size', label: 'Size', min: 0, max: 100, step: 1, default: 50, modes: ['rabinovich'] },
@@ -146,7 +147,9 @@ Magi.effectConfig = [
       { id: 'zspin', label: 'Spin', min: 0, max: 100, step: 1, default: 30, modes: ['zero'] },
       { id: 'zglow', label: 'Glow', min: 0, max: 100, step: 1, default: 40, modes: ['zero'] },
       { id: 'zcube', label: 'Cube', type: 'toggle', default: true, modes: ['zero'], hint: 'The wireframe cube and the lines inside the sphere.' },
-      { id: 'zcolor', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue', modes: ['zero'] }
+      { id: 'zcolor', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue', modes: ['zero'] },
+      { id: 'hrays', label: 'Rays', min: 2, max: 24, step: 1, default: 9, modes: ['horizon'] },
+      { id: 'hpanel', label: 'Panel', type: 'toggle', default: true, modes: ['horizon'], hint: 'The instrument panel on the right: orbits and an artificial horizon.' }
     ]
   },
   {
@@ -323,13 +326,14 @@ Magi.effectConfig = [
     photoType: 'image/jpeg',
     modes: [
       { id: 'smoke', name: 'Smoke' },
+      { id: 'psychedelic', name: 'Psychedelic' },
       { id: 'watercolor', name: 'Watercolor' }
     ],
     params: [
-      { id: 'trail', label: 'Trail', min: 0, max: 100, step: 1, default: 50, modes: ['smoke'] },
-      { id: 'flow', label: 'Flow', min: 0, max: 100, step: 1, default: 60, modes: ['smoke'] },
-      { id: 'swirl', label: 'Swirl', min: 0, max: 100, step: 1, default: 45, modes: ['smoke'] },
-      { id: 'rise', label: 'Rise', min: 0, max: 100, step: 1, default: 30, modes: ['smoke'] },
+      { id: 'trail', label: 'Trail', min: 0, max: 100, step: 1, default: 50, modes: ['smoke', 'psychedelic'] },
+      { id: 'flow', label: 'Flow', min: 0, max: 100, step: 1, default: 60, modes: ['smoke', 'psychedelic'] },
+      { id: 'swirl', label: 'Swirl', min: 0, max: 100, step: 1, default: 45, modes: ['smoke', 'psychedelic'] },
+      { id: 'rise', label: 'Rise', min: 0, max: 100, step: 1, default: 30, modes: ['smoke', 'psychedelic'] },
       { id: 'wtrail', label: 'Trail', min: 0, max: 100, step: 1, default: 0, modes: ['watercolor'] },
       { id: 'wflow', label: 'Flow', min: 0, max: 100, step: 1, default: 0, modes: ['watercolor'] },
       { id: 'wswirl', label: 'Swirl', min: 0, max: 100, step: 1, default: 30, modes: ['watercolor'] },
@@ -786,6 +790,7 @@ Magi.effectGuides = {
     'Cohesion: a chord diagram of your hand’s 21 landmarks. Pairs close together are joined, so a fist fills the circle and spread fingers thin it; the level reads at the top with its recent history. Two hands: all 42 landmarks, chords across the hands in white as they come together, and each hand’s level plus the hands’ cohesion.',
     'Pollinate: point with your index finger: a small pad appears there, and only your index finger moves it (by pushing past an edge). Your fingertip’s place on it picks two concepts (across, down). Hold still on a cell for half a second: the cell is marked in red and they pollinate into “A + B = ?” and an idea that decodes on the right. Fist: clears the marks. The two concepts under the crosshair are named beside the pad.',
     'Zero: a sphere of digits (each latitude band counts 0–9) with a wireframe cube inside, bent by real shape operators (twist, bend, and a collapse onto its equator), with the formulas and live values in the top-left corner. Pinch and drag: turns it. Spread thumb and index: twists it (roll left to reverse). Fist: collapses it into a flat ring, a zero; open palm: blooms back. Two hands: closer curls it tighter. Swipe left/right: shuffles the digits; up/down: new lines in the cube. Count, Size, Text, Twist, Curl, Spin, Glow, Cube, Color, Dim.',
+    'Horizon: your hands as green bones and red joints. Close a fist and rays fan out from it, aimed by its angle. Two open hands: a line between your index fingertips. The panel on the right: one green orbit per hand, tilted by its roll and flattened as you close it, and an artificial horizon (an aircraft attitude indicator) that banks with your fist’s roll and pitches with its height. Rays: how many. Panel: show the instrument. Dim.',
   ],
   'line-art': [
     'How it works: points gather on the outlines of your hands and arms (where the picture’s edges are strongest) and one continuous line runs through them, always to the nearest point, redrawn as you move.',
@@ -853,7 +858,8 @@ Magi.effectGuides = {
   wisp: [
     'Move your fingers through the picture: the video itself swirls and drags like smoke where they pass, then settles. A still hand does nothing.',
     'Fist: vacuums the picture back to normal around your hand; two fists vacuum two places.',
-    'Pinch: shifts the colors (in Smoke, the hue of the swirls; in Watercolor, through the palettes). Pinch with both hands: twice as fast.',
+    'Pinch (Psychedelic and Watercolor): shifts the colors, the hue of the swirls or the palette. Pinch with both hands: twice as fast. Smoke stays the picture’s own colors.',
+    'Modes: tap the tile. Smoke: the picture swirls in its own colors. Psychedelic: the same, and the swirls shift hue as you pinch. Watercolor: painting with pigment.',
     'Trail: how long the swirl lasts. Flow: how strongly your motion drags the picture.',
     'Swirl: extra curling where you’ve moved. Rise: how much the disturbance drifts upward, like smoke.',
     'Watercolor (tap the tile): your fingers paint pigment that the same flow carries and bleeds, on paper. Colors mix like glazes and pool darker at their edges.',

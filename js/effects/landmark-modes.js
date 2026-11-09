@@ -1042,4 +1042,114 @@
         if (!hands.length) frame.say('Pinch and drag to turn it. Spread thumb and index to twist; fist makes a zero; two hands curl it.');
     };
   };
+
+  // Horizon (after a reference of a hand-tracking interface): the hands drawn as green bones with
+  // red joints; a closed fist casts a fan of rays aimed by its angle; open hands are joined by a line
+  // between their index fingertips (h1, h2). A panel on the right is the instrument:
+  //   Orbits: dotted rings, a 72-tick dial and a bright core, with one green orbit per hand, an
+  //     ellipse tilted by that hand's roll whose minor axis is its openness (fingers out ÷ 5), so a
+  //     fist flattens its orbit into a line.
+  //   Artificial horizon (an aircraft attitude indicator): a pitch ladder (bars every 5°, longer and
+  //     numbered every 10°) behind a fixed aircraft mark. The fist (or the first hand) is the
+  //     aircraft: its roll banks the ladder (bank = roll) and its height pitches it
+  //     (pitch = (½ − y/H)·60°, up to ±30°); the green line is the horizon, pitch 0.
+  // Rays: Rays (count) from the fist's knuckles, spread over 70° centered on the direction the fist
+  // points (its roll), out to the frame's edge, with a faint wedge between the outer two.
+  Magi.landmarkModes.horizon = function () {
+    var GREEN = '#34e06a', RED = '#ff3b30', C = null, bank = 0, pitch = 0, orbitK = [0, 0];
+    return function (ctx, frame, ix, params) {
+      var W = frame.width, H = frame.height, u = frame.pxPerCss, t = frame.time / 1000, hud = frame.hud;
+      ctx.fillStyle = 'rgba(0,0,0,' + (params.dim / 100).toFixed(3) + ')';
+      ctx.fillRect(0, 0, W, H);
+      if (!C) C = (Magi.tracking.connections && Magi.tracking.connections.hand) || [];
+      var hands = ix.pair ? [ix.pair.left, ix.pair.right] : ix.hands.slice(0, 1), panel = params.hpanel !== false, PW = panel ? Math.round(W * 0.24) : 0;
+      var fist = hands.filter(function (h) { return h.fist; })[0], lead = fist || hands[0];
+      ctx.save();
+      // Rays from a closed fist.
+      if (fist) {
+        var k = [5, 9, 13, 17].reduce(function (a, i) { return { x: a.x + fist.points[i].x / 4, y: a.y + fist.points[i].y / 4 }; }, { x: 0, y: 0 });
+        var dir = fist.rotation * Math.PI / 180 - Math.PI / 2, n = Math.max(2, Math.round(params.hrays || 9)), spread = 70 * Math.PI / 180, far = Math.hypot(W, H);
+        var ends = [];
+        for (var r = 0; r < n; r++) { var a = dir - spread / 2 + spread * r / (n - 1); ends.push([k.x + Math.cos(a) * far, k.y + Math.sin(a) * far]); }
+        ctx.fillStyle = 'rgba(255,255,255,0.1)';
+        ctx.beginPath(); ctx.moveTo(k.x, k.y); ctx.lineTo(ends[0][0], ends[0][1]); ctx.lineTo(ends[n - 1][0], ends[n - 1][1]); ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = Math.max(1, u);
+        ctx.beginPath(); ends.forEach(function (e) { ctx.moveTo(k.x, k.y); ctx.lineTo(e[0], e[1]); }); ctx.stroke();
+        ctx.fillStyle = GREEN; ctx.beginPath(); ctx.arc(k.x, k.y, 3 * u, 0, Math.PI * 2); ctx.fill();
+      }
+      // Two open hands: a line between the index fingertips.
+      if (hands.length >= 2 && !fist) {
+        var i1 = hands[0].points[8], i2 = hands[1].points[8];
+        ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = Math.max(1, u);
+        ctx.beginPath(); ctx.moveTo(i1.x, i1.y); ctx.lineTo(i2.x, i2.y); ctx.stroke();
+        ctx.fillStyle = GREEN; [i1, i2].forEach(function (q) { ctx.beginPath(); ctx.arc(q.x, q.y, 3 * u, 0, Math.PI * 2); ctx.fill(); });
+      }
+      // Skeletons: green bones, red joints.
+      hands.forEach(function (h, hi) {
+        var p = h.points;
+        ctx.strokeStyle = GREEN; ctx.lineWidth = Math.max(1, 1.6 * u);
+        ctx.beginPath(); C.forEach(function (c) { ctx.moveTo(p[c.start].x, p[c.start].y); ctx.lineTo(p[c.end].x, p[c.end].y); }); ctx.stroke();
+        ctx.fillStyle = RED; ctx.beginPath(); p.forEach(function (q) { ctx.moveTo(q.x + 3 * u, q.y); ctx.arc(q.x, q.y, 3 * u, 0, Math.PI * 2); }); ctx.fill();
+        hud.save(); hud.fillStyle = '#fff'; hud.font = '400 ' + Math.round(9 * u) + 'px ' + Magi.fx.MONO;
+        hud.fillText('h' + (hi + 1), p[8].x - 4 * u, p[8].y - 10 * u); hud.restore();
+      });
+      ctx.restore();
+
+      if (!panel) return;
+      // The instrument panel.
+      var px0 = W - PW, cx = px0 + PW / 2, dt = 1 / 60;
+      ctx.save();
+      ctx.fillStyle = '#000'; ctx.fillRect(px0, 0, PW, H);
+      ctx.beginPath(); ctx.rect(px0, 0, PW, H); ctx.clip();
+      var wantBank = lead ? lead.rotation * Math.PI / 180 : Math.sin(t * 0.4) * 0.2, wantPitch = lead ? (0.5 - lead.center.y / H) * 60 : 0;
+      bank += (wantBank - bank) * 0.15; pitch += (wantPitch - pitch) * 0.15;
+      // Orbits.
+      var oy = H * 0.26, R = Math.min(PW * 0.44, H * 0.2);
+      ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = Math.max(1, 0.8 * u);
+      ctx.setLineDash([1.5 * u, 4 * u]);
+      [0.35, 0.55, 0.75, 0.95, 1.15].forEach(function (f) { ctx.beginPath(); ctx.arc(cx, oy, R * f, 0, Math.PI * 2); ctx.stroke(); });
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      for (var tk = 0; tk < 72; tk++) { var ta = tk / 72 * Math.PI * 2 + t * 0.05, l = tk % 6 ? 0.06 : 0.14; ctx.moveTo(cx + Math.cos(ta) * R * 0.95, oy + Math.sin(ta) * R * 0.95); ctx.lineTo(cx + Math.cos(ta) * R * (0.95 + l), oy + Math.sin(ta) * R * (0.95 + l)); }
+      ctx.stroke();
+      ctx.fillStyle = '#fff';
+      for (var cdot = 0; cdot < 24; cdot++) { var ca = cdot * 2.39996 + t * 0.6, cr = R * 0.18 * Math.sqrt((cdot + 0.5) / 24); ctx.fillRect(cx + Math.cos(ca) * cr - u, oy + Math.sin(ca) * cr - u, 2 * u, 2 * u); }
+      ctx.strokeStyle = GREEN; ctx.lineWidth = Math.max(1, 1.2 * u);
+      hands.slice(0, 2).forEach(function (h, hi) {
+        orbitK[hi] += ((h.fist ? 0.04 : h.count / 5) - orbitK[hi]) * 0.15;
+        ctx.beginPath(); ctx.ellipse(cx, oy, R * (0.75 + 0.2 * hi), R * (0.75 + 0.2 * hi) * Math.max(0.04, orbitK[hi]), h.rotation * Math.PI / 180, 0, Math.PI * 2); ctx.stroke();
+        var pa = t * (0.8 + hi * 0.3); ctx.fillStyle = GREEN; ctx.beginPath();
+        var ex = Math.cos(pa) * R * (0.75 + 0.2 * hi), ey = Math.sin(pa) * R * (0.75 + 0.2 * hi) * Math.max(0.04, orbitK[hi]), rr = h.rotation * Math.PI / 180;
+        ctx.arc(cx + ex * Math.cos(rr) - ey * Math.sin(rr), oy + ex * Math.sin(rr) + ey * Math.cos(rr), 2.5 * u, 0, Math.PI * 2); ctx.fill();
+      });
+      // Artificial horizon: pitch ladder banked by the fist's roll.
+      var ay = H * 0.7, pxPerDeg = H * 0.008;
+      ctx.save();
+      ctx.translate(cx, ay); ctx.rotate(-bank);
+      ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = Math.max(1, u);
+      hud.save(); hud.fillStyle = 'rgba(255,255,255,0.8)'; hud.font = '400 ' + Math.round(7 * u) + 'px ' + Magi.fx.MONO; hud.textBaseline = 'middle';
+      for (var deg = -40; deg <= 40; deg += 5) {
+        if (!deg) continue;
+        var yy = (pitch - deg) * pxPerDeg, half = deg % 10 ? PW * 0.12 : PW * 0.24;
+        ctx.beginPath(); ctx.moveTo(-half, yy); ctx.lineTo(-PW * 0.04, yy); ctx.moveTo(PW * 0.04, yy); ctx.lineTo(half, yy); ctx.stroke();
+        if (!(deg % 10)) {
+          var lx = cx + Math.cos(-bank) * (half + 4 * u) - Math.sin(-bank) * yy, ly = ay + Math.sin(-bank) * (half + 4 * u) + Math.cos(-bank) * yy;
+          if (lx > px0 + 4 * u && lx < W - 10 * u && ly > H * 0.46 && ly < H * 0.94) hud.fillText(String(Math.abs(deg)), lx, ly);
+        }
+      }
+      hud.restore();
+      ctx.strokeStyle = GREEN; ctx.lineWidth = Math.max(1, 1.6 * u);
+      ctx.beginPath(); ctx.moveTo(-PW, pitch * pxPerDeg); ctx.lineTo(PW, pitch * pxPerDeg); ctx.stroke();
+      ctx.restore();
+      // Fixed aircraft mark and the vertical axis.
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(1, 1.4 * u);
+      ctx.beginPath(); ctx.moveTo(cx - PW * 0.18, ay); ctx.lineTo(cx - PW * 0.06, ay); ctx.lineTo(cx, ay + PW * 0.04); ctx.lineTo(cx + PW * 0.06, ay); ctx.lineTo(cx + PW * 0.18, ay); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.beginPath(); ctx.moveTo(cx, H * 0.48); ctx.lineTo(cx, H * 0.95); ctx.stroke();
+      ctx.restore();
+      hud.save(); hud.fillStyle = '#fff'; hud.font = '400 ' + Math.round(8 * u) + 'px ' + Magi.fx.MONO;
+      hud.fillText('BANK ' + (bank * 180 / Math.PI).toFixed(0) + '°  PITCH ' + pitch.toFixed(0) + '°', px0 + 8 * u, H * 0.97);
+      hud.restore();
+      if (!hands.length) frame.say('Raise your hands. Close a fist and turn it to aim the rays and bank the horizon.');
+    };
+  };
 })();

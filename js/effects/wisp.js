@@ -304,7 +304,7 @@
         // Fist: a vacuum around each closed hand (radius a quarter of the frame height): there the
         // stirred picture is drawn back to normal quickly (0.12 s half-life, pigment 0.4 s) and the
         // flow is damped. Two fists vacuum two places.
-        // Pinch: shifts the colors, one palette a second per pinching hand (two hands: twice as fast;
+        // Pinch (Psychedelic, Watercolor): shifts the colors, one palette a second per pinching hand (two hands: twice as fast;
         // real elapsed time, since the fluid's own step is capped); in Smoke it turns the hue of the
         // swirls. The slider follows in Watercolor.
         var ixW = Magi.interaction.read(frame), fists = ixW.hands.filter(function (h) { return h.fist; }).slice(0, 2);
@@ -312,7 +312,7 @@
         var pinching = ixW.hands.filter(function (h) { return h.pinched; }).length;
         var realDt = lastColorT === null ? dt : Math.min(0.25, t - lastColorT);
         lastColorT = t;
-        if (pinching) {
+        if (pinching && params.mode !== 'smoke') {
           colorShift += pinching * realDt;
           if (params.mode === 'watercolor') {
             colorAcc += pinching * realDt * 100 / (PALETTES.length - 1);
@@ -363,7 +363,7 @@
         } else {
           run('warp', { vel: vel.read, map: map.read, velTexel: vt, dt: dt, keep: keep, vk: vkeep, vac0: vac.vac0, vac1: vac.vac1, aspect: vac.aspect }, map.write, [1 / map.read.w, 1 / map.read.h]);
           map.swap();
-          run('show', { cam: camTex, map: map.read, hue: colorShift * 2.4 }, null, [1 / W, 1 / H]);
+          run('show', { cam: camTex, map: map.read, hue: params.mode === 'psychedelic' ? colorShift * 2.4 : 0 }, null, [1 / W, 1 / H]);
         }
         ctx.drawImage(canvas, 0, 0);
 

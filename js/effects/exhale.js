@@ -41,8 +41,9 @@
 // δr = 0.12f·sin(4x + 2.1t)·cos(3y − 1.6t) in the sphere's own frame, so it turns with it.
 // Separating with two hands: pinch and hold with both and each sphere is torn to its own pinch
 // (the split happens at once, the shared particles cross in 0.25 s and stream with short lags);
-// two open palms pulled apart separate it magnetically, slowly (1.6 s), particles stretching
-// across like iron filings between two poles. A fist pulls its particles in faster (the inhale's
+// two open palms pull it apart magnetically: each palm draws its own particles, the sphere
+// stretches into two lobes and splits at 2.4 radii (crossing in 0.9 s), like iron filings between
+// two poles. A fist pulls its particles in faster (the inhale's
 // time constant drops from 0.18 s to 0.07 s and the particles' lag halves).
 // Flash: how bright and wide the core flashes when a sphere implodes (and how much the shell
 // brightens as it collapses); 0 turns the flash off.
@@ -111,13 +112,17 @@
         // Merge state: one hand or none, merged; two hands, merge on touch and split when pulled apart.
         if (!two) mergedFlag = true;
         else if (mergedFlag && bothPinched) { mergedFlag = false; splitAt = t; }
-        else if (mergedFlag && Math.hypot(hands[0].center.x - hands[1].center.x, hands[0].center.y - hands[1].center.y) > 3.4 * Rsep) { mergedFlag = false; splitAt = t; }
+        else if (mergedFlag && Math.hypot(hands[0].center.x - hands[1].center.x, hands[0].center.y - hands[1].center.y) > (bothOpen ? 2.4 : 3.4) * Rsep) { mergedFlag = false; splitAt = t; }
+        // Magnetism: with both palms open, each palm pulls its own particles toward it, so the
+        // combined sphere stretches into two lobes before it splits; the pull grows with the gap
+        // between your hands (0 at one radius apart, full, 75%, at 2.4).
+        var stretch = bothOpen ? Math.max(0, Math.min(0.75, (Math.hypot(hands[0].center.x - hands[1].center.x, hands[0].center.y - hands[1].center.y) / Rsep - 1) / 1.4 * 0.75)) : 0;
         groups.forEach(function (G, g) { if (!G.center) { var h0 = ownHand(g); G.center = h0 ? { x: h0.center.x, y: h0.center.y } : { x: home.x, y: home.y }; } });
         if (two && !mergedFlag && !bothPinched && t - splitAt > 1) {
           var rr0 = Rsep * (0.02 + 1.03 * groups[0].breath), rr1 = Rsep * (0.02 + 1.03 * groups[1].breath);
           if (Math.hypot(groups[0].center.x - groups[1].center.x, groups[0].center.y - groups[1].center.y) < 0.9 * (rr0 + rr1)) mergedFlag = true;
         }
-        var tauM = bothPinched ? 0.25 : bothOpen && !mergedFlag ? 1.6 : 0.8;
+        var tauM = bothPinched ? 0.25 : bothOpen && !mergedFlag ? 0.9 : 0.8;
         m += ((mergedFlag ? 1 : 0) - m) * (1 - Math.exp(-dt / tauM));
         // Dissipate: fade away with no hands, gather back when one returns.
         var visT = params.dissipate && !hands.length ? 0 : 1;
@@ -221,7 +226,7 @@
               ox += (mx * rr * Rbase * k2 - ox) * w0; oy += (-my * rr * Rbase * k2 - oy) * w0; zz += (mz - zz) * w0;
             }
             // Each particle follows the center through its own lag (long while flowing to or from a pinch).
-            var tcx = G.center.x + (cm.x - G.center.x) * w0, tcy = G.center.y + (cm.y - G.center.y) * w0;
+            var wc0 = w0 * (1 - stretch), tcx = G.center.x + (cm.x - G.center.x) * wc0, tcy = G.center.y + (cm.y - G.center.y) * wc0;
             if (q.cx === null) { q.cx = tcx; q.cy = tcy; }
             var tau = (flowing ? (0.05 + 0.9 * q.lag) / spd * (0.4 + 1.6 * fl) * (bothPinched ? 0.4 : 1) : (0.04 + 0.08 * q.lag) * lagK * (bothOpen && m > 0 && m < 1 ? 3 : 1)) * (G.fist ? 0.5 : 1), kf = 1 - Math.exp(-dt / tau);
             q.cx += (tcx - q.cx) * kf; q.cy += (tcy - q.cy) * kf;
