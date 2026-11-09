@@ -736,8 +736,8 @@
   // pad cross-pollinates them. Point with your index finger: the pad appears there (only the index
   // finger moves it, by pushing past an edge) and your fingertip's place on it picks two concepts — across for the first, down for the
   // second. Hold still on a cell for 0.5 s and the pair pollinates: "A + B = ?" and an idea for a
-  // work appear on the right, decoding from scrambled symbols into words. Pinch: pins the cell (a red
-  // dot stays on the pad). Fist: clears the pins. Open palm: the galaxy spins faster.
+  // work appear on the right, decoding from scrambled symbols into words, and the cell is marked in
+  // red on the pad. Fist: clears the marks. Open palm: the galaxy spins faster.
   // Galaxy: each concept and 220 unnamed particles orbit the center with differential rotation, the
   // angular speed falling with radius as ω ∝ r^(−1/2), so the inner arms lead and the spiral winds
   // like a galaxy; each leaves a short comet arc, orange or blue. The chosen pair is named in large
@@ -804,10 +804,10 @@
           var gx = cell[0], gy = cell[1];
           pair = { a: POLLEN[gx], b: POLLEN[gy === gx ? (gy + 1) % K : gy], key: cell.join(','), gx: gx, gy: gy };
           text = idea(pair.a, pair.b); textAt = t;
+          if (!pins.some(function (pn) { return pn[0] === gx && pn[1] === gy; })) pins.push([gx, gy]);
         }
       } else cross = null;
       if (hd) {
-        if (hd.pinched && !wasPinched && pair) pins.push([pair.gx, pair.gy]);
         if (hd.fist) pins = [];
         wasPinched = hd.pinched;
         padSeen = t;
@@ -840,7 +840,7 @@
         hud.fillText(o.w, x + 6 * u, y);
       });
       hud.restore();
-      // The pad: a grid of dots, pins in red, the crosshair. It stays on screen and fades out only
+      // The pad: a grid of dots, marked cells in red, the crosshair. It stays on screen and fades out only
       // after 2 s without a hand.
       if (pad && t - padSeen < 2.5) {
         ctx.globalAlpha = Math.max(0, Math.min(1, 2.5 - (t - padSeen)));
@@ -849,16 +849,18 @@
         ctx.strokeRect(pad.x, pad.y, ps, ps);
         ctx.fillStyle = 'rgba(255,255,255,0.35)';
         for (var gy2 = 0; gy2 < 10; gy2++) for (var gx2 = 0; gx2 < 10; gx2++) ctx.fillRect(pad.x + (gx2 + 0.5) * ps / 10 - u * 0.6, pad.y + (gy2 + 0.5) * ps / 10 - u * 0.6, u * 1.2, u * 1.2);
-        ctx.fillStyle = '#ff5a1f';
-        pins.forEach(function (pn) { ctx.fillRect(pad.x + (pn[0] + 0.5) * ps / K - 2.5 * u, pad.y + (pn[1] + 0.5) * ps / K - 2.5 * u, 5 * u, 5 * u); });
+        // The crosshair has an open center so the cell under it (and its red mark) stays visible.
         if (cross) {
-          var tp = cross, hold = cell ? Math.min(1, (t - cellSince) / 0.5) : 0;
+          var tp = cross, g0 = 4 * u, g1 = 11 * u;
           ctx.strokeStyle = '#fff';
-          ctx.beginPath(); ctx.moveTo(tp.x - 10 * u, tp.y); ctx.lineTo(tp.x + 10 * u, tp.y); ctx.moveTo(tp.x, tp.y - 10 * u); ctx.lineTo(tp.x, tp.y + 10 * u); ctx.stroke();
-          ctx.fillStyle = '#fff'; ctx.fillRect(tp.x - 3 * u, tp.y - 3 * u, 6 * u, 6 * u);
-          // The hold, as an arc filling around the crosshair until it pollinates.
-          if (hold < 1) { ctx.beginPath(); ctx.arc(tp.x, tp.y, 13 * u, -Math.PI / 2, -Math.PI / 2 + hold * Math.PI * 2); ctx.stroke(); }
+          ctx.beginPath();
+          ctx.moveTo(tp.x - g1, tp.y); ctx.lineTo(tp.x - g0, tp.y); ctx.moveTo(tp.x + g0, tp.y); ctx.lineTo(tp.x + g1, tp.y);
+          ctx.moveTo(tp.x, tp.y - g1); ctx.lineTo(tp.x, tp.y - g0); ctx.moveTo(tp.x, tp.y + g0); ctx.lineTo(tp.x, tp.y + g1);
+          ctx.stroke();
         }
+        ctx.fillStyle = '#ff2020';
+        var mk = Math.max(5 * u, ps / K);
+        pins.forEach(function (pn) { ctx.fillRect(pad.x + (pn[0] + 0.5) * ps / K - mk / 2, pad.y + (pn[1] + 0.5) * ps / K - mk / 2, mk, mk); });
         ctx.restore();
         ctx.globalAlpha = 1;
       }

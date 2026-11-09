@@ -129,7 +129,8 @@ Magi.effectConfig = [
       { id: 'feed', label: 'Feed', type: 'text', default: '', placeholder: 'Feed URL or Are.na channel', maxLength: 300, modes: ['attention'] },
       { id: 'tempo', label: 'Tempo', min: 60, max: 180, step: 1, default: 110, modes: ['sequencer'] },
       { id: 'sound', label: 'Sound', type: 'toggle', default: false, modes: ['sequencer'], hint: 'Play the rings (kick, snare, hi-hat); recorded into videos.' },
-      { id: 'dim', label: 'Dim', min: 0, max: 100, step: 1, default: 45, modes: ['filaments', 'sequencer', 'rabinovich', 'cohesion', 'pollinate'] },
+      { id: 'fdim', label: 'Dim', min: 0, max: 100, step: 1, default: 0, modes: ['filaments'] },
+      { id: 'dim', label: 'Dim', min: 0, max: 100, step: 1, default: 45, modes: ['sequencer', 'rabinovich', 'cohesion', 'pollinate'] },
       { id: 'speed', label: 'Speed', min: 0, max: 100, step: 1, default: 50, modes: ['rabinovich'] },
       { id: 'trail', label: 'Trail', min: 0, max: 100, step: 1, default: 70, modes: ['rabinovich'] },
       { id: 'size', label: 'Size', min: 0, max: 100, step: 1, default: 50, modes: ['rabinovich'] }
@@ -165,9 +166,7 @@ Magi.effectConfig = [
       range('points', 'Points', 40, 600, 220),
       { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
       range('dim', 'Dim', 0, 100, 0),
-      toggle('connect', 'Connect', true, 'One line through both hands, with strands between matching fingertips. Off: a line per hand.'),
-      range('depth', 'Depth', 0, 100, 40),
-      { id: 'text', label: 'Text', type: 'text', default: '', placeholder: 'Letters between your hands (Connect on)', maxLength: 40 }
+      toggle('connect', 'Connect', true, 'One line through both hands, with strands between matching fingertips. Off: a line per hand.')
     ]
   },
   {
@@ -204,7 +203,7 @@ Magi.effectConfig = [
       range('friction', 'Friction', 0, 100, 30),
       range('trail', 'Trail', 0, 100, 60),
       range('thickness', 'Thickness', 0, 100, 30),
-      range('dim', 'Dim', 0, 100, 80)
+      range('dim', 'Dim', 0, 100, 40)
     ]
   },
   {
@@ -263,8 +262,6 @@ Magi.effectConfig = [
       { id: 'invert', name: 'Invert' },
       { id: 'blur', name: 'Blur' },
       { id: 'print', name: 'Print' },
-      { id: 'prism', name: 'Prism' },
-      { id: 'triangle', name: 'Triangle' },
       { id: 'code', name: 'Code' }
     ],
     // `modes` on a parameter shows it only in those modes.
@@ -274,11 +271,11 @@ Magi.effectConfig = [
       { id: 'frost', label: 'Frosted', type: 'toggle', default: false, modes: ['blur'], hint: 'Frosted glass: scattered, hazy and grainy.' },
       { id: 'mosaic', label: 'Mosaic', min: 0, max: 100, step: 1, default: 0, modes: ['blur'] },
       { id: 'speed', label: 'Speed', min: 0, max: 100, step: 1, default: 30, modes: ['acid', 'thermal'] },
-      { id: 'line', label: 'Line', type: 'toggle', default: false, modes: ['acid', 'thermal', 'invert', 'blur', 'print', 'prism', 'triangle'], hint: 'A crisp outline around the window, or around each sheet, face and fold.' },
+      { id: 'line', label: 'Line', type: 'toggle', default: false, modes: ['acid', 'thermal', 'invert', 'blur', 'print'], hint: 'A crisp outline around the window, or around each sheet.' },
       { id: 'border', label: 'Border', type: 'toggle', default: true, modes: ['print'], hint: 'A white paper margin around the print. Off: full bleed.' },
-      { id: 'sheets', label: 'Sheets', min: 1, max: 4, step: 1, default: 1, modes: ['print', 'prism', 'triangle'] },
-      { id: 'dots', label: 'Dots', min: 1, max: 9, step: 1, default: 4, modes: ['print', 'prism', 'triangle'] },
-      { id: 'grain', label: 'Grain', min: 0, max: 100, step: 1, default: 60, modes: ['print', 'prism', 'triangle'] },
+      { id: 'sheets', label: 'Sheets', min: 1, max: 4, step: 1, default: 1, modes: ['print'] },
+      { id: 'dots', label: 'Dots', min: 1, max: 9, step: 1, default: 4, modes: ['print'] },
+      { id: 'grain', label: 'Grain', min: 0, max: 100, step: 1, default: 60, modes: ['print'] },
       { id: 'shift', label: 'Shift', min: 0, max: 100, step: 1, default: 35, modes: ['print'] },
       { id: 'cells', label: 'Cells', min: 1, max: 9, step: 1, default: 3, modes: ['code'] },
       { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue', modes: ['code'] },
@@ -319,8 +316,7 @@ Magi.effectConfig = [
     photoType: 'image/jpeg',
     params: [
       range('rings', 'Rings', 0, 5, 3),
-      range('sag', 'Sag', 0, 100, 25),
-      range('throw', 'Throw', 0, 100, 50),
+      range('sag', 'Sag', 0, 100, 35),
       range('particles', 'Particles', 0, 100, 50),
       range('glow', 'Glow', 0, 100, 60),
       { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' }
@@ -371,7 +367,7 @@ Magi.effectConfig = [
     ready: true,
     photoType: 'image/jpeg',
     params: [
-      range('size', 'Size', 0, 100, 30),
+      range('size', 'Size', 0, 100, 10),
       range('particles', 'Particles', 500, 3000, 1000),
       range('gravity', 'Gravity', 0, 100, 100),
       range('viscosity', 'Viscosity', 0, 100, 50),
@@ -395,8 +391,8 @@ Magi.effectConfig = [
       range('size', 'Size', 10, 100, 50),
       { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 55, track: 'hue' },
       range('spread', 'Spread', 0, 100, 45),
-      range('opacity', 'Opacity', 10, 100, 95),
-      toggle('outline', 'Outline', true, 'Black edges on each panel.'),
+      range('opacity', 'Opacity', 10, 100, 50),
+      toggle('outline', 'Outline', false, 'Black edges on each panel.'),
       toggle('line', 'Line', false, 'Show the line and distance between your palms.')
     ]
   },
@@ -449,8 +445,8 @@ Magi.effectConfig = [
     ready: true,
     photoType: 'image/jpeg',
     modes: [
-      { id: 'silk', name: 'Silk' },
-      { id: 'neon', name: 'Neon' }
+      { id: 'neon', name: 'Neon' },
+      { id: 'silk', name: 'Silk' }
     ],
     params: [
       range('count', 'Count', 0, 100, 50),
@@ -666,14 +662,13 @@ Magi.effectGuides = {
     'Sequencer: three rings of Euclidean rhythms (events spread as evenly as possible over the steps). Grip and turn like a knob to change a ring’s number of events: thumb and index out for red, add the middle finger for yellow, all five for blue. Close your hand to randomize where the events sit. Tempo: speed. Sound: kick, snare and hi-hat, recorded into videos. Dim: darkens the camera.',
     'Rabinovich: thousands of points ride the Rabinovich–Fabrikant equations. Open thumb and index to raise α (0.1 → 1.3) and reshape the attractor; turn and raise your hand to turn the view. Two hands: two attractors, one per hand. Speed, Trail, Size, Dim.',
     'Cohesion: a chord diagram of your hand’s 21 landmarks. Pairs close together are joined, so a fist fills the circle and spread fingers thin it; the level reads at the top with its recent history. Two hands: all 42 landmarks, chords across the hands in white as they come together, and each hand’s level plus the hands’ cohesion.',
-    'Pollinate: concepts orbit in a spiral galaxy. Point with your index finger: a small pad appears there, and only your index finger moves it (by pushing past an edge). Your fingertip’s place on it picks two concepts (across, down). Hold still on a cell for half a second (the arc fills): they pollinate into “A + B = ?” and an idea that decodes on the right. Pinch: pins the cell. Fist: clears pins. Open palm: spins the galaxy faster.'
+    'Pollinate: concepts orbit in a spiral galaxy. Point with your index finger: a small pad appears there, and only your index finger moves it (by pushing past an edge). Your fingertip’s place on it picks two concepts (across, down). Hold still on a cell for half a second: the cell is marked in red and they pollinate into “A + B = ?” and an idea that decodes on the right. Fist: clears the marks. Open palm: spins the galaxy faster.'
   ],
   'line-art': [
     'How it works: points gather on the outlines of your hands and arms (where the picture’s edges are strongest) and one continuous line runs through them, always to the nearest point, redrawn as you move.',
     'Pinch: freezes the drawing until you let go.',
     'Close your palm: the drawing shrinks; open it: the drawing expands. Size: how large the drawing is around each hand. Connect: one line through both hands with strands between matching fingertips (off: each hand its own line).',
-    'Thickness: line width. Texture: a dry brush, broken and layered. Spikiness: 0 rounded curves, 50 straight lines, 100 sharp spikes. Rate: how often it redraws. Points: how many. Color: far left lime. Dim: darkens the camera.',
-    'Text (Connect on): type letters or a phrase and, with both hands up, it forms between them as one continuous line in 3D. Roll your hands to turn it; Depth sets how thick it is.'
+    'Thickness: line width. Texture: a dry brush, broken and layered. Spikiness: 0 rounded curves, 50 straight lines, 100 sharp spikes. Rate: how often it redraws. Points: how many. Color: far left lime. Dim: darkens the camera.'
   ],
   particles: [
     'How it works: every particle sits on a damped spring to its resting place; your fingertips push particles away as they pass, and the field springs back behind them. Moving particles light up and streak.',
@@ -719,8 +714,6 @@ Magi.effectGuides = {
     'Print: hold a sheet by its corners, index fingers on top, thumbs below. Twist to fold it; a side that turns over shows its back.',
     'Sheets: 1 is the folding print. 2–4 give each finger its own sheet (index, middle, ring, pinky), in overprinting riso inks.',
     'Dots, Grain, Shift: halftone size, riso grain, ink misregistration. Border: the white paper margin (off: full bleed).',
-    'Prism: hold the paper by its corners, fingertips on top, thumbs below; it folds into four facets (blue stipple, green/yellow, pink stipple, red dots). Open thumb and index to deepen the fold. Sheets: 1–4 papers, one per finger (index, middle, ring, pinky).',
-    'Triangle: a three-sided paper prism between your hands; roll your hands to turn it. Sheets: 1–4 prisms, one per finger, fanned. Dots, Grain: halftone size and riso grain on the faces.',
     'Code: pinch with both hands to span a box, read out as 1-bit code. Cells: block size. Color: ink.',
     'Lock: on, corners stay where you let go; a fist frees that hand’s corner until your next pinch. Off: the box follows your pinches.',
     'Outside: codes everything outside the box instead. Solid: fills the area with one flat color.',
@@ -732,7 +725,7 @@ Magi.effectGuides = {
     'Trail: how long the swirl lasts. Flow: how strongly your motion drags the picture.',
     'Swirl: extra curling where you’ve moved. Rise: how much the disturbance drifts upward, like smoke.',
     'Watercolor (tap the tile): your fingers paint pigment that the same flow carries and bleeds, on paper. Colors mix like glazes and pool darker at their edges.',
-    'Colors: 0 takes colors from the camera; above it the slider runs through 23 palettes, blending between neighbors (Rothko, Indigo, Spring, Sunset, Earth, Water Lilies, Great Wave, Gold Leaf, Cutouts, Stain, Neon, Ocean, Forest, Desert, Sumi, Fauve, Klein, Candy, Ember, Aurora, Pop, Lagoon, Blossom; the name shows on screen). Pinch: the colors move on through the palettes; with both hands pinching, twice as fast. Edges: how much pigment pools at the edges. Dark: black paper instead of white. Trail: how long the painting lasts. Flow, Swirl: how much your motion and the curls move the paint.'
+    'Colors: 0 takes colors from the camera; above it the slider runs through 23 palettes, blending between neighbors (Rothko, Indigo, Spring, Sunset, Earth, Water Lilies, Great Wave, Gold Leaf, Cutouts, Stain, Neon, Ocean, Forest, Desert, Sumi, Fauve, Klein, Candy, Ember, Aurora, Pop, Lagoon, Blossom; the name shows on screen). Pinch: washes the painting out and calms the stir while you hold it. Edges: how much pigment pools at the edges. Dark: black paper instead of white. Trail: how long the painting lasts. Flow, Swirl: how much your motion and the curls move the paint.'
   ],
   bubbles: [
     'Wave your fingers: faster fingers blow more bubbles.',
@@ -805,11 +798,12 @@ Magi.effectGuides = {
     'Scale, Response, Speed, Shade: as in Interactive. Saturation: image color. Color: hue rotation.'
   ],
   web: [
-    'Raise a hand: threads run from your palm to each fingertip and between neighboring fingertips, with rings like an orb web, pulled taut.',
+    'Raise a hand: threads run from your palm to each fingertip and between neighboring fingertips, with rings like an orb web.',
     'Two hands: threads join matching fingertips across your hands, with rings between them.',
-    'Throw: swing an open palm fast and a web line shoots out of it, sticks where it hits the edge of the frame with a small splat, and holds taut between your hand and that point. Pull too far and it snaps back to your palm. Up to five at once.',
     'Pinch: draws a taut thumb–index thread; let go and the web gets plucked.',
-    'Rings: how many rings. Sag: how much threads droop (low: taut). Throw: how easily a swing throws a line. Particles: specks flowing along the threads. Glow, Color: light and color.'
+    'Flick: the web lets go of your fingers and floats away, and a new one forms.',
+    'Threads sag and swing as you move: real rope physics, pinned to your fingers.',
+    'Rings: how many rings. Sag: how much threads droop. Particles: how many specks flow along the threads. Glow, Color: light and color.'
   ],
   cards: [
     'How it works: a collection of images built into 3D structures. Without a feed, the cards are snapshots of the camera.',
@@ -820,7 +814,7 @@ Magi.effectGuides = {
   ],
   tendrils: [
     'How it works: moving fingertips release particles that follow a curl-noise flow (swirls with no sources or sinks); each draws a thread that tapers to a fine tail.',
-    'Modes: tap the tile. Silk: fine pale threads. Neon: colored tubes with a white-hot core and bloom.',
+    'Modes: tap the tile. Neon: colored tubes with a white-hot core and bloom. Silk: fine pale threads.',
     'Pinch: pulls the tendrils toward the pinch. Make a fist, then open it: a ring bursts from your palm.',
     'Count: how many come off a moving finger. Curl: flow strength. Length: how long threads are. Glow, Color: light and color.'
   ],

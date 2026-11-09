@@ -211,7 +211,7 @@
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     }
 
-    var colorPos = null, lastColorT = null, shownPalette = null, paletteAt = -9, W = 0, H = 0, sw, sh, vel, act, map, pig, prs, div, curl, camTex, maskTex, mask, lastHands = null, prev = {}, lastT = null;
+    var shownPalette = null, paletteAt = -9, W = 0, H = 0, sw, sh, vel, act, map, pig, prs, div, curl, camTex, maskTex, mask, lastHands = null, prev = {}, lastT = null;
     function alloc(w, h) {
       W = w; H = h;
       sw = Math.max(32, Math.round(w / 4)); sh = Math.max(32, Math.round(h / 4));
@@ -290,8 +290,8 @@
 
         // Pinch: the stirred picture is drawn back to normal quickly (0.12 s half-life) and the flow
         // is damped, as if sucked back up.
-        // Pinch (Smoke): the picture is sucked back. In Watercolor a pinch changes the colors instead.
-        var sucking = params.mode !== 'watercolor' && Magi.interaction.read(frame).hands.some(function (h) { return h.pinched; });
+        // In Watercolor the pinch also washes the painting out (below).
+        var sucking = Magi.interaction.read(frame).hands.some(function (h) { return h.pinched; });
         var vt = [1 / sw, 1 / sh], keep = Math.pow(2, -dt / (sucking ? 0.12 : 0.15 * Math.pow(2, params.trail / 20)));
         run('emit', { act: act.read, mask: maskTex }, act.write, vt); act.swap();
         run('force', { vel: vel.read, mask: maskTex, act: act.read, size: [sw, sh], flow: params.flow / 100, dt: dt,
@@ -315,19 +315,8 @@
           // (pigment half-life 2·2^(Trail/12) s). Watercolor has its own Trail, Flow and Swirl.
           // Colors, 0–100, runs continuously through the palettes: 0 is the camera's own colors, and
           // every other value blends the two palettes it falls between, so each step changes the
-          // colors. Pinching moves it on, one palette a second per pinching hand (two hands: twice
-          // as fast); the slider follows.
-          var pinching = Magi.interaction.read(frame).hands.filter(function (h) { return h.pinched; }).length;
-          if (colorPos === null || Math.abs(Math.round(colorPos) - params.colors) >= 1) colorPos = params.colors;
-          if (!pinching) lastColorT = null;
-          if (pinching) {
-            // Real elapsed time (the fluid's own step is capped at 1/30 s for stability).
-            var real = lastColorT === null ? dt : Math.min(0.25, t - lastColorT);
-            colorPos += pinching * real * 100 / (PALETTES.length - 1);
-            if (colorPos > 100) colorPos -= 99;
-            lastColorT = t;
-            if (Math.round(colorPos) !== params.colors) frame.setParam('colors', Math.round(colorPos));
-          }
+          // colors. A pinch washes the painting out (0.4 s half-life) while the stir is sucked back.
+          var colorPos = params.colors;
           var pos = colorPos / 100 * (PALETTES.length - 1), lo = Math.floor(pos), fr = pos - lo, A0 = PALETTES[lo], A1 = PALETTES[Math.min(PALETTES.length - 1, lo + 1)];
           var pt = [1 / pig.read.w, 1 / pig.read.h], entry = fr < 0.5 ? A0 : A1, pal = pos > 0 ? true : null;
           // The palette's name shows for 2 s after it changes.
@@ -336,7 +325,7 @@
           var cs = pal ? ca.map(function (c, k) { return [c[0] + (cb[k][0] - c[0]) * fr, c[1] + (cb[k][1] - c[1]) * fr, c[2] + (cb[k][2] - c[2]) * fr]; }) : [[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]];
           run('deposit', { pig: pig.read, mask: maskTex, cam: camTex, c0: cs[0], c1: cs[1], c2: cs[2], c3: cs[3], amount: dt * 2.5, t: t, useCam: pal ? 0 : 1 }, pig.write, pt);
           pig.swap();
-          var pkeep = Math.pow(2, -dt / (2 * Math.pow(2, params.trail / 12)));
+          var pkeep = Math.pow(2, -dt / (sucking ? 0.4 : 2 * Math.pow(2, params.trail / 12)));
           run('advect', { vel: vel.read, src: pig.read, velTexel: vt, dt: dt, keep: pkeep }, pig.write, pt);
           pig.swap();
           run('bleed', { pig: pig.read, k: 0.12 }, pig.write, pt);

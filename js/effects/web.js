@@ -10,15 +10,14 @@
 // between two hands) at fixed fractions along them (Rings), attached to the ropes' own points so
 // they sway together. A pinched hand draws its thumb–index thread taut and bright; letting go of a
 // pinch plucks the web (every thread point gets a small random kick).
-// Threads hang with little slack (rest length 0.98–1.04 × the span by Sag), so the web is taut.
-// Throw: swing an open palm fast and a web line shoots out of it, Spider-Man style, sticks where it
-// meets the edge of the frame with a small splat web, and holds taut between your hand and that
-// point (see newShot). Up to five lines; a sixth snaps the oldest back.
+// Flick: the web lets go of your fingers. Its pins are released, it is thrown along the flick and
+// floats up (buoyancy, with air drag), keeping its shape through the same constraints, and fades
+// over 4 s while a new web forms on your hands.
 // Particles flow along every thread in one direction (outward from the palm, along the fingers,
 // left hand to right) at a steady speed measured along the curve, so they don't speed up on long
 // threads, spaced by the thread's length, fading in and out at the ends.
 (function () {
-  var TIPS = [4, 8, 12, 16, 20], PALM = [0, 5, 9, 13, 17], SEG = 10, ITER = 6, MAX_SHOTS = 5;
+  var TIPS = [4, 8, 12, 16, 20], PALM = [0, 5, 9, 13, 17], SEG = 10, ITER = 6, FLY_LIFE = 4, MAX_FLYING = 4;
 
   function center(p) {
     var x = 0, y = 0;
@@ -28,11 +27,10 @@
 
   // Integrate and constrain a set of ropes. pos(anchor) gives a pinned end's position, or null
   // for a free end. g: gravity in px/s² (negative floats up); damp: velocity kept per step.
-  function simulate(set, pos, g, damp, dt, tautOf, slack) {
-    slack = slack || 1.04;
+  function simulate(set, pos, g, damp, dt, tautOf) {
     set.forEach(function (R) {
       var n = R.pts.length - 1, a0 = pos(R.a), b0 = pos(R.b), taut = tautOf && tautOf(R);
-      if (a0 && b0 && !R.fixedRest) R.rest = Math.hypot(b0.x - a0.x, b0.y - a0.y) / n * (taut ? 1 : slack);
+      if (a0 && b0) R.rest = Math.hypot(b0.x - a0.x, b0.y - a0.y) / n * (taut ? 1 : 1.04);
       for (var i = 0; i <= n; i++) {
         if ((i === 0 && a0) || (i === n && b0)) continue;
         var q = R.pts[i], vx = (q.x - q.px) * damp, vy = (q.y - q.py) * damp;
@@ -66,59 +64,7 @@
   }
 
   function createWeb() {
-    var ropes = [], topology = '', lastT = null, wasPinched = {}, flows = [], shots = [], lastThrow = {}, bornAt = 0;
-
-    // A web line: a 16-point rope from the palm to a projectile. The projectile flies with a little
-    // gravity (0.6 frame heights/s²); the rope is pinned at both ends and kept at its length. At the
-    // frame's edge it sticks: the rope's rest length is set to 92% of the span, so it pulls taut and
-    // twangs as your hand moves. Pulled past 1.7× that span it snaps: the far end lets go and the
-    // line whips back to your palm (its rest length shrinking to nothing in 0.25 s). If your hand
-    // leaves for over a second, the near end lets go and the line hangs from where it stuck,
-    // swinging, then fades after 3 s.
-    var SEG_SHOT = 16;
-    function newShot(hand, c, vx, vy, t) {
-      var pts = [];
-      for (var i = 0; i <= SEG_SHOT; i++) pts.push({ x: c.x, y: c.y, px: c.x, py: c.y });
-      return { hand: hand, state: 'flying', p: { x: c.x, y: c.y, vx: vx, vy: vy }, born: t, anchor: null, span: 0, lost: 0, alpha: 1, splat: 0, inward: 0,
-        rope: { a: { end: 'hand' }, b: { end: 'tip' }, pts: pts, rest: 1, fixedRest: true, kind: 'shot' } };
-    }
-    function stepShot(S, palm, dt, t, W, H) {
-      var R = S.rope, n = SEG_SHOT;
-      if (palm) S.lastPalm = palm; else S.lost += dt;
-      var hp = palm || S.lastPalm;
-      if (S.state === 'flying') {
-        S.p.vy += H * 0.6 * dt; S.p.x += S.p.vx * dt; S.p.y += S.p.vy * dt;
-        var out = S.p.x < 0 || S.p.x > W || S.p.y < 0 || S.p.y > H;
-        if (out || t - S.born > 1.2) {
-          S.anchor = { x: Math.max(0, Math.min(W, S.p.x)), y: Math.max(0, Math.min(H, S.p.y)) };
-          S.inward = Math.atan2(hp.y - S.anchor.y, hp.x - S.anchor.x);
-          S.span = Math.hypot(S.anchor.x - hp.x, S.anchor.y - hp.y); S.state = 'stuck'; S.stuckAt = t;
-        }
-        R.rest = Math.hypot(S.p.x - hp.x, S.p.y - hp.y) / n;
-      }
-      if (S.state === 'stuck') {
-        S.splat = Math.min(1, (t - S.stuckAt) / 0.12);
-        R.rest = S.span * 0.92 / n;
-        if (Math.hypot(S.anchor.x - hp.x, S.anchor.y - hp.y) > S.span * 1.7) { S.state = 'snap'; S.snapAt = t; }
-        else if (S.lost > 1) { S.state = 'hang'; S.hangAt = t; }
-      }
-      if (S.state === 'snap') {
-        if (!S.snapAt) S.snapAt = t;
-        var k = Math.max(0, 1 - (t - S.snapAt) / 0.25);
-        R.rest = Math.max(0.5, R.rest * k);
-        S.alpha = k; S.splat = k;
-        if (k <= 0) return false;
-      }
-      if (S.state === 'hang') { S.alpha = Math.max(0, 1 - (t - S.hangAt) / 3); if (S.alpha <= 0) return false; }
-      var pos = function (an) {
-        if (an.end === 'hand') return S.state === 'hang' ? null : hp;
-        if (S.state === 'flying') return S.p;
-        if (S.state === 'snap') return null;
-        return S.anchor;
-      };
-      simulate([R], pos, H * 1.2, 0.97, dt);
-      return true;
-    }
+    var ropes = [], topology = '', lastT = null, wasPinched = {}, flows = [], flying = [], seen = 0, bornAt = 0;
 
     function rope(a, b, at, bt, n, kind) {
       var pts = [];
@@ -193,16 +139,17 @@
         var tracker = Magi.tracking.hands, ix = Magi.interaction.read(frame);
         var hands = ix.hands.map(function (h) { return h.points; }), cs = hands.map(center);
 
-        // Throw: an open palm (four or five fingers out) moving faster than Throw's threshold
-        // shoots a web line from the palm along its motion, at least 2.5 frame heights a second.
-        ix.hands.forEach(function (hd, hi) {
-          var thr = H * (2.0 - params.throw / 100 * 1.6);
-          if (hd.count >= 4 && !hd.pinched && hd.speed > thr && t - (lastThrow[hd.id] || -9) > 0.45) {
-            lastThrow[hd.id] = t;
-            var c0 = cs[hi], vl = hd.speed || 1, sp = Math.max(H * 2.5, hd.speed * 1.6);
-            shots.push(newShot(hd.id, c0, hd.velocity.x / vl * sp, hd.velocity.y / vl * sp, t));
-            if (shots.length > MAX_SHOTS) shots[0].state = 'snap';
-          }
+        // Flick: the whole web lets go and floats away; a new one forms.
+        ix.events.forEach(function (e) {
+          if (e.n <= seen) return;
+          seen = e.n;
+          if (e.type !== 'flick' || !ropes.length) return;
+          var d = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[e.dir] || [0, -1];
+          var vx = d[0] * H * 0.25, vy = d[1] * H * 0.25 - H * 0.05;
+          ropes.forEach(function (R) { R.pts.forEach(function (q) { q.px = q.x - vx * dt; q.py = q.y - vy * dt; }); });
+          flying.push({ ropes: ropes, born: t });
+          if (flying.length > MAX_FLYING) flying.shift();
+          ropes = []; topology = '';
         });
 
         var key = ix.hands.map(function (h) { return h.id; }).join('|') + ':' + params.rings;
@@ -223,12 +170,15 @@
           wasPinched[h.id] = h.pinched;
         });
         if (hands.length && ropes.length) {
-          simulate(ropes, anchorOn(ropes, hands, cs), (params.sag / 100) * H * 2.2, 0.985, dt, function (R) { return R.kind === 'pinch' && pinched[R.a.hand]; }, 1 + params.sag / 100 * 0.06 - 0.02);
+          simulate(ropes, anchorOn(ropes, hands, cs), (params.sag / 100) * H * 2.2, 0.985, dt, function (R) { return R.kind === 'pinch' && pinched[R.a.hand]; });
         }
-        // Web lines (see the header): flying, stuck under tension, snapping back, or hanging.
-        var byId = {};
-        ix.hands.forEach(function (hd, hi) { byId[hd.id] = cs[hi]; });
-        shots = shots.filter(function (S) { return stepShot(S, byId[S.hand], dt, t, W, H); });
+        // Released webs: free ends, thrown gently along the flick, then buoyant (a slow rise against
+        // air drag), fading out.
+        flying = flying.filter(function (F) {
+          if (t - F.born > FLY_LIFE) return false;
+          simulate(F.ropes, anchorOn(F.ropes, null), -H * 0.06, 0.98, dt);
+          return true;
+        });
 
         var ink = Magi.fx.inkColor(params.color), rgb = ink.map(function (v) { return Math.round(v * 255); }).join(',');
         var glow = params.glow / 100, form = Math.min(1, (t - bornAt) / 0.4);
@@ -248,24 +198,7 @@
           ctx.lineWidth = Math.max(1, 0.8 * u);
           ctx.stroke();
         }
-        // Web lines: the rope, a taut bright core, and a splat web where each one stuck.
-        shots.forEach(function (S) {
-          strokeSet([S.rope], S.alpha);
-          if (S.anchor && S.state !== 'gone') {
-            var A = S.anchor, r = H * 0.045 * S.splat;
-            ctx.beginPath();
-            for (var k = 0; k < 7; k++) { var a = S.inward + (k - 3) * 0.45; ctx.moveTo(A.x, A.y); ctx.lineTo(A.x + Math.cos(a) * r, A.y + Math.sin(a) * r); }
-            [0.45, 0.8].forEach(function (f) {
-              for (var k2 = 0; k2 < 6; k2++) {
-                var a1 = S.inward + (k2 - 3) * 0.45, a2 = a1 + 0.45;
-                k2 ? ctx.lineTo(A.x + Math.cos(a2) * r * f, A.y + Math.sin(a2) * r * f) : (ctx.moveTo(A.x + Math.cos(a1) * r * f, A.y + Math.sin(a1) * r * f), ctx.lineTo(A.x + Math.cos(a2) * r * f, A.y + Math.sin(a2) * r * f));
-              }
-            });
-            ctx.strokeStyle = 'rgba(' + rgb + ',' + (0.85 * S.alpha).toFixed(3) + ')';
-            ctx.lineWidth = Math.max(1, 0.9 * u);
-            ctx.stroke();
-          }
-        });
+        flying.forEach(function (F) { var a = 1 - (t - F.born) / FLY_LIFE; strokeSet(F.ropes, a * a); });
         strokeSet(ropes, form, function (R) { return R.kind !== 'pinch' || pinched[R.a.hand]; });
         // Pinch threads, taut and bright.
         ctx.beginPath();
@@ -308,9 +241,9 @@
         ctx.restore();
 
         if (tracker.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, tracker, 'hand');
-        else if (!hands.length && !shots.length) Magi.tracking.hint(ctx, frame, 'Raise your hands and spread your fingers. Swing an open palm fast to throw a web.');
+        else if (!hands.length && !flying.length) Magi.tracking.hint(ctx, frame, 'Raise your hands and spread your fingers. Flick to let the web go.');
       },
-      reset: function () { ropes = []; topology = ''; lastT = null; wasPinched = {}; shots = []; flows = []; lastThrow = {}; }
+      reset: function () { ropes = []; topology = ''; lastT = null; wasPinched = {}; flying = []; flows = []; }
     };
   }
 

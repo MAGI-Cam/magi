@@ -40,8 +40,6 @@
 //             adds frosted glass's random micro-facet offsets, haze and grain.
 //             Mosaic samples each pixel's blur around the center of its cell (up to 8% of the
 //             frame height), so the window becomes glass blocks, each blurred as one.
-//   Prism, Triangle — folded paper held between your hands, each face a different print of the
-//             camera. See their functions.
 (function () {
   var THUMB_TIP = 4, INDEX_TIP = 8;
   var THERMAL = [[0, 0, 4], [40, 11, 84], [101, 21, 110], [159, 42, 99], [212, 72, 66], [245, 125, 21], [250, 193, 39], [252, 255, 164]];
@@ -433,158 +431,8 @@
     '}'
   ].join('\n');
 
-  // Print faces for Prism and Triangle: the camera behind the shape, printed four ways on the same
-  // paper (contrast stretched to the crop's own range, as in Print). Stipple faces are riso
-  // stochastic screens: ink where the tone's coverage beats the paper grain at that pixel.
-  //   0 Blue stipple: RISO Blue where the darkness 1 − L beats the grain.
-  //   1 Green/yellow: RISO Green (#00A95C) on the shadows and Yellow on the midtones, multiplied.
-  //   2 Pink stipple: Fluorescent Pink on shadows and midtones.
-  //   3 Red dots: Bright Red amplitude-modulated halftone, dot radius r = c·√(darkness/π) (Dots).
-  // Faces are drawn by clipping to each face's polygon and drawing the print registered to the
-  // camera behind it, so the picture runs on across the folds; each face is then shaded by how
-  // far it turns away (a Lambert-like 1 − cos term), which is what makes the paper read as folded.
-  var GREEN = [0, 169, 92], PINK = [255, 72, 176];
-  function createFaces() {
-    var src = document.createElement('canvas'), sctx = src.getContext('2d', { willReadFrequently: true });
-    var outs = [0, 1, 2, 3].map(function () { var c = document.createElement('canvas'); return { c: c, g: c.getContext('2d'), img: null }; });
-    var lum = null;
-    function mul(o, k, ink) { o[k] *= ink[0] / 255; o[k + 1] *= ink[1] / 255; o[k + 2] *= ink[2] / 255; }
-    return function (frame, x0, y0, bw, bh, params) {
-      var W = frame.width, H = frame.height, tw = TEX, th = Math.max(24, Math.min(TEX * 2, Math.round(TEX * bh / Math.max(1, bw))));
-      if (src.width !== tw || src.height !== th) { src.width = tw; src.height = th; }
-      sctx.setTransform(tw / bw, 0, 0, th / bh, -x0 * tw / bw, -y0 * th / bh);
-      frame.draw(sctx, W, H);
-      sctx.setTransform(1, 0, 0, 1, 0, 0);
-      var px = sctx.getImageData(0, 0, tw, th).data, n = tw * th, i, x, y, lo = 1, hi = 0;
-      if (!lum || lum.length !== n) lum = new Float32Array(n);
-      for (i = 0; i < n; i++) { var L = (0.2126 * px[i * 4] + 0.7152 * px[i * 4 + 1] + 0.0722 * px[i * 4 + 2]) / 255; lum[i] = L; if (L < lo) lo = L; if (L > hi) hi = L; }
-      var span = Math.max(0.15, hi - lo);
-      outs.forEach(function (o) {
-        if (o.c.width !== tw || o.c.height !== th) { o.c.width = tw; o.c.height = th; o.img = null; }
-        if (!o.img) o.img = o.g.createImageData(tw, th);
-      });
-      var d0 = outs[0].img.data, d1 = outs[1].img.data, d2 = outs[2].img.data, d3 = outs[3].img.data;
-      var g = 0.25 + 0.75 * params.grain / 100, cell = 3 + params.dots * 1.5;
-      for (y = 0; y < th; y++) {
-        for (x = 0; x < tw; x++) {
-          i = y * tw + x;
-          var k = i * 4, L0 = (lum[i] - lo) / span, dark = 1 - L0;
-          var t1 = 0.5 + (grainAt(x, y) - 0.5) * g, t2 = 0.5 + (grainAt(x + 911, y + 457) - 0.5) * g, t3 = 0.5 + (grainAt(x + 313, y + 1021) - 0.5) * g;
-          [d0, d1, d2, d3].forEach(function (d) { d[k] = PAPER[0]; d[k + 1] = PAPER[1]; d[k + 2] = PAPER[2]; d[k + 3] = 255; });
-          if (dark > t1) mul(d0, k, BLUE);
-          if (smoothstep(0.6, 0.15, L0) > t2) mul(d1, k, GREEN);
-          if (1 - Math.abs(L0 - 0.5) / 0.35 > t1) mul(d1, k, YELLOW);
-          if (smoothstep(0.8, 0.25, L0) > t3) mul(d2, k, PINK);
-          var ccx = (Math.floor(x / cell) + 0.5) * cell, ccy = (Math.floor(y / cell) + 0.5) * cell;
-          var dk = 1 - (lum[Math.min(th - 1, ccy | 0) * tw + Math.min(tw - 1, ccx | 0)] - lo) / span;
-          var cover = cell * Math.sqrt(Math.max(0, dk) / Math.PI) - Math.hypot(x + 0.5 - ccx, y + 0.5 - ccy) + 0.5;
-          if (cover > 0) { cover = Math.min(1, cover); d3[k] += (d3[k] * RED[0] / 255 - d3[k]) * cover; d3[k + 1] += (d3[k + 1] * RED[1] / 255 - d3[k + 1]) * cover; d3[k + 2] += (d3[k + 2] * RED[2] / 255 - d3[k + 2]) * cover; }
-        }
-      }
-      outs.forEach(function (o) { o.g.putImageData(o.img, 0, 0); });
-      return outs.map(function (o) { return o.c; });
-    };
-  }
-
-  function bbox(pts, W, H) {
-    var x0 = Math.max(0, Math.floor(Math.min.apply(null, pts.map(function (p) { return p.x; }))));
-    var y0 = Math.max(0, Math.floor(Math.min.apply(null, pts.map(function (p) { return p.y; }))));
-    var x1 = Math.min(W, Math.ceil(Math.max.apply(null, pts.map(function (p) { return p.x; }))));
-    var y1 = Math.min(H, Math.ceil(Math.max.apply(null, pts.map(function (p) { return p.y; }))));
-    return { x0: x0, y0: y0, w: x1 - x0, h: y1 - y0 };
-  }
-  function face(ctx, poly, tex, b, shade) {
-    ctx.save();
-    ctx.beginPath();
-    poly.forEach(function (p, i) { i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y); });
-    ctx.closePath();
-    ctx.clip();
-    ctx.drawImage(tex, b.x0, b.y0, b.w, b.h);
-    if (shade > 0) { ctx.fillStyle = 'rgba(0,0,0,' + shade.toFixed(3) + ')'; ctx.fill(); }
-    ctx.restore();
-  }
-  function lerpP(a, b, k) { return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k }; }
-
-  // Fingers that can hold a shape against the thumbs: index, middle, ring, pinky (Sheets: how many).
-  var HOLD_TIPS = [8, 12, 16, 20];
-
-  // Prism: a folded paper kite per finger. The four corners are that finger's tips and the thumb
-  // tips of both hands; three creases run across from the left hand to the right at 40%, 50% and
-  // 60% of the way from fingertip to thumb, so the paper folds into four facets: blue stipple,
-  // green/yellow, pink stipple, red dots (each finger's sheet starts one print further along).
-  // The middle crease is the ridge, lifted toward you: the two narrow facets turn away by the
-  // fold angle, which opens with the thumb–index spread (θ = 20° + 50° × spread), and are shaded
-  // by 1 − cos θ; the outer facets face you. Sheets fan out from the shared thumbs; the pinky's is
-  // drawn first, the index's on top. All sheets share one set of prints registered to the camera.
-  function createPrism() {
-    var faces = createFaces();
-    return function (frame, ctx, ix, params, outline) {
-      var pair = ix.pair;
-      if (!pair) return false;
-      var L = pair.left.points, R = pair.right.points, W = frame.width, H = frame.height;
-      var Lt = L[THUMB_TIP], Rt = R[THUMB_TIP], n = Math.max(1, Math.min(4, params.sheets || 1));
-      var spread = Math.min(1, (pair.left.pinchWith.index.distance + pair.right.pinchWith.index.distance) / 2 / 1.5);
-      var side = 1 - Math.cos((20 + 50 * spread) * Math.PI / 180);
-      var sheets = HOLD_TIPS.slice(0, n).map(function (tip, k) {
-        var Li = L[tip], Ri = R[tip];
-        var at = function (f) { return [lerpP(Li, Lt, f), lerpP(Ri, Rt, f)]; };
-        var c1 = at(0.4), c2 = at(0.5), c3 = at(0.6);
-        return { k: k, corners: [Li, Ri, Rt, Lt], creases: [c1, c2, c3],
-          polys: [[Li, Ri, c1[1], c1[0]], [c1[0], c1[1], c2[1], c2[0]], [c2[0], c2[1], c3[1], c3[0]], [c3[0], c3[1], Rt, Lt]] };
-      });
-      var b = bbox([].concat.apply([], sheets.map(function (sh) { return sh.corners; })), W, H);
-      if (b.w < 4 || b.h < 4) return true;
-      var tex = faces(frame, b.x0, b.y0, b.w, b.h, params), shades = [0, side * 0.55, side * 0.3, 0.04];
-      sheets.slice().reverse().forEach(function (sh) {
-        sh.polys.forEach(function (poly, f) { face(ctx, poly, tex[(f + sh.k) % 4], b, shades[f]); });
-        outline.push(sh.corners);
-        sh.creases.forEach(function (c) { outline.push([c[0], c[1]]); });
-      });
-      return true;
-    };
-  }
-
-  // Triangle: a three-sided paper prism per finger, stretched between your hands along the line
-  // joining the midpoints of that finger's tip and the thumb tip on each hand; its radius is half
-  // their mean spread. Rolling your hands spins it: φ = 1.5 × the hands' mean rotation, and each
-  // finger's prism is turned a further 30° so the stack fans. A vertex at angle θ sits at
-  // n·r·cos θ across the axis and r·sin θ toward you (orthographic). A face between θa and θa + 120°
-  // faces you when its normal's z, sin(θa + 60°), is positive; visible faces are drawn back to
-  // front and shaded by 1 − that z. Faces print blue stipple, green/yellow and red dots.
-  function createTriangle() {
-    var faces = createFaces();
-    return function (frame, ctx, ix, params, outline) {
-      var pair = ix.pair;
-      if (!pair) return false;
-      var L = pair.left.points, R = pair.right.points, W = frame.width, H = frame.height;
-      var n = Math.max(1, Math.min(4, params.sheets || 1));
-      var phi0 = (pair.left.rotation + pair.right.rotation) / 2 * Math.PI / 180 * 1.5;
-      var prisms = HOLD_TIPS.slice(0, n).map(function (tip, k) {
-        var ML = lerpP(L[tip], L[THUMB_TIP], 0.5), MR = lerpP(R[tip], R[THUMB_TIP], 0.5);
-        var dx = MR.x - ML.x, dy = MR.y - ML.y, len = Math.hypot(dx, dy) || 1, nx = -dy / len, ny = dx / len;
-        var r = Math.max(8, (Math.hypot(L[4].x - L[tip].x, L[4].y - L[tip].y) + Math.hypot(R[4].x - R[tip].x, R[4].y - R[tip].y)) / 4);
-        var phi = phi0 + k * Math.PI / 6;
-        var off = function (P, th) { return { x: P.x + nx * r * Math.cos(th), y: P.y + ny * r * Math.cos(th) }; };
-        return { k: k, list: [0, 1, 2].map(function (f) {
-          var a = phi + f * 2 * Math.PI / 3, bth = a + 2 * Math.PI / 3, z = Math.sin(a + Math.PI / 3);
-          return { f: f, z: z, poly: [off(ML, a), off(MR, a), off(MR, bth), off(ML, bth)] };
-        }).filter(function (fc) { return fc.z > 0; }).sort(function (a, b) { return a.z - b.z; }) };
-      });
-      var all = [];
-      prisms.forEach(function (pr) { pr.list.forEach(function (fc) { all = all.concat(fc.poly); }); });
-      if (!all.length) return true;
-      var b = bbox(all, W, H);
-      if (b.w < 4 || b.h < 4) return true;
-      var tex = faces(frame, b.x0, b.y0, b.w, b.h, params);
-      prisms.slice().reverse().forEach(function (pr) {
-        pr.list.forEach(function (fc) { face(ctx, fc.poly, tex[[0, 1, 3][(fc.f + pr.k) % 3]], b, (1 - fc.z) * 0.6); outline.push(fc.poly); });
-      });
-      return true;
-    };
-  }
-
   function createPinchFrame() {
-    var drawPrint = null, drawCode = null, drawLayers = null, drawPrism = null, drawTri = null, blurPass;
+    var drawPrint = null, drawCode = null, drawLayers = null, blurPass;
     var work = document.createElement('canvas'), wctx = work.getContext('2d', { willReadFrequently: true });
     var tint = document.createElement('canvas'), tctx = tint.getContext('2d');
     var lut = new Uint8ClampedArray(256 * 3);
@@ -620,10 +468,6 @@
           drewCode = (drawLayers || (drawLayers = createLayers()))(frame, ctx, Magi.interaction.read(frame), params, outline) !== false;
         } else if (params.mode === 'code') {
           drewCode = (drawCode || (drawCode = createCode()))(frame, ctx, Magi.interaction.read(frame), params) !== false;
-        } else if (params.mode === 'prism') {
-          drewCode = (drawPrism || (drawPrism = createPrism()))(frame, ctx, Magi.interaction.read(frame), params, outline) !== false;
-        } else if (params.mode === 'triangle') {
-          drewCode = (drawTri || (drawTri = createTriangle()))(frame, ctx, Magi.interaction.read(frame), params, outline) !== false;
         } else if (hands.length >= 2 && params.mode === 'print') {
           (drawPrint || (drawPrint = createPrint()))(frame, ctx, hands, params, outline);
         } else if (hands.length >= 2) {
@@ -679,9 +523,9 @@
 
         // Line: a crisp outline around the filter window, or around each print sheet (and its fold).
         if (windowPts) outline.push(windowPts);
-        if (params.line && outline.length && ['acid', 'thermal', 'invert', 'blur', 'print', 'prism', 'triangle'].indexOf(params.mode || 'acid') >= 0) {
+        if (params.line && outline.length && ['acid', 'thermal', 'invert', 'blur', 'print'].indexOf(params.mode || 'acid') >= 0) {
           ctx.save();
-          ctx.strokeStyle = ['print', 'prism', 'triangle'].indexOf(params.mode) >= 0 ? 'rgba(20,20,20,0.9)' : 'rgba(255,255,255,0.95)';
+          ctx.strokeStyle = params.mode === 'print' ? 'rgba(20,20,20,0.9)' : 'rgba(255,255,255,0.95)';
           ctx.lineWidth = Math.max(1, 1.25 * u);
           ctx.lineJoin = 'miter';
           ctx.beginPath();
@@ -707,13 +551,11 @@
         }
 
         if (tracker.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, tracker, 'hand');
-        else if (['code', 'prism', 'triangle'].indexOf(params.mode) >= 0 || (params.mode === 'print' && params.sheets >= 2) ? !drewCode : hands.length < 2) {
+        else if (params.mode === 'code' || (params.mode === 'print' && params.sheets >= 2) ? !drewCode : hands.length < 2) {
           Magi.tracking.hint(ctx, frame, params.mode === 'print' && params.sheets >= 2
             ? 'Both hands: thumbs at the bottom; index, middle, ring and pinky each hold a sheet.'
             : params.mode === 'print' ? 'Hold a sheet: index fingers at its top corners, thumbs at the bottom.'
             : params.mode === 'code' ? 'Pinch with both hands to draw a box.'
-            : params.mode === 'prism' ? 'Hold the paper: fingertips at its top corners, thumbs at the bottom. Open to deepen the fold.'
-            : params.mode === 'triangle' ? 'Hold the prism between both hands, fingers to thumbs; roll your hands to turn it.'
             : 'Make an L with thumb and index finger on both hands.');
         }
       },
