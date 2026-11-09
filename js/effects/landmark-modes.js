@@ -1043,113 +1043,144 @@
     };
   };
 
-  // Horizon (after a reference of a hand-tracking interface): the hands drawn as green bones with
-  // red joints; a closed fist casts a fan of rays aimed by its angle; open hands are joined by a line
-  // between their index fingertips (h1, h2). A panel on the right is the instrument:
-  //   Orbits: dotted rings, a 72-tick dial and a bright core, with one green orbit per hand, an
-  //     ellipse tilted by that hand's roll whose minor axis is its openness (fingers out ÷ 5), so a
-  //     fist flattens its orbit into a line.
-  //   Artificial horizon (an aircraft attitude indicator): a pitch ladder (bars every 5°, longer and
-  //     numbered every 10°) behind a fixed aircraft mark. The fist (or the first hand) is the
-  //     aircraft: its roll banks the ladder (bank = roll) and its height pitches it
-  //     (pitch = (½ − y/H)·60°, up to ±30°); the green line is the horizon, pitch 0.
-  // Rays: Rays (count) from the fist's knuckles, spread over 70° centered on the direction the fist
-  // points (its roll), out to the frame's edge, with a faint wedge between the outer two.
+  // Horizon: a gesture selection wheel, like a game's weapon wheel (after a reference of a
+  // hand-tracking interface). Hands are drawn as green bones with red joints.
+  //   Make a fist: the wheel opens around it (it grows in over 0.15 s), Slots items in a ring, each
+  //     a wedge with a line-drawn icon, the spokes running out past the ring like rays.
+  //   Choose: push your fist toward a slot, a marking menu (Kurtenbach & Buxton 1993): past a dead
+  //     zone of 0.6 palm lengths, the direction of the fist from where it closed picks the slot,
+  //     as a game pad's stick does. Inside the dead zone, roll your wrist: the slot under the
+  //     direction your knuckles point, the roll amplified ×2.5 so a comfortable turn sweeps the
+  //     whole ring. The chosen wedge lights up and its name shows at the rim.
+  //   Open your hand: equips the chosen slot (a flash and a ring burst). Losing the hand cancels.
+  // The panel on the right is the loadout: the equipped item's icon, name and four stat bars, and
+  // a dial whose needle follows the selection while the wheel is open.
+  var WHEEL = [
+    { name: 'BLADE', stats: [0.9, 0.3, 0.6, 0.2] }, { name: 'BOW', stats: [0.6, 0.9, 0.4, 0.3] },
+    { name: 'ORB', stats: [0.5, 0.5, 0.9, 0.6] }, { name: 'SHIELD', stats: [0.1, 0.2, 0.3, 1.0] },
+    { name: 'BEAM', stats: [0.8, 1.0, 0.2, 0.1] }, { name: 'PULSE', stats: [0.4, 0.6, 0.8, 0.4] },
+    { name: 'TRAP', stats: [0.7, 0.1, 0.5, 0.5] }, { name: 'WARP', stats: [0.2, 0.8, 1.0, 0.3] },
+    { name: 'NOVA', stats: [1.0, 0.4, 0.3, 0.2] }, { name: 'HOOK', stats: [0.3, 0.7, 0.6, 0.4] },
+    { name: 'SWARM', stats: [0.6, 0.5, 0.7, 0.3] }, { name: 'MIRROR', stats: [0.2, 0.3, 0.5, 0.9] }
+  ];
+  var STATS = ['POWER', 'RANGE', 'SPEED', 'GUARD'];
+  // Icons in a unit box centered on (0, 0), radius 1.
+  function wheelIcon(ctx, k, x, y, r) {
+    ctx.save(); ctx.translate(x, y); ctx.scale(r, r); ctx.lineWidth = ctx.lineWidth / r; ctx.beginPath();
+    switch (k % 12) {
+      case 0: ctx.moveTo(-0.7, 0.7); ctx.lineTo(0.7, -0.7); ctx.moveTo(-0.6, 0.2); ctx.lineTo(-0.2, 0.6); break;
+      case 1: ctx.arc(-0.3, 0, 0.9, -1.1, 1.1); ctx.moveTo(0.11, -0.8); ctx.lineTo(0.11, 0.8); ctx.moveTo(-0.6, 0); ctx.lineTo(0.8, 0); break;
+      case 2: ctx.arc(0, 0, 0.75, 0, Math.PI * 2); ctx.moveTo(0.2, 0); ctx.arc(0, 0, 0.2, 0, Math.PI * 2); break;
+      case 3: ctx.moveTo(0, -0.8); ctx.lineTo(0.7, -0.5); ctx.lineTo(0.55, 0.3); ctx.lineTo(0, 0.85); ctx.lineTo(-0.55, 0.3); ctx.lineTo(-0.7, -0.5); ctx.closePath(); break;
+      case 4: ctx.moveTo(-0.8, 0.5); ctx.lineTo(-0.3, -0.2); ctx.lineTo(0.1, 0.3); ctx.lineTo(0.8, -0.6); break;
+      case 5: [0.25, 0.5, 0.8].forEach(function (q) { ctx.moveTo(q, 0); ctx.arc(0, 0, q, 0, Math.PI * 2); }); break;
+      case 6: ctx.moveTo(0, -0.8); ctx.lineTo(0.75, 0.6); ctx.lineTo(-0.75, 0.6); ctx.closePath(); ctx.moveTo(-0.25, 0); ctx.lineTo(0.25, 0.4); ctx.moveTo(0.25, 0); ctx.lineTo(-0.25, 0.4); break;
+      case 7: for (var a = 0; a < 12; a += 0.25) { var rr = a / 14; a ? ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr) : ctx.moveTo(0, 0); } break;
+      case 8: for (var s2 = 0; s2 < 8; s2++) { var an = s2 * Math.PI / 4; ctx.moveTo(Math.cos(an) * 0.25, Math.sin(an) * 0.25); ctx.lineTo(Math.cos(an) * 0.85, Math.sin(an) * 0.85); } break;
+      case 9: ctx.moveTo(0, -0.8); ctx.lineTo(0, 0.3); ctx.arc(-0.35, 0.3, 0.35, 0, Math.PI); break;
+      case 10: [[-0.4, -0.3], [0.35, -0.4], [0, 0.35], [0.5, 0.45], [-0.5, 0.5]].forEach(function (q) { ctx.moveTo(q[0] + 0.12, q[1]); ctx.arc(q[0], q[1], 0.12, 0, Math.PI * 2); }); break;
+      default: ctx.rect(-0.6, -0.8, 1.2, 1.6); ctx.moveTo(-0.6, 0.8); ctx.lineTo(0.6, -0.8);
+    }
+    ctx.stroke(); ctx.restore();
+  }
   Magi.landmarkModes.horizon = function () {
-    var GREEN = '#34e06a', RED = '#ff3b30', C = null, bank = 0, pitch = 0, orbitK = [0, 0];
+    var GREEN = '#34e06a', RED = '#ff3b30', C = null, wheel = null, equipped = 0, burst = -9, needle = 0;
     return function (ctx, frame, ix, params) {
       var W = frame.width, H = frame.height, u = frame.pxPerCss, t = frame.time / 1000, hud = frame.hud;
       ctx.fillStyle = 'rgba(0,0,0,' + (params.dim / 100).toFixed(3) + ')';
       ctx.fillRect(0, 0, W, H);
       if (!C) C = (Magi.tracking.connections && Magi.tracking.connections.hand) || [];
-      var hands = ix.pair ? [ix.pair.left, ix.pair.right] : ix.hands.slice(0, 1), panel = params.hpanel !== false, PW = panel ? Math.round(W * 0.24) : 0;
-      var fist = hands.filter(function (h) { return h.fist; })[0], lead = fist || hands[0];
-      ctx.save();
-      // Rays from a closed fist.
+      var hands = ix.hands.slice(0, 2), n = Math.max(4, Math.min(12, Math.round(params.hrays || 8))), panel = params.hpanel !== false;
+      var fist = hands.filter(function (h) { return h.fist; })[0];
+      var knuckles = function (h) { return [5, 9, 13, 17].reduce(function (a, i) { return { x: a.x + h.points[i].x / 4, y: a.y + h.points[i].y / 4 }; }, { x: 0, y: 0 }); };
+      // Open, follow, choose, equip.
       if (fist) {
-        var k = [5, 9, 13, 17].reduce(function (a, i) { return { x: a.x + fist.points[i].x / 4, y: a.y + fist.points[i].y / 4 }; }, { x: 0, y: 0 });
-        var dir = fist.rotation * Math.PI / 180 - Math.PI / 2, n = Math.max(2, Math.round(params.hrays || 9)), spread = 70 * Math.PI / 180, far = Math.hypot(W, H);
-        var ends = [];
-        for (var r = 0; r < n; r++) { var a = dir - spread / 2 + spread * r / (n - 1); ends.push([k.x + Math.cos(a) * far, k.y + Math.sin(a) * far]); }
-        ctx.fillStyle = 'rgba(255,255,255,0.1)';
-        ctx.beginPath(); ctx.moveTo(k.x, k.y); ctx.lineTo(ends[0][0], ends[0][1]); ctx.lineTo(ends[n - 1][0], ends[n - 1][1]); ctx.closePath(); ctx.fill();
-        ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = Math.max(1, u);
-        ctx.beginPath(); ends.forEach(function (e) { ctx.moveTo(k.x, k.y); ctx.lineTo(e[0], e[1]); }); ctx.stroke();
-        ctx.fillStyle = GREEN; ctx.beginPath(); ctx.arc(k.x, k.y, 3 * u, 0, Math.PI * 2); ctx.fill();
+        var kc = knuckles(fist), palm = fist.size || Math.hypot(fist.points[9].x - fist.points[0].x, fist.points[9].y - fist.points[0].y);
+        if (!wheel || wheel.id !== fist.id) wheel = { id: fist.id, o: kc, at: t, sel: equipped, palm: palm };
+        wheel.palm += (palm - wheel.palm) * 0.2;
+        var dx = kc.x - wheel.o.x, dy = kc.y - wheel.o.y, ang;
+        if (Math.hypot(dx, dy) > wheel.palm * 0.6) ang = Math.atan2(dy, dx);
+        else ang = fist.rotation * 2.5 * Math.PI / 180 - Math.PI / 2;
+        var sl = Math.PI * 2 / n, k = Math.round(((ang + Math.PI / 2) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) / sl) % n;
+        wheel.sel = k; wheel.seen = t; needle = ang;
+      } else if (wheel) {
+        // Released with a hand still up: equip. Hand lost: cancel.
+        if (hands.length && t - wheel.seen < 0.3) { equipped = wheel.sel; burst = t; }
+        wheel = null;
       }
-      // Two open hands: a line between the index fingertips.
-      if (hands.length >= 2 && !fist) {
-        var i1 = hands[0].points[8], i2 = hands[1].points[8];
-        ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = Math.max(1, u);
-        ctx.beginPath(); ctx.moveTo(i1.x, i1.y); ctx.lineTo(i2.x, i2.y); ctx.stroke();
-        ctx.fillStyle = GREEN; [i1, i2].forEach(function (q) { ctx.beginPath(); ctx.arc(q.x, q.y, 3 * u, 0, Math.PI * 2); ctx.fill(); });
+      ctx.save();
+      ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+      // The wheel.
+      if (wheel) {
+        var grow = Math.min(1, (t - wheel.at) / 0.15), R1 = wheel.palm * 0.7 * grow, R2 = wheel.palm * 2.8 * grow, o = wheel.o, slice = Math.PI * 2 / n;
+        for (var i = 0; i < n; i++) {
+          var a0 = -Math.PI / 2 + (i - 0.5) * slice, a1 = a0 + slice, on = i === wheel.sel;
+          ctx.beginPath(); ctx.arc(o.x, o.y, R2, a0 + 0.02, a1 - 0.02); ctx.arc(o.x, o.y, R1, a1 - 0.02, a0 + 0.02, true); ctx.closePath();
+          ctx.fillStyle = on ? 'rgba(255,255,255,0.32)' : 'rgba(0,0,0,0.35)'; ctx.fill();
+          ctx.strokeStyle = on ? '#fff' : 'rgba(255,255,255,0.45)'; ctx.lineWidth = Math.max(1, (on ? 1.6 : 1) * u); ctx.stroke();
+          var am = a0 + slice / 2, ir = (R1 + R2) / 2;
+          ctx.strokeStyle = on ? GREEN : 'rgba(255,255,255,0.8)'; ctx.lineWidth = Math.max(1, 1.4 * u);
+          wheelIcon(ctx, i, o.x + Math.cos(am) * ir, o.y + Math.sin(am) * ir, (R2 - R1) * 0.22 * (on ? 1.2 : 1));
+        }
+        // Spokes run past the rim like rays; the chosen one is green.
+        ctx.lineWidth = Math.max(1, u);
+        for (var r = 0; r < n; r++) {
+          var ra = -Math.PI / 2 + (r - 0.5) * slice;
+          ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+          ctx.beginPath(); ctx.moveTo(o.x + Math.cos(ra) * R2, o.y + Math.sin(ra) * R2); ctx.lineTo(o.x + Math.cos(ra) * R2 * 1.5, o.y + Math.sin(ra) * R2 * 1.5); ctx.stroke();
+        }
+        ctx.strokeStyle = GREEN; ctx.lineWidth = Math.max(1, 1.6 * u);
+        ctx.beginPath(); ctx.moveTo(o.x, o.y); ctx.lineTo(o.x + Math.cos(needle) * R1 * 0.95, o.y + Math.sin(needle) * R1 * 0.95); ctx.stroke();
+        var sa = -Math.PI / 2 + wheel.sel * slice;
+        hud.save(); hud.fillStyle = '#fff'; hud.font = '500 ' + Math.round(11 * u) + 'px ' + Magi.fx.MONO; hud.textAlign = 'center'; hud.textBaseline = 'middle';
+        hud.fillText(WHEEL[wheel.sel].name, o.x + Math.cos(sa) * (R2 + 16 * u), o.y + Math.sin(sa) * (R2 + 16 * u));
+        hud.restore();
       }
       // Skeletons: green bones, red joints.
-      hands.forEach(function (h, hi) {
+      hands.forEach(function (h) {
         var p = h.points;
         ctx.strokeStyle = GREEN; ctx.lineWidth = Math.max(1, 1.6 * u);
         ctx.beginPath(); C.forEach(function (c) { ctx.moveTo(p[c.start].x, p[c.start].y); ctx.lineTo(p[c.end].x, p[c.end].y); }); ctx.stroke();
         ctx.fillStyle = RED; ctx.beginPath(); p.forEach(function (q) { ctx.moveTo(q.x + 3 * u, q.y); ctx.arc(q.x, q.y, 3 * u, 0, Math.PI * 2); }); ctx.fill();
-        hud.save(); hud.fillStyle = '#fff'; hud.font = '400 ' + Math.round(9 * u) + 'px ' + Magi.fx.MONO;
-        hud.fillText('h' + (hi + 1), p[8].x - 4 * u, p[8].y - 10 * u); hud.restore();
       });
+      // Equip burst: a ring expanding from the hand for 0.4 s.
+      var bk = (t - burst) / 0.4;
+      if (bk >= 0 && bk < 1 && hands[0]) {
+        var bc = hands[0].center; ctx.strokeStyle = 'rgba(52,224,106,' + (1 - bk).toFixed(3) + ')'; ctx.lineWidth = Math.max(1, 3 * u * (1 - bk));
+        ctx.beginPath(); ctx.arc(bc.x, bc.y, (hands[0].size || 60) * (0.5 + 3 * bk), 0, Math.PI * 2); ctx.stroke();
+      }
       ctx.restore();
 
-      if (!panel) return;
-      // The instrument panel.
-      var px0 = W - PW, cx = px0 + PW / 2, dt = 1 / 60;
-      ctx.save();
-      ctx.fillStyle = '#000'; ctx.fillRect(px0, 0, PW, H);
-      ctx.beginPath(); ctx.rect(px0, 0, PW, H); ctx.clip();
-      var wantBank = lead ? lead.rotation * Math.PI / 180 : Math.sin(t * 0.4) * 0.2, wantPitch = lead ? (0.5 - lead.center.y / H) * 60 : 0;
-      bank += (wantBank - bank) * 0.15; pitch += (wantPitch - pitch) * 0.15;
-      // Orbits.
-      var oy = H * 0.26, R = Math.min(PW * 0.44, H * 0.2);
-      ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = Math.max(1, 0.8 * u);
-      ctx.setLineDash([1.5 * u, 4 * u]);
-      [0.35, 0.55, 0.75, 0.95, 1.15].forEach(function (f) { ctx.beginPath(); ctx.arc(cx, oy, R * f, 0, Math.PI * 2); ctx.stroke(); });
-      ctx.setLineDash([]);
-      ctx.beginPath();
-      for (var tk = 0; tk < 72; tk++) { var ta = tk / 72 * Math.PI * 2 + t * 0.05, l = tk % 6 ? 0.06 : 0.14; ctx.moveTo(cx + Math.cos(ta) * R * 0.95, oy + Math.sin(ta) * R * 0.95); ctx.lineTo(cx + Math.cos(ta) * R * (0.95 + l), oy + Math.sin(ta) * R * (0.95 + l)); }
-      ctx.stroke();
-      ctx.fillStyle = '#fff';
-      for (var cdot = 0; cdot < 24; cdot++) { var ca = cdot * 2.39996 + t * 0.6, cr = R * 0.18 * Math.sqrt((cdot + 0.5) / 24); ctx.fillRect(cx + Math.cos(ca) * cr - u, oy + Math.sin(ca) * cr - u, 2 * u, 2 * u); }
-      ctx.strokeStyle = GREEN; ctx.lineWidth = Math.max(1, 1.2 * u);
-      hands.slice(0, 2).forEach(function (h, hi) {
-        orbitK[hi] += ((h.fist ? 0.04 : h.count / 5) - orbitK[hi]) * 0.15;
-        ctx.beginPath(); ctx.ellipse(cx, oy, R * (0.75 + 0.2 * hi), R * (0.75 + 0.2 * hi) * Math.max(0.04, orbitK[hi]), h.rotation * Math.PI / 180, 0, Math.PI * 2); ctx.stroke();
-        var pa = t * (0.8 + hi * 0.3); ctx.fillStyle = GREEN; ctx.beginPath();
-        var ex = Math.cos(pa) * R * (0.75 + 0.2 * hi), ey = Math.sin(pa) * R * (0.75 + 0.2 * hi) * Math.max(0.04, orbitK[hi]), rr = h.rotation * Math.PI / 180;
-        ctx.arc(cx + ex * Math.cos(rr) - ey * Math.sin(rr), oy + ex * Math.sin(rr) + ey * Math.cos(rr), 2.5 * u, 0, Math.PI * 2); ctx.fill();
-      });
-      // Artificial horizon: pitch ladder banked by the fist's roll.
-      var ay = H * 0.7, pxPerDeg = H * 0.008;
-      ctx.save();
-      ctx.translate(cx, ay); ctx.rotate(-bank);
-      ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.lineWidth = Math.max(1, u);
-      hud.save(); hud.fillStyle = 'rgba(255,255,255,0.8)'; hud.font = '400 ' + Math.round(7 * u) + 'px ' + Magi.fx.MONO; hud.textBaseline = 'middle';
-      for (var deg = -40; deg <= 40; deg += 5) {
-        if (!deg) continue;
-        var yy = (pitch - deg) * pxPerDeg, half = deg % 10 ? PW * 0.12 : PW * 0.24;
-        ctx.beginPath(); ctx.moveTo(-half, yy); ctx.lineTo(-PW * 0.04, yy); ctx.moveTo(PW * 0.04, yy); ctx.lineTo(half, yy); ctx.stroke();
-        if (!(deg % 10)) {
-          var lx = cx + Math.cos(-bank) * (half + 4 * u) - Math.sin(-bank) * yy, ly = ay + Math.sin(-bank) * (half + 4 * u) + Math.cos(-bank) * yy;
-          if (lx > px0 + 4 * u && lx < W - 10 * u && ly > H * 0.46 && ly < H * 0.94) hud.fillText(String(Math.abs(deg)), lx, ly);
-        }
+      if (panel) {
+        // The loadout: equipped item, its stats, and a dial that follows the selection.
+        var PW = Math.round(W * 0.22), px0 = W - PW, cx = px0 + PW / 2, item = WHEEL[wheel ? wheel.sel : equipped];
+        ctx.save();
+        ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fillRect(px0, 0, PW, H);
+        ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = Math.max(1, 0.8 * u);
+        var dy0 = H * 0.2, DR = Math.min(PW * 0.38, H * 0.14);
+        ctx.setLineDash([1.5 * u, 4 * u]); ctx.beginPath(); ctx.arc(cx, dy0, DR, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+        ctx.beginPath();
+        for (var tk = 0; tk < n; tk++) { var ta = -Math.PI / 2 + tk * Math.PI * 2 / n; ctx.moveTo(cx + Math.cos(ta) * DR * 0.85, dy0 + Math.sin(ta) * DR * 0.85); ctx.lineTo(cx + Math.cos(ta) * DR * 1.1, dy0 + Math.sin(ta) * DR * 1.1); }
+        ctx.stroke();
+        var na = wheel ? needle : -Math.PI / 2 + equipped * Math.PI * 2 / n;
+        ctx.strokeStyle = GREEN; ctx.lineWidth = Math.max(1, 1.6 * u);
+        ctx.beginPath(); ctx.moveTo(cx, dy0); ctx.lineTo(cx + Math.cos(na) * DR, dy0 + Math.sin(na) * DR); ctx.stroke();
+        ctx.strokeStyle = wheel ? '#fff' : GREEN;
+        wheelIcon(ctx, WHEEL.indexOf(item), cx, H * 0.45, Math.min(PW * 0.18, H * 0.07));
+        ctx.restore();
+        hud.save(); hud.fillStyle = '#fff'; hud.textAlign = 'center';
+        hud.font = '500 ' + Math.round(12 * u) + 'px ' + Magi.fx.MONO; hud.fillText(item.name, cx, H * 0.56);
+        hud.font = '400 ' + Math.round(7 * u) + 'px ' + Magi.fx.MONO; hud.fillText(wheel ? 'SELECTING' : 'EQUIPPED', cx, H * 0.6);
+        hud.textAlign = 'left';
+        STATS.forEach(function (st, si) {
+          var y = H * (0.68 + si * 0.06), bw = PW * 0.6;
+          hud.fillStyle = 'rgba(255,255,255,0.8)'; hud.fillText(st, px0 + PW * 0.08, y);
+          hud.fillStyle = 'rgba(255,255,255,0.2)'; hud.fillRect(px0 + PW * 0.32, y - 5 * u, bw, 4 * u);
+          hud.fillStyle = GREEN; hud.fillRect(px0 + PW * 0.32, y - 5 * u, bw * item.stats[si], 4 * u);
+        });
+        hud.restore();
       }
-      hud.restore();
-      ctx.strokeStyle = GREEN; ctx.lineWidth = Math.max(1, 1.6 * u);
-      ctx.beginPath(); ctx.moveTo(-PW, pitch * pxPerDeg); ctx.lineTo(PW, pitch * pxPerDeg); ctx.stroke();
-      ctx.restore();
-      // Fixed aircraft mark and the vertical axis.
-      ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(1, 1.4 * u);
-      ctx.beginPath(); ctx.moveTo(cx - PW * 0.18, ay); ctx.lineTo(cx - PW * 0.06, ay); ctx.lineTo(cx, ay + PW * 0.04); ctx.lineTo(cx + PW * 0.06, ay); ctx.lineTo(cx + PW * 0.18, ay); ctx.stroke();
-      ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.beginPath(); ctx.moveTo(cx, H * 0.48); ctx.lineTo(cx, H * 0.95); ctx.stroke();
-      ctx.restore();
-      hud.save(); hud.fillStyle = '#fff'; hud.font = '400 ' + Math.round(8 * u) + 'px ' + Magi.fx.MONO;
-      hud.fillText('BANK ' + (bank * 180 / Math.PI).toFixed(0) + '°  PITCH ' + pitch.toFixed(0) + '°', px0 + 8 * u, H * 0.97);
-      hud.restore();
-      if (!hands.length) frame.say('Raise your hands. Close a fist and turn it to aim the rays and bank the horizon.');
+      if (!hands.length) frame.say('Make a fist to open the wheel, push it (or roll it) toward a slot, open your hand to equip.');
     };
   };
 })();

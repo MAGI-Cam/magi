@@ -148,8 +148,8 @@ Magi.effectConfig = [
       { id: 'zglow', label: 'Glow', min: 0, max: 100, step: 1, default: 40, modes: ['zero'] },
       { id: 'zcube', label: 'Cube', type: 'toggle', default: true, modes: ['zero'], hint: 'The wireframe cube and the lines inside the sphere.' },
       { id: 'zcolor', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue', modes: ['zero'] },
-      { id: 'hrays', label: 'Rays', min: 2, max: 24, step: 1, default: 9, modes: ['horizon'] },
-      { id: 'hpanel', label: 'Panel', type: 'toggle', default: true, modes: ['horizon'], hint: 'The instrument panel on the right: orbits and an artificial horizon.' }
+      { id: 'hrays', label: 'Slots', min: 4, max: 12, step: 1, default: 8, modes: ['horizon'] },
+      { id: 'hpanel', label: 'Panel', type: 'toggle', default: true, modes: ['horizon'], hint: 'The loadout panel on the right: the equipped item, its stats and a dial.' }
     ]
   },
   {
@@ -797,7 +797,7 @@ Magi.effectGuides = {
     'Cohesion: a chord diagram of your hand’s 21 landmarks. Pairs close together are joined, so a fist fills the circle and spread fingers thin it; the level reads at the top with its recent history. Two hands: all 42 landmarks, chords across the hands in white as they come together, and each hand’s level plus the hands’ cohesion.',
     'Pollinate: point with your index finger: a small pad appears there, and only your index finger moves it (by pushing past an edge). Your fingertip’s place on it picks two concepts (across, down). Hold still on a cell for half a second: the cell is marked in red and they pollinate into “A + B = ?” and an idea that decodes on the right. Fist: clears the marks. The two concepts under the crosshair are named beside the pad.',
     'Zero: a sphere of digits (each latitude band counts 0–9) with a wireframe cube inside, bent by real shape operators (twist, bend, and a collapse onto its equator), with the formulas and live values in the top-left corner. Pinch and drag: turns it. Spread thumb and index: twists it (roll left to reverse). Fist: collapses it into a flat ring, a zero; open palm: blooms back. Two hands: closer curls it tighter. Swipe left/right: shuffles the digits; up/down: new lines in the cube. Count, Size, Text, Twist, Curl, Spin, Glow, Cube, Color, Dim.',
-    'Horizon: your hands as green bones and red joints. Close a fist and rays fan out from it, aimed by its angle. Two open hands: a line between your index fingertips. The panel on the right: one green orbit per hand, tilted by its roll and flattened as you close it, and an artificial horizon (an aircraft attitude indicator) that banks with your fist’s roll and pitches with its height. Rays: how many. Panel: show the instrument. Dim.',
+    'Horizon: a gesture selection wheel, like a game’s weapon wheel. Make a fist and the wheel opens around it. Push your fist toward a slot (like a game stick), or roll your wrist to sweep around the ring; the chosen slot lights up. Open your hand to equip it. The panel shows what you have equipped and its stats. Slots: how many. Panel: show the loadout. Dim.',
   ],
   'line-art': [
     'How it works: points gather on the outlines of your hands and arms (where the picture’s edges are strongest) and one continuous line runs through them, always to the nearest point, redrawn as you move.',
