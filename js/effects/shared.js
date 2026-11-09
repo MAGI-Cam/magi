@@ -321,6 +321,50 @@
 
   fx.MONO = 'Menlo, Consolas, "DejaVu Sans Mono", "Courier New", monospace';
 
+  // Small glyph masks for pixel-buffer drawing: each character rendered once at px pixels in the
+  // monospace face, kept as its alpha coverage (0–1) so many copies can be added into an ImageData
+  // without thousands of canvas calls. Cached per character set and size.
+  var maskCache = {};
+  fx.glyphMasks = function (chars, px) {
+    var key = chars + '|' + px;
+    if (maskCache[key]) return maskCache[key];
+    var w = Math.max(2, Math.ceil(px * 0.62)), h = Math.max(3, Math.ceil(px * 1.0)), c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    var g = c.getContext('2d', { willReadFrequently: true });
+    var out = chars.split('').map(function (ch) {
+      g.clearRect(0, 0, w, h);
+      g.fillStyle = '#fff'; g.font = '400 ' + px + 'px ' + fx.MONO; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(ch, w / 2, h / 2 + px * 0.05);
+      var d = g.getImageData(0, 0, w, h).data, a = new Float32Array(w * h);
+      for (var i = 0; i < w * h; i++) a[i] = d[i * 4 + 3] / 255;
+      return { w: w, h: h, a: a };
+    });
+    return (maskCache[key] = out);
+  };
+
+  // Bloom: the layer drawn again, blurred, added on top ('lighter'). The blur is the cheap kind:
+  // the layer is shrunk to a quarter and an eighth of its size and stretched back with smoothing
+  // (a box-filter pyramid), which costs two small draws instead of a per-pixel filter.
+  var bloomA = document.createElement('canvas'), bloomB = document.createElement('canvas');
+  fx.bloom = function (ctx, layer, W, H, amount) {
+    if (amount <= 0) return;
+    var w4 = Math.max(1, Math.round(layer.width / 4)), h4 = Math.max(1, Math.round(layer.height / 4));
+    if (bloomA.width !== w4 || bloomA.height !== h4) { bloomA.width = w4; bloomA.height = h4; }
+    var w8 = Math.max(1, Math.round(w4 / 2)), h8 = Math.max(1, Math.round(h4 / 2));
+    if (bloomB.width !== w8 || bloomB.height !== h8) { bloomB.width = w8; bloomB.height = h8; }
+    var a = bloomA.getContext('2d'), b = bloomB.getContext('2d');
+    a.globalCompositeOperation = 'copy'; a.imageSmoothingEnabled = true; a.drawImage(layer, 0, 0, w4, h4);
+    b.globalCompositeOperation = 'copy'; b.imageSmoothingEnabled = true; b.drawImage(bloomA, 0, 0, w8, h8);
+    // The eighth is added into the quarter first, so the full-size draw happens once (twice for
+    // strong glow): full-frame draws are the expensive part.
+    a.globalCompositeOperation = 'lighter'; a.drawImage(bloomB, 0, 0, w4, h4);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter'; ctx.imageSmoothingEnabled = true;
+    var k = Math.min(2, amount * 2);
+    while (k > 0) { ctx.globalAlpha = Math.min(1, k); ctx.drawImage(bloomA, 0, 0, W, H); k -= 1; }
+    ctx.restore();
+  };
+
   // Glyph typefaces offered as modes. `family` is the web font (loaded in index.html);
   // `stack` is what the canvas draws with, falling back to the system monospace.
   fx.FONTS = {

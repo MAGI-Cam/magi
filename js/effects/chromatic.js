@@ -16,10 +16,11 @@
 //     vertical (y) axis, up–down about the horizontal (x) axis, 1.6π and 0.9π across the frame.
 //     Let go and it keeps turning, slowing with a 0.8 s time constant (v ← v·e^(−dt/0.8)).
 //     Pinching on a name selects it too.
-//   Pinch with both hands: zoom like a photo on a phone. The zoom is the distance between the two
-//     pinches over its distance when the second pinch closed, zoom = zoom₀·d/d₀ (0.4×–5×). The gap
-//     between two hands is large next to tracking noise, so it holds steady.
-//   Swipe: left or right flings the space into a spin; up or down switches to the next space.
+//   Open palm (four or five fingers out): zooms in, steadily, ×1.8 a second (zoom ← zoom·1.8^dt).
+//     Fist (closed palm): shrinks it the same way. Any other hand shape holds the zoom (0.4×–5×).
+//     Finger counts are discrete, so the zoom doesn't jitter with tracking noise.
+//   Swipe left or right: flings the space into a spin. The space (Lab, HSL, RGB) changes only by
+//     tapping the tile.
 // With no hand the space turns slowly on its own (Spin). Tapping the tile cycles the spaces too.
 (function () {
   var THUMB_TIP = 4, INDEX_TIP = 8, FOCAL = 3;
@@ -94,16 +95,16 @@
         hands.forEach(function (h) { if (!h.pinched) delete pinchedAt[h.id]; else if (!(h.id in pinchedAt)) pinchedAt[h.id] = now; });
         var mid = function (h) { var q = h.points; return { x: (q[THUMB_TIP].x + q[INDEX_TIP].x) / 2, y: (q[THUMB_TIP].y + q[INDEX_TIP].y) / 2 }; };
         var pinchers = hands.filter(function (h) { return h.pinched; });
-        // Two pinches: phone-style zoom (no turning meanwhile).
-        if (pinchers.length >= 2) {
-          var pa = mid(pinchers[0]), pb = mid(pinchers[1]), dd = Math.max(1, Math.hypot(pa.x - pb.x, pa.y - pb.y));
-          if (!zoomRef) zoomRef = { d: dd, zoom: wantZoom };
-          wantZoom = Math.max(0.4, Math.min(5, zoomRef.zoom * dd / zoomRef.d));
-          grab = null; vel.yaw = vel.pitch = 0;
-        } else zoomRef = null;
+        // Open palm zooms in, fist zooms out, at a steady rate.
+        hands.forEach(function (h) {
+          if (h.pinched) return;
+          if (h.count >= 4) wantZoom *= Math.pow(1.8, dt);
+          else if (h.fist) wantZoom /= Math.pow(1.8, dt);
+        });
+        wantZoom = Math.max(0.4, Math.min(5, wantZoom));
         view.zoom += (wantZoom - view.zoom) * (1 - Math.exp(-dt / 0.1));
         // One pinch: grab and turn.
-        var grabber = pinchers.length === 1 ? pinchers[0] : null, startedGrab = false;
+        var grabber = pinchers[0] || null, startedGrab = false;
         if (grabber) {
           var m = mid(grabber);
           if (grab && grab.id === grabber.id) {
@@ -112,7 +113,7 @@
             vel.yaw += (dy / Math.max(dt, 1e-3) - vel.yaw) * 0.3; vel.pitch += (dp / Math.max(dt, 1e-3) - vel.pitch) * 0.3;
           } else { startedGrab = true; vel.yaw = vel.pitch = 0; }
           grab = { id: grabber.id, x: m.x, y: m.y };
-        } else if (pinchers.length < 2) {
+        } else {
           grab = null;
           var decay = Math.exp(-dt / 0.8);
           view.yaw += vel.yaw * dt; view.pitch += vel.pitch * dt;
@@ -124,7 +125,6 @@
           if (ev.type !== 'swipe' || ev.n === lastSwipe || pinchers.length) return;
           lastSwipe = ev.n;
           if (ev.dir === 'left' || ev.dir === 'right') vel.yaw = (ev.dir === 'right' ? 1 : -1) * 6;
-          else { override = SPACES[(SPACES.indexOf(override || params.mode || 'lab') + 1) % 3]; switchedAt = now; }
         });
         // Pointing: index out, middle and ring in, not pinched.
         var pointer = null;
@@ -208,7 +208,7 @@
         }
 
         if (tracker.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, tracker, 'hand');
-        else if (!hands.length) Magi.tracking.hint(ctx, frame, 'Pinch and drag to turn the colors, point and hold to pick one, pinch with both hands to zoom.');
+        else if (!hands.length) Magi.tracking.hint(ctx, frame, 'Pinch and drag to turn the colors, point and hold to pick one, open palm to zoom in, fist to zoom out.');
       },
       reset: function () { last = 0; override = null; grab = null; zoomRef = null; selected = null; vel = { yaw: 0, pitch: 0 }; pinchedAt = {}; }
     };

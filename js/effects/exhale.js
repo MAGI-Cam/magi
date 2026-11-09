@@ -29,12 +29,19 @@
 // across it spins it like a ball (ω gains the hand's velocity ÷ radius, about the axis perpendicular
 // to the motion); rolling your hand turns it about the view axis; a swipe flings it. Spin slows with
 // a 3 s half-life toward a slow idle turn.
-// Pinch: the particles flow to the pinch. Each sets off after a delay that grows with its distance
-// (so they leave as a stream, nearest first), and steers toward the pinch with a limited
-// acceleration (no jumps), up to 2.2 frame heights a second × Speed. There they circle the pinch in
-// a small swirling cloud while you hold it. Let go and the cloud blooms outward gently, then flows
-// back into the sphere on springs (1.1 Hz × Speed, slightly underdamped).
+// Pinch: the sphere moves to your pinch, carried there by its particles rather than jumping: the
+// sphere's center goes to the pinch at once, but every particle follows the center through its own
+// lag (a first-order follower, time constant 0.05–0.95 s ÷ Speed, random per particle, for 1.6 s
+// after a pinch or a release; 0.04–0.12 s otherwise). So they set off in a stream and gather into
+// the sphere at the pinch, holding there while you pinch; let go and they stream back to your palm.
 // Speed scales all of that motion and the breath, ×0.35 to ×2.9 (2^((Speed − 50)/33)).
+// Looks (modes): Sphere (dots), Zero (each particle a digit, its latitude band on its own sphere
+// counted 0–9 from the top pole, as in the Zero landmark) and Binary (each particle a bit, 0 or 1,
+// flipping at random about every 2.5 s).
+// Drawing: everything goes into one pixel buffer (an ImageData at up to 1280 px), added like light
+// (dots as small squares, digits from glyph masks, streaks as DDA lines), then drawn over the
+// camera once with 'lighter' compositing: a few thousand canvas paths with additive blending are
+// what slowed phones. Glow adds a bloom of that layer (fx.bloom).
 (function () {
   var GOLDEN = Math.PI * (3 - Math.sqrt(5));
   function fib(k, n) { var y = 1 - 2 * (k + 0.5) / n, r = Math.sqrt(Math.max(0, 1 - y * y)), phi = k * GOLDEN; return [r * Math.cos(phi), y, r * Math.sin(phi)]; }
@@ -44,9 +51,9 @@
     var P = [];
     for (var k = 0; k < n; k++) {
       P.push({ d: fib(k, n), dm: fib(2 * k + g, 2 * n), r: breath, v: 0, w: 2 * Math.PI * (2 + Math.random() * 4), jit: 0.95 + Math.random() * 0.1,
-        mode: 0, delay: 0, fx: 0, fy: 0, fvx: 0, fvy: 0, sx: null, sy: null, orb: 0.4 + Math.random() * 0.6, ang: Math.random() * 6.28 });
+        lag: Math.random(), cx: null, cy: null, lx: null, ly: null, digit: Math.round(Math.acos(fib(k, n)[1]) / Math.PI * 20) % 10, bit: Math.random() < 0.5 ? 1 : 0 });
     }
-    return { P: P, breath: breath, center: null, cv: { x: 0, y: 0 }, M: [1, 0, 0, 0, 1, 0, 0, 0, 1], omega: [0, 0.25, 0], roll: null, wasPinched: false, pin: null, pinned: false };
+    return { P: P, breath: breath, center: null, cv: { x: 0, y: 0 }, M: [1, 0, 0, 0, 1, 0, 0, 0, 1], omega: [0, 0.25, 0], roll: null, wasPinched: false, pin: null, flowUntil: -9 };
   }
   // Rotation by angle a about unit axis k (Rodrigues), applied on the left: M ← R·M.
   function turn(S, k, a) {
@@ -56,10 +63,10 @@
     for (var i = 0; i < 3; i++) for (var j = 0; j < 3; j++) out[i * 3 + j] = R2[i * 3] * M[j] + R2[i * 3 + 1] * M[3 + j] + R2[i * 3 + 2] * M[6 + j];
     S.M = out;
   }
-  function rot(M, d) { return [M[0] * d[0] + M[1] * d[1] + M[2] * d[2], -(M[3] * d[0] + M[4] * d[1] + M[5] * d[2]), M[6] * d[0] + M[7] * d[1] + M[8] * d[2]]; }
 
   function createExhale() {
     var groups = [], key = '', lastT = null, seenEvents = 0, m = 1, mergedFlag = true, splitAt = -9;
+    var layer = document.createElement('canvas'), lctx = layer.getContext('2d'), img = null, buf = null, u32 = null;
     return {
       animated: true,
       render: function (frame, out, params) {
@@ -77,7 +84,7 @@
         if (key !== String(n)) { key = String(n); groups = [createGroup(n, 0, 0.3), createGroup(n, 1, 0.3)]; }
         var Rbase = Math.min(W, H) * 0.32 * (0.4 + params.size / 100 * 0.9), Rsep = Rbase / 1.4, F = 3;
         var ink = params.color ? Magi.fx.inkColor(params.color) : [0.42, 1, 0.45], rgb = ink.map(function (v) { return Math.round(v * 255); }).join(',');
-        var bristle = params.bristles / 100;
+        var bristle = params.bristles / 100, look = params.mode || 'sphere';
         var events = ix.events.filter(function (e) { return e.n > seenEvents; });
         events.forEach(function (e) { seenEvents = Math.max(seenEvents, e.n); });
         var two = hands.length >= 2;
@@ -97,9 +104,17 @@
         m += ((mergedFlag ? 1 : 0) - m) * (1 - Math.exp(-dt / 0.8));
         if (Math.abs(m - (mergedFlag ? 1 : 0)) < 0.002) m = mergedFlag ? 1 : 0;
 
-        // Centers: a spring to the hand (or home), plus mutual gravity while apart.
+        // Pinches: a pinched group's center goes straight to the pinch (its particles follow with lag).
+        groups.forEach(function (G, g) {
+          var ph = handsOf(g).filter(function (h) { return h.pinched; })[0], pinched = !!ph;
+          G.pin = ph ? { x: (ph.points[4].x + ph.points[8].x) / 2, y: (ph.points[4].y + ph.points[8].y) / 2 } : null;
+          if (pinched !== G.wasPinched) G.flowUntil = t + 1.6 / spd;
+          G.wasPinched = pinched;
+        });
+        // Centers: the pinch, or a spring to the hand (or home), plus mutual gravity while apart.
         var wc = 2 * Math.PI * 1.6, Gk = 1.9 * wc * wc * Rsep * Rsep * Rsep;
         groups.forEach(function (G, g) {
+          if (G.pin) { G.center.x = G.pin.x; G.center.y = G.pin.y; G.cv.x = G.cv.y = 0; return; }
           var h0 = ownHand(g), aim = h0 ? h0.center : home;
           var ax = wc * wc * (aim.x - G.center.x) - 2 * 0.9 * wc * G.cv.x, ay = wc * wc * (aim.y - G.center.y) - 2 * 0.9 * wc * G.cv.y;
           if (!h0) { ax *= 0.15; ay *= 0.15; }
@@ -112,7 +127,7 @@
         });
         var cm = { x: (groups[0].center.x + groups[1].center.x) / 2, y: (groups[0].center.y + groups[1].center.y) / 2 };
 
-        // Per group: breath, spin, pinch.
+        // Per group: breath and spin.
         var bOf = function (h) { return h.fist ? 0 : h.count >= 5 ? 1 : 0.15 + 0.85 * (h.count / 5); };
         groups.forEach(function (G, g) {
           var hs = handsOf(g), hd = ownHand(g);
@@ -121,7 +136,7 @@
           if (hd) {
             var R = Rsep + (Rbase - Rsep) * m, c = m > 0.5 ? cm : G.center;
             var near = Math.hypot(hd.center.x - c.x, hd.center.y - c.y) < R * 1.3;
-            if (near && hd.speed > H * 0.3) { G.omega[0] += hd.velocity.y / R * dt * 3; G.omega[1] += hd.velocity.x / R * dt * 3; }
+            if (near && hd.speed > H * 0.3 && !hd.pinched) { G.omega[0] += hd.velocity.y / R * dt * 3; G.omega[1] += hd.velocity.x / R * dt * 3; }
             if (G.roll !== null) { var dr = (hd.rotation - G.roll) * Math.PI / 180; dr -= Math.round(dr / (2 * Math.PI)) * 2 * Math.PI; if (Math.abs(dr) > 0.003) turn(G, [0, 0, 1], dr); }
             G.roll = hd.rotation;
             events.forEach(function (e) { if (e.type === 'swipe' && e.hand === hd.id) { var dd = { left: [-1, 0], right: [1, 0], up: [0, -1], down: [0, 1] }[e.dir] || [0, 0]; G.omega[0] += dd[1] * 4; G.omega[1] += dd[0] * 4; } });
@@ -130,104 +145,91 @@
           if (wl > 1e-4) turn(G, [G.omega[0] / wl, G.omega[1] / wl, G.omega[2] / wl], -wl * dt);
           var decay = Math.pow(0.5, dt / 3);
           G.omega = [G.omega[0] * decay, 0.25 + (G.omega[1] - 0.25) * decay, G.omega[2] * decay];
-          // Pinch: start the stream (delays by distance, nearest first); let go: bloom and return.
-          var ph = hs.filter(function (h) { return h.pinched; })[0], pinched = !!ph;
-          if (ph) G.pin = { x: (ph.points[4].x + ph.points[8].x) / 2, y: (ph.points[4].y + ph.points[8].y) / 2 };
-          if (pinched && !G.wasPinched) {
-            var far = 1;
-            G.P.forEach(function (q) { if (q.sx !== null) far = Math.max(far, Math.hypot(q.sx - G.pin.x, q.sy - G.pin.y)); });
-            G.P.forEach(function (q) {
-              if (q.sx === null) return;
-              if (q.mode === 0) { q.fx = q.sx; q.fy = q.sy; q.fvx = 0; q.fvy = 0; }
-              q.mode = 1; q.delay = (Math.hypot(q.fx - G.pin.x, q.fy - G.pin.y) / far * 0.5 + Math.random() * 0.15) / spd;
-            });
-          }
-          if (!pinched && G.wasPinched) {
-            G.P.forEach(function (q) {
-              if (q.mode !== 1) return;
-              var a = Math.atan2(q.fy - G.pin.y, q.fx - G.pin.x), bs = H * (0.6 + Math.random() * 0.6) * spd;
-              q.fvx += Math.cos(a) * bs; q.fvy += Math.sin(a) * bs; q.mode = 2;
-            });
-          }
-          G.wasPinched = pinched;
         });
+
+        // The pixel layer: opaque black (adds nothing under 'lighter'), at up to 1280 px.
+        var sL = Math.min(1, 1280 / Math.max(W, H)), LW = Math.max(1, Math.round(W * sL)), LH = Math.max(1, Math.round(H * sL));
+        if (layer.width !== LW || layer.height !== LH) { layer.width = LW; layer.height = LH; img = null; }
+        if (!img) { img = lctx.createImageData(LW, LH); buf = img.data; u32 = new Uint32Array(buf.buffer); }
+        u32.fill(0xFF000000);
+        var IR = ink[0] * 255, IG = ink[1] * 255, IB = ink[2] * 255;
+        var ds = Math.max(1, Math.round(1.3 * u * sL));
+        function dot(x, y, k) {
+          var x0 = Math.round(x * sL - ds / 2), y0 = Math.round(y * sL - ds / 2);
+          if (x0 < 0 || y0 < 0 || x0 + ds > LW || y0 + ds > LH) return;
+          for (var yy = 0; yy < ds; yy++) for (var xx = 0, i = ((y0 + yy) * LW + x0) * 4; xx < ds; xx++, i += 4) { buf[i] += IR * k; buf[i + 1] += IG * k; buf[i + 2] += IB * k; }
+        }
+        var masks = look === 'zero' ? Magi.fx.glyphMasks('0123456789', Math.max(5, Math.round(7 * u * sL))) : look === 'binary' ? Magi.fx.glyphMasks('01', Math.max(5, Math.round(7 * u * sL))) : null;
+        function glyph(x, y, gm, k) {
+          var x0 = Math.round(x * sL - gm.w / 2), y0 = Math.round(y * sL - gm.h / 2);
+          if (x0 < 0 || y0 < 0 || x0 + gm.w > LW || y0 + gm.h > LH) return;
+          var a = gm.a, j = 0;
+          for (var yy = 0; yy < gm.h; yy++) for (var xx = 0, i = ((y0 + yy) * LW + x0) * 4; xx < gm.w; xx++, i += 4, j++) { var c = a[j] * k; if (c > 0.02) { buf[i] += IR * c; buf[i + 1] += IG * c; buf[i + 2] += IB * c; } }
+        }
+        function line(x0, y0, x1, y1, k) {
+          x0 *= sL; y0 *= sL; x1 *= sL; y1 *= sL;
+          var steps = Math.min(80, Math.ceil(Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0))));
+          for (var s = 0; s <= steps; s++) {
+            var f = steps ? s / steps : 0, px = Math.round(x0 + (x1 - x0) * f), py = Math.round(y0 + (y1 - y0) * f);
+            if (px < 0 || py < 0 || px >= LW || py >= LH) continue;
+            var i = (py * LW + px) * 4, kk = k * (1 - f * 0.7);
+            buf[i] += IR * kk; buf[i + 1] += IG * kk; buf[i + 2] += IB * kk;
+          }
+        }
 
         // Particles.
         var Mm = groups[0].M, bm = (groups[0].breath + groups[1].breath) / 2;
-        var vmax = H * 2.2 * spd, amax = H * 9 * spd, wf = 2 * Math.PI * 1.1 * spd, Kf = wf * wf, Cf = 2 * 0.8 * wf, sub = 2;
-        var dots = [[], [], []], streaks = [[], [], []];
-        groups.forEach(function (G, g) {
-          var O = groups[1 - g].center, ox0 = O.x - G.center.x, oy0 = O.y - G.center.y, ol = Math.hypot(ox0, oy0) || 1;
-          var h = dt * spd / sub;
-          G.P.forEach(function (q) {
-            // Breath spring on the particle's own radius.
-            var w0 = 0;
-            var ds = rot(G.M, q.d);
-            // Its share threshold: lowest facing the other sphere.
-            var facing = (ds[0] * ox0 + -ds[1] * oy0) / ol, thr = 0.5 * (1 - facing) / 2;
-            w0 = smooth((m - thr) / 0.5);
-            var br = G.breath + (bm - G.breath) * w0;
-            for (var s = 0; s < sub; s++) { var a = -q.w * q.w * (q.r - br * q.jit) - 2 * 0.35 * q.w * q.v; q.v += a * h; q.r += q.v * h; }
-            var rr = 0.02 + 1.03 * Math.max(0, q.r);
-            var k1 = F / (F + ds[2]), x1 = G.center.x + ds[0] * rr * Rsep * k1, y1 = G.center.y - ds[1] * rr * Rsep * k1;
-            var dmv = rot(Mm, q.dm), k2 = F / (F + dmv[2]), x2 = cm.x + dmv[0] * rr * Rbase * k2, y2 = cm.y - dmv[1] * rr * Rbase * k2;
-            var sx = x1 + (x2 - x1) * w0, sy = y1 + (y2 - y1) * w0, zz = ds[2] + (dmv[2] - ds[2]) * w0;
-            var band = Math.abs(zz) < 0.35 ? 0 : Math.abs(zz) < 0.7 ? 1 : 2;
-            q.sx = sx; q.sy = sy;
-            if (q.mode === 1 && q.delay > 0) { q.delay -= dt; q.fx = sx; q.fy = sy; q.fvx = 0; q.fvy = 0; q.mode = 1; }
-            else if (q.mode === 1 && G.pin) {
-              // Steering with limited acceleration: velocity turns toward the pinch, never jumps.
-              // Close in, the target becomes a point circling the pinch, so they swirl in a cloud.
-              q.ang += dt * 3 * spd;
-              var rad = H * 0.05 * q.orb, tx = G.pin.x + Math.cos(q.ang) * rad, ty = G.pin.y + Math.sin(q.ang) * rad;
-              var gx = tx - q.fx, gy = ty - q.fy, gl = Math.hypot(gx, gy) || 1, want = Math.min(vmax, gl * 4);
-              var ax = gx / gl * want - q.fvx, ay = gy / gl * want - q.fvy, al = Math.hypot(ax, ay), lim = amax * dt;
-              if (al > lim) { ax *= lim / al; ay *= lim / al; }
-              var px0 = q.fx, py0 = q.fy;
-              q.fvx += ax; q.fvy += ay; q.fx += q.fvx * dt; q.fy += q.fvy * dt;
-              dots[0].push(q.fx, q.fy);
-              if (bristle > 0) streaks[0].push(q.fx, q.fy, px0 - q.fvx * dt * 2 * bristle, py0 - q.fvy * dt * 2 * bristle);
-              return;
-            }
-            if (q.mode === 2) {
-              var ax2 = -Kf * (q.fx - sx) - Cf * q.fvx, ay2 = -Kf * (q.fy - sy) - Cf * q.fvy, px1 = q.fx, py1 = q.fy;
-              q.fvx += ax2 * dt; q.fvy += ay2 * dt; q.fx += q.fvx * dt; q.fy += q.fvy * dt;
-              if (Math.hypot(q.fx - sx, q.fy - sy) < 1.5 && Math.hypot(q.fvx, q.fvy) < H * 0.05) q.mode = 0;
-              dots[0].push(q.fx, q.fy);
-              if (bristle > 0) streaks[0].push(q.fx, q.fy, px1 - q.fvx * dt * 2 * bristle, py1 - q.fvy * dt * 2 * bristle);
-              return;
-            }
-            dots[band].push(sx, sy);
-            var speed = Math.abs(q.v);
-            if (bristle > 0 && speed > 0.3) {
-              var back = Math.min(0.5, speed * 0.12 * bristle) * Math.sign(q.v), r0 = Math.max(0, rr - back), f0 = r0 / Math.max(rr, 1e-3);
-              var cx0 = G.center.x + (cm.x - G.center.x) * w0, cy0 = G.center.y + (cm.y - G.center.y) * w0;
-              streaks[band].push(sx, sy, cx0 + (sx - cx0) * f0, cy0 + (sy - cy0) * f0);
-            }
-          });
-        });
-
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-        var sz = Math.max(1, 1.3 * u);
         var tightOf = function (b) { return Math.max(0, 1 - b / 0.15); };
         var tightAll = Math.max(tightOf(groups[0].breath), tightOf(groups[1].breath));
-        var alphaBand = [0.95, 0.4 + 0.5 * tightAll, 0.1 + 0.8 * tightAll];
-        for (var b = 2; b >= 0; b--) {
-          ctx.strokeStyle = 'rgba(' + rgb + ',' + (alphaBand[b] * 0.8).toFixed(3) + ')';
-          ctx.lineWidth = Math.max(0.6, 0.9 * u);
-          ctx.beginPath();
-          var sl = streaks[b];
-          for (var j = 0; j < sl.length; j += 4) { ctx.moveTo(sl[j], sl[j + 1]); ctx.lineTo(sl[j + 2], sl[j + 3]); }
-          ctx.stroke();
-          // All of a band's dots in one path and one fill (thousands of fillRect calls are slow).
-          ctx.fillStyle = 'rgba(' + rgb + ',' + Math.min(1, alphaBand[b]).toFixed(3) + ')';
-          var dl = dots[b];
-          ctx.beginPath();
-          for (var j2 = 0; j2 < dl.length; j2 += 2) ctx.rect(dl[j2] - sz / 2, dl[j2 + 1] - sz / 2, sz, sz);
-          ctx.fill();
-        }
+        var bandK = [0.95, 0.4 + 0.5 * tightAll, 0.1 + 0.8 * tightAll], flip = dt * 0.4;
+        groups.forEach(function (G, g) {
+          var O = groups[1 - g].center, ox0 = O.x - G.center.x, oy0 = O.y - G.center.y, ol = Math.hypot(ox0, oy0) || 1;
+          var h = dt * spd / 2, M = G.M, flowing = t < G.flowUntil;
+          var mFull = m >= 1, mNone = m <= 0;
+          G.P.forEach(function (q) {
+            var d = q.d, dx = M[0] * d[0] + M[1] * d[1] + M[2] * d[2], dy = -(M[3] * d[0] + M[4] * d[1] + M[5] * d[2]), dz = M[6] * d[0] + M[7] * d[1] + M[8] * d[2];
+            // Its share threshold: lowest facing the other sphere.
+            var w0 = mFull ? 1 : mNone ? 0 : smooth((m - 0.25 * (1 - (dx * ox0 - dy * oy0) / ol)) / 0.5);
+            var br = G.breath + (bm - G.breath) * w0;
+            for (var s = 0; s < 2; s++) { var a = -q.w * q.w * (q.r - br * q.jit) - 2 * 0.35 * q.w * q.v; q.v += a * h; q.r += q.v * h; }
+            var rr = 0.02 + 1.03 * Math.max(0, q.r), k1 = F / (F + dz), ox = dx * rr * Rsep * k1, oy = -dy * rr * Rsep * k1, zz = dz;
+            if (w0 > 0) {
+              var e = q.dm, mx = Mm[0] * e[0] + Mm[1] * e[1] + Mm[2] * e[2], my = -(Mm[3] * e[0] + Mm[4] * e[1] + Mm[5] * e[2]), mz = Mm[6] * e[0] + Mm[7] * e[1] + Mm[8] * e[2], k2 = F / (F + mz);
+              ox += (mx * rr * Rbase * k2 - ox) * w0; oy += (-my * rr * Rbase * k2 - oy) * w0; zz += (mz - zz) * w0;
+            }
+            // Each particle follows the center through its own lag (long while flowing to or from a pinch).
+            var tcx = G.center.x + (cm.x - G.center.x) * w0, tcy = G.center.y + (cm.y - G.center.y) * w0;
+            if (q.cx === null) { q.cx = tcx; q.cy = tcy; }
+            var tau = flowing ? (0.05 + 0.9 * q.lag) / spd : 0.04 + 0.08 * q.lag, kf = 1 - Math.exp(-dt / tau);
+            q.cx += (tcx - q.cx) * kf; q.cy += (tcy - q.cy) * kf;
+            var sx = q.cx + ox, sy = q.cy + oy, band = Math.abs(zz) < 0.35 ? 0 : Math.abs(zz) < 0.7 ? 1 : 2, kb = bandK[band];
+            if (masks) {
+              if (look === 'binary' && Math.random() < flip) q.bit ^= 1;
+              glyph(sx, sy, masks[look === 'binary' ? q.bit : q.digit], kb);
+            } else dot(sx, sy, kb);
+            if (bristle > 0) {
+              var speed = Math.abs(q.v);
+              if (speed > 0.3) {
+                var back = Math.min(0.5, speed * 0.12 * bristle) * Math.sign(q.v), f0 = Math.max(0, rr - back) / Math.max(rr, 1e-3);
+                line(sx, sy, q.cx + ox * f0, q.cy + oy * f0, kb * 0.6);
+              }
+              // A streak behind particles that are travelling (to or from a pinch).
+              if (q.lx !== null) { var mvx = sx - q.lx, mvy = sy - q.ly; if (mvx * mvx + mvy * mvy > 9) line(sx, sy, sx - mvx * 3 * bristle, sy - mvy * 3 * bristle, kb * 0.5); }
+            }
+            q.lx = sx; q.ly = sy;
+          });
+        });
+        lctx.putImageData(img, 0, 0);
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.imageSmoothingEnabled = true;
+        ctx.drawImage(layer, 0, 0, W, H);
+        ctx.restore();
+        Magi.fx.bloom(ctx, layer, W, H, (params.glow === undefined ? 40 : params.glow) / 100);
+
         // Implosion cores: the merged sphere's (weight m) and each separate sphere's (weight 1 − m).
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
         var core = function (cx, cy, R, tight, wgt) {
           if (tight * wgt < 0.2) return;
           var gr = ctx.createRadialGradient(cx, cy, 0, cx, cy, R * 0.12), k = tight * wgt;

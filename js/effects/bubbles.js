@@ -1,7 +1,10 @@
 // Bubbles: soap bubbles from your hands. Wave your fingers to stream small ones; pinch thumb and
 // index and a bubble grows at your fingertips while you hold, and floats off when you let go.
 // Inverse mode: each bubble inverts the video under it instead. Electrokinetic mode: inside each
-// bubble the video turns into electrokinetic pixel glazing (dots sized by brightness).
+// bubble the video turns into electrokinetic pixel glazing (dots sized by brightness). Neon mode:
+// each bubble's rim is a neon tube in its film's interference color (below, taken where the rim
+// meets the eye, cos θ = 0.3, then pushed to full saturation), added like light ('lighter'): a wide
+// faint halo, a brighter band and a white-hot core.
 // A bubble pops when its life runs out (2–5 s; 4–7 s for one you blew), or, with Pop on, when a
 // fingertip touches it after its first 0.4 s.
 //
@@ -92,6 +95,16 @@
       return { x: x, y: y, vx: vx, vy: vy, r: r, age: 0, life: 2 + Math.random() * 3, phase: Math.random() * 6.28, film: Math.floor(Math.random() * 3), spin: Math.random() * 6.28 };
     }
 
+    // A film's neon color: its thin-film reflectance near the rim (cos θ = 0.3, sin θt = sin θ / n),
+    // stretched so the strongest channel is 255 and the weakest 0 (full saturation).
+    var neonCache = {};
+    function neonColor(f) {
+      if (neonCache[f]) return neonCache[f];
+      var sinT = Math.sqrt(1 - 0.09) / N_FILM, cosT = Math.sqrt(1 - sinT * sinT);
+      var rgb = LAMBDA.map(function (l) { var s = Math.sin(2 * Math.PI * N_FILM * THICK[f] * 0.8 * cosT / l); return s * s; });
+      var lo = Math.min.apply(null, rgb), hi = Math.max.apply(null, rgb);
+      return (neonCache[f] = rgb.map(function (v) { return Math.round((v - lo) / Math.max(1e-3, hi - lo) * 255); }));
+    }
     function drawBubble(ctx, x, y, r, film, spin, wob) {
       if (r < 1.5) return;
       var sp = sprite(bucketFor(r), film), k = r / sp.r;
@@ -212,6 +225,23 @@
           ctx.beginPath();
           all.forEach(function (b) { if (b.r >= 2) { ctx.moveTo(b.x + b.r, b.y); ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2); } });
           ctx.stroke();
+        } else if (params.mode === 'neon') {
+          // Neon: one path per film thickness, stroked three times, added like light.
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.lineCap = 'round';
+          [0, 1, 2].forEach(function (f) {
+            var c = neonColor(f), list = all.filter(function (b) { return b.film === f && b.r >= 2; });
+            if (!list.length) return;
+            ctx.beginPath();
+            list.forEach(function (b) { var rr = b.r * (1 + b.wob); ctx.moveTo(b.x + rr, b.y); ctx.arc(b.x, b.y, rr, 0, Math.PI * 2); });
+            [[7 * u, 0.1, 0], [2.6 * u, 0.4, 0], [Math.max(1, 0.9 * u), 0.95, 0.65]].forEach(function (ps) {
+              var cc = c.map(function (v) { return Math.round(v + (255 - v) * ps[2]); });
+              ctx.strokeStyle = 'rgba(' + cc.join(',') + ',' + ps[1] + ')';
+              ctx.lineWidth = ps[0];
+              ctx.stroke();
+            });
+          });
+          ctx.globalCompositeOperation = 'source-over';
         } else if (params.mode === 'inverse') {
           // Inverse: each bubble inverts the video beneath it (difference with white: c → 1 − c),
           // edged with a crisp 1 px rim.
