@@ -1,10 +1,11 @@
 // Siri: a voice assistant's listening wave, driven by your hand instead of your voice (after
-// references of the classic Siri wave and the newer glass pill).
+// a reference of the classic Siri wave).
 //
 // Gesture: open your hand to wake it. How open your hand is (mean straightness of the four
 // fingers, 1 − curl, mapped so a fist is 0 and a flat hand 1) is the loudness: the waves swell and
 // shrink with it the way they follow a voice (0.06 s attack, 0.18 s release, like a level meter).
-// The wave goes where your hand is (its center follows your palm, time constant 0.15 s).
+// The wave follows your hand from side to side (its center follows your palm's x, time constant
+// 0.15 s) and stays at mid-height.
 // Pinch and spread thumb and index: the wave shrinks and grows with them (0.4× to 1.4× its size).
 // Make a fist, or take your hand away, and it settles into a calm thin wave resting at the bottom.
 //
@@ -14,9 +15,6 @@
 // its own. Each is filled between y and −y (a lens-shaped lobe) and blended with 'screen',
 // 1 − (1 − a)(1 − b), which brightens where colors cross without blowing out to flat white; a thin
 // bright edge traces each lobe, and a soft halo is the same drawing at a quarter size, scaled up.
-// Pill (the newer look): a dark glass pill whose lower rim glows with a moving spectrum; the glow's
-// height along the rim is a sum of sines scaled by the loudness, so it ripples like a level meter.
-// Asleep, it shrinks to a short bar at the bottom, like a home indicator.
 (function () {
   var COLORS = [[240, 74, 150], [70, 175, 255], [120, 86, 255]];
   function att(x) { var K = 2; return Math.pow(K / (K + Math.pow(x, 4)), K); }
@@ -67,14 +65,6 @@
       ctx.restore();
     }
 
-    function pillPath(g, x, y, w, h) {
-      var r = h / 2;
-      g.beginPath();
-      g.moveTo(x - w / 2 + r, y - h / 2); g.lineTo(x + w / 2 - r, y - h / 2);
-      g.arc(x + w / 2 - r, y, r, -Math.PI / 2, Math.PI / 2); g.lineTo(x - w / 2 + r, y + h / 2);
-      g.arc(x - w / 2 + r, y, r, Math.PI / 2, Math.PI * 1.5); g.closePath();
-    }
-
     return {
       animated: true,
       render: function (frame, out, params) {
@@ -91,7 +81,7 @@
         wake += (awake - wake) * (1 - Math.exp(-dt / 0.25));
         var target = awake ? open : 0;
         level += (target - level) * (1 - Math.exp(-dt / (target > level ? 0.06 : 0.18)));
-        var restY = H - M * 0.08, tx = awake ? hd.center.x : W / 2, ty = awake ? hd.center.y : restY;
+        var restY = H - M * 0.08, tx = awake ? hd.center.x : W / 2, ty = awake ? H / 2 : restY;
         if (cx === null) { cx = W / 2; cy = restY; }
         var kf = 1 - Math.exp(-dt / 0.15);
         cx += (tx - cx) * kf; cy += (ty - cy) * kf;
@@ -104,43 +94,9 @@
         if (dim > 0) { ctx.fillStyle = 'rgba(0,0,0,' + dim.toFixed(3) + ')'; ctx.fillRect(0, 0, W, H); }
 
         var s = smooth(wake), size = 0.45 + params.size / 100 * 0.55;
-        if (params.mode === 'pill') {
-          // Asleep: a short bar at the bottom. Awake: a wide glass pill in the middle.
-          var bx = W / 2, by = H - M * 0.05, bw = W * 0.28, bh = Math.max(4, 5 * u);
-          var aw = W * 0.85 * size * sz, ah = M * 0.16 * size * sz;
-          var x = bx + (cx - bx) * s, y = by + (cy - by) * s, w = bw + (aw - bw) * s, h = bh + (ah - bh) * s;
-          var lvl = (0.15 + 0.85 * level) * sz, glowH = h * (0.35 + 1.4 * lvl * params.height / 100) * (0.25 + 0.75 * s);
-          var rim = function (g) {
-            // The spectrum along the lower rim, moving; its height ripples with the level.
-            var N = 60, x0 = x - w / 2, gr = g.createLinearGradient(x0, 0, x0 + w, 0);
-            for (var k = 0; k <= 6; k++) { var hue = (k / 6 * 360 + phase * 40) % 360; gr.addColorStop(k / 6, 'hsl(' + hue.toFixed(0) + ',95%,62%)'); }
-            g.fillStyle = gr;
-            g.beginPath(); g.moveTo(x0, y);
-            for (var i = 0; i <= N; i++) {
-              var xx = i / N, ripple = 0.55 + 0.25 * Math.sin(xx * 9 + phase * 2.3) + 0.2 * Math.sin(xx * 17 - phase * 3.1);
-              g.lineTo(x0 + xx * w, y + h / 2 + glowH * ripple * Math.sin(Math.PI * xx));
-            }
-            g.lineTo(x0 + w, y); g.closePath(); g.fill();
-          };
-          // The glow is only ever seen blurred (the halo); on the pill itself a thin spectral rim.
-          haloOf(ctx, W, H, rim, 0.3 + 0.6 * params.glow / 100, 6);
-          haloOf(ctx, W, H, rim, 0.3 + 0.5 * params.glow / 100, 16);
-          if (s > 0.05) {
-            ctx.save();
-            var sg = ctx.createLinearGradient(x - w / 2, 0, x + w / 2, 0);
-            for (var k2 = 0; k2 <= 6; k2++) sg.addColorStop(k2 / 6, 'hsla(' + ((k2 / 6 * 360 + phase * 40) % 360).toFixed(0) + ',95%,70%,' + (0.9 * s).toFixed(3) + ')');
-            ctx.strokeStyle = sg; ctx.lineWidth = Math.max(1.5, 2 * u * (0.5 + lvl));
-            ctx.beginPath(); ctx.arc(x + w / 2 - h / 2, y, h / 2, 0, Math.PI / 2); ctx.lineTo(x - w / 2 + h / 2, y + h / 2); ctx.arc(x - w / 2 + h / 2, y, h / 2, Math.PI / 2, Math.PI); ctx.stroke();
-            ctx.restore();
-          }
-          ctx.save();
-          pillPath(ctx, x, y, w, h);
-          ctx.fillStyle = s < 0.15 ? 'rgba(255,255,255,0.9)' : 'rgba(8,8,10,' + (0.82 * s).toFixed(3) + ')'; ctx.fill();
-          ctx.strokeStyle = 'rgba(255,255,255,' + (0.25 * s).toFixed(3) + ')'; ctx.lineWidth = Math.max(1, u); ctx.stroke();
-          ctx.restore();
-        } else {
-          // Asleep: a calm, thin wave resting at the bottom. Awake: the wave at your hand, as tall as
-          // your hand is open, scaled by the thumb–index spread.
+        {
+          // Asleep: a calm, thin wave resting at the bottom. Awake: mid-height, under your hand from
+          // side to side, as tall as your hand is open, scaled by the thumb–index spread.
           var half = W * (0.16 + (0.42 * size * sz - 0.16) * s);
           var big = M * 0.3 * params.height / 100 * size * sz, idle = M * 0.012 * (1 + 0.3 * Math.sin(t * 1.3));
           var amps = COLORS.map(function (c, k) {
@@ -154,7 +110,7 @@
 
         var tracker = Magi.tracking.hands;
         if (tracker.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, tracker, 'hand');
-        else if (!hands.length) frame.say('Open your hand to wake it; open it wider to make it louder. It follows your hand; pinch and spread to shrink and grow it. A fist puts it to rest.');
+        else if (!hands.length) frame.say('Open your hand to wake it; open it wider to make it louder. It follows your hand side to side; pinch and spread to shrink and grow it. A fist puts it to rest.');
       },
       reset: function () { lastT = null; wake = 0; level = 0; cx = null; sz = 1; }
     };

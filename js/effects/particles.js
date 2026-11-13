@@ -2,7 +2,10 @@
 // particle spring system").
 //
 // Each particle has a rest position x₀ and is pulled back by a damped spring,
-//   a = −k (x − x₀) − c v,   k = (2π f)² with f = 0.3–3 Hz (Stiffness), c from Damping,
+//   a = −k (x − x₀) − c v,   k = ω² with ω = 2π f, f = 0.3–3 Hz (Stiffness), c = 2ζω,
+// where ζ is the damping ratio: below 1 a pushed particle overshoots its rest and swings back (it
+// bounces), the first swing reaching e^(−πζ/√(1 − ζ²)) of the push; at 1 it settles without
+// overshooting. Bounce sets ζ from 1 (0, no bounce) down to 0.05 (100, ringing).
 // integrated with semi-implicit Euler in two substeps a frame. Every fingertip pushes particles
 // away within a radius r (Reach, 4–20% of the frame height) with an acceleration that fades as
 // (1 − d/r)² (Push), so your finger carves a path and the field springs back behind it.
@@ -67,7 +70,7 @@
         lastT = t;
         var ix = Magi.interaction.read(frame), tips = [];
         ix.hands.forEach(function (h) { TIPS.forEach(function (k) { tips.push(h.points[k]); }); });
-        var f = 0.3 + params.stiffness / 100 * 2.7, K = (2 * Math.PI * f) * (2 * Math.PI * f), C = 1 + params.damping / 100 * 14;
+        var f = 0.3 + params.stiffness / 100 * 2.7, om = 2 * Math.PI * f, K = om * om, zeta = 1 - 0.95 * (params.bounce === undefined ? 70 : params.bounce) / 100, C = 2 * zeta * om;
         var r = H * (0.04 + params.reach / 100 * 0.16), push = H * (20 + params.push / 100 * 140), h = dt / 2;
         for (var s = 0; s < 2; s++) {
           for (var i = 0; i < P.length; i++) {

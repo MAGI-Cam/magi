@@ -344,7 +344,7 @@ Magi.effectConfig = [
     params: [
       range('count', 'Count', 200, 5000, 2600),
       range('stiffness', 'Stiffness', 0, 100, 35),
-      range('damping', 'Damping', 0, 100, 30),
+      range('bounce', 'Bounce', 0, 100, 70),
       range('push', 'Push', 0, 100, 50),
       range('reach', 'Reach', 0, 100, 40),
       { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 42, track: 'hue' },
@@ -362,8 +362,8 @@ Magi.effectConfig = [
     ready: true,
     photoType: 'image/jpeg',
     modes: [
-      { id: 'worms', name: 'Worms' },
-      { id: 'glow', name: 'Glow' }
+      { id: 'glow', name: 'Glow' },
+      { id: 'worms', name: 'Worms' }
     ],
     params: [
       range('count', 'Count', 200, 2000, 900),
@@ -650,10 +650,6 @@ Magi.effectConfig = [
     group: 'hand',
     ready: true,
     photoType: 'image/jpeg',
-    modes: [
-      { id: 'wave', name: 'Wave' },
-      { id: 'pill', name: 'Pill' }
-    ],
     params: [
       range('height', 'Height', 0, 100, 60),
       range('size', 'Size', 0, 100, 60),
@@ -964,7 +960,7 @@ Magi.effectGuides = {
   ],
   particles: [
     'How it works: every particle sits on a damped spring to its resting place; your fingertips push particles away as they pass, and the field springs back behind them. Moving particles light up and streak.',
-    'Count: how many. Stiffness: how fast they spring back. Damping: how quickly they settle (low: they wobble). Push, Reach: how hard and how far your fingertips push.',
+    'Count: how many. Stiffness: how fast they spring back. Bounce: how much they overshoot and swing back after being pushed (0: they settle straight back, no bounce). Push, Reach: how hard and how far your fingertips push.',
     'Text: type any characters to make the particles form them (empty: the whole screen). Hide: only the particles your hand moves show. Pointer: a red dot on your index fingertip. Color, Glow: tint and halo. Dim: darkens the camera.'
   ],
   'particle-life': [
@@ -980,7 +976,7 @@ Magi.effectGuides = {
     'How it works: a sphere of particles that breathes. Each particle springs toward the breath at its own pace, so exhales bloom bristled and inhales rush back.',
     'Open palm: exhale. Fist: inhale all the way and the sphere implodes into a bright core; open your hand and it blooms back out.',
     'Two hands: pull them apart and the sphere divides gradually into two, one per hand, each breathing with its own hand. The two pull on each other like gravity; bring them together and when they touch, particles cross over where they meet and the two blend into one shared sphere.',
-    'Pull apart: pinch and hold with both hands and the sphere is torn to each pinch, fast; open both palms and pull apart and it separates slowly, like iron filings between two magnets. A fist pulls its particles in faster.',
+    'Pull apart: pinch with both hands and draw them apart; the sphere stretches into two lobes and comes apart smoothly once your pinches are far enough apart. Or open both palms and pull apart, and it separates slowly, like iron filings between two magnets. The two spheres attract each other gently; bring them well together to merge them. A fist pulls its particles in faster.',
     'Pinch: the sphere moves to your pinch, its particles streaming there and forming it again around your fingers; let go and they stream back to your palm. Brush your hand across it to spin it like a ball; roll your hand to turn it; swipe to fling it. No hand: it breathes on its own at Rate.',
     'Count, Size: how many and how big. Bristles: the streaks of rushing particles. Rate: breaths a minute with no hand. Speed: how fast the particles travel and breathe. Fluidity: how liquid it feels — particles trail further behind your hand, the shell sloshes after each breath and ripples on its surface. Glow: a soft bloom around them. Flash: how bright the core flashes when it implodes (0: none). Dissipate: fades the particles away when no hand is up. Modes: tap the tile. Sphere: dots. Zero: digits counting 0–9 down the sphere. Binary: flickering 0s and 1s. Color: far left green. Dim: darkens the camera.'
   ],
@@ -1072,9 +1068,8 @@ Magi.effectGuides = {
   ],
   siri: [
     'How it works: a voice assistant’s listening wave, driven by your hand instead of your voice. Open your hand to wake it; how open it is sets how loud it is, so the waves swell and shrink like a voice. Make a fist, or take your hand away, and it rests as a calm thin wave at the bottom.',
-    'It follows your hand around the picture. Pinch and spread thumb and index to shrink and grow it.',
-    'Modes: tap the tile. Wave: three soft colored waves (pink, light blue, violet) that brighten where they cross. Pill: a dark glass pill whose lower edge glows with a moving spectrum, shrinking to a bar when resting.',
-    'Height: how tall the waves (or the glow) get. Size: how wide. Speed: how fast they move. Glow: the halo. Dim: darkens the camera while it is awake.'
+    'It stays at mid-height and follows your hand from side to side. Pinch and spread thumb and index to shrink and grow it. Three soft colored waves (pink, light blue, violet) brighten where they cross.',
+    'Height: how tall the waves get. Size: how wide. Speed: how fast they move. Glow: the halo. Dim: darkens the camera while it is awake.'
   ],
   swarm: [
     'How it works: a flock of mouse cursors. Each is steered to its own target by a critically damped spring and kept apart from its neighbors (a boid rule), so a moving target pulls them into a stream.',

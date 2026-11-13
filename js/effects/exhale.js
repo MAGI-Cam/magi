@@ -22,9 +22,9 @@
 // the Fibonacci points 2k + g of 2n), so the two populations share one shell. Splitting runs the
 // same way backwards.
 // Two spheres attract: each center is held to its hand by a spring (1.6 Hz) and pulled toward the
-// other by Newtonian gravity, a = G/d² (G = 1.9·ω²·R³, so 2.5 radii apart the pull moves each about
-// a third of a radius off its hand). When their shells touch (centers closer than 0.9 of the summed
-// radii) they merge; pull your hands more than 3.4 radii apart and it splits (no re-merge for 1 s).
+// other by Newtonian gravity, a = G/d² (G = 1.2·ω²·R³, so 2.5 radii apart the pull moves each about
+// a fifth of a radius off its hand: G/(ω²d²) = 1.2R³/(2.5R)² ≈ 0.19R). When their shells overlap
+// (centers closer than 0.75 of the summed radii) they merge; pull your hands more than 3.4 radii apart and it splits (no re-merge for 1 s).
 // Each sphere turns as a rigid body (rotation matrix M, angular velocity ω). Brushing your hand
 // across it spins it like a ball (ω gains the hand's velocity ÷ radius, about the axis perpendicular
 // to the motion); rolling your hand turns it about the view axis; a swipe flings it. Spin slows with
@@ -39,10 +39,11 @@
 // (ζ = 0.5 − 0.5f, at least 0.08), so the shell sloshes and rings after each breath, and a
 // standing surface wave rides on the shell, two low modes of a drop,
 // δr = 0.12f·sin(4x + 2.1t)·cos(3y − 1.6t) in the sphere's own frame, so it turns with it.
-// Separating with two hands: pinch and hold with both and each sphere is torn to its own pinch
-// (the split happens at once, the shared particles cross in 0.25 s and stream with short lags);
-// two open palms pull it apart magnetically: each palm draws its own particles, the sphere
-// stretches into two lobes and splits at 2.4 radii (crossing in 0.9 s), like iron filings between
+// Separating with two hands: pinch with both and draw them apart: the sphere stretches into two
+// lobes as the pinches separate, splits once they are 1.8 radii apart, and the shared particles
+// cross over in 0.7 s, each sphere gliding to its pinch (0.12 s); two open palms pull it apart
+// magnetically: each palm draws its own particles, the sphere stretches into two lobes and splits
+// at 2.4 radii (crossing in 1.2 s), like iron filings between
 // two poles. A fist pulls its particles in faster (the inhale's
 // time constant drops from 0.18 s to 0.07 s and the particles' lag halves).
 // Flash: how bright and wide the core flashes when a sphere implodes (and how much the shell
@@ -111,18 +112,20 @@
 
         // Merge state: one hand or none, merged; two hands, merge on touch and split when pulled apart.
         if (!two) mergedFlag = true;
-        else if (mergedFlag && bothPinched) { mergedFlag = false; splitAt = t; }
+        else if (mergedFlag && bothPinched && Math.hypot(hands[0].center.x - hands[1].center.x, hands[0].center.y - hands[1].center.y) > 1.8 * Rsep) { mergedFlag = false; splitAt = t; }
         else if (mergedFlag && Math.hypot(hands[0].center.x - hands[1].center.x, hands[0].center.y - hands[1].center.y) > (bothOpen ? 2.4 : 3.4) * Rsep) { mergedFlag = false; splitAt = t; }
         // Magnetism: with both palms open, each palm pulls its own particles toward it, so the
         // combined sphere stretches into two lobes before it splits; the pull grows with the gap
         // between your hands (0 at one radius apart, full, 75%, at 2.4).
-        var stretch = bothOpen ? Math.max(0, Math.min(0.75, (Math.hypot(hands[0].center.x - hands[1].center.x, hands[0].center.y - hands[1].center.y) / Rsep - 1) / 1.4 * 0.75)) : 0;
+        // (Both pinching stretches it the same way, so a pinch pull-apart also comes apart in lobes.)
+        var stretch = bothOpen || bothPinched ? Math.max(0, Math.min(0.75, (Math.hypot(hands[0].center.x - hands[1].center.x, hands[0].center.y - hands[1].center.y) / Rsep - 1) / 1.4 * 0.75)) : 0;
         groups.forEach(function (G, g) { if (!G.center) { var h0 = ownHand(g); G.center = h0 ? { x: h0.center.x, y: h0.center.y } : { x: home.x, y: home.y }; } });
         if (two && !mergedFlag && !bothPinched && t - splitAt > 1) {
           var rr0 = Rsep * (0.02 + 1.03 * groups[0].breath), rr1 = Rsep * (0.02 + 1.03 * groups[1].breath);
-          if (Math.hypot(groups[0].center.x - groups[1].center.x, groups[0].center.y - groups[1].center.y) < 0.9 * (rr0 + rr1)) mergedFlag = true;
+          if (Math.hypot(groups[0].center.x - groups[1].center.x, groups[0].center.y - groups[1].center.y) < 0.75 * (rr0 + rr1)) mergedFlag = true;
         }
-        var tauM = bothPinched ? 0.25 : bothOpen && !mergedFlag ? 0.9 : 0.8;
+        // Splitting eases over 0.7 s with pinches, 1.2 s with open palms, 1 s otherwise; merging 0.8 s.
+        var tauM = mergedFlag ? 0.8 : bothPinched ? 0.7 : bothOpen ? 1.2 : 1.0;
         m += ((mergedFlag ? 1 : 0) - m) * (1 - Math.exp(-dt / tauM));
         // Dissipate: fade away with no hands, gather back when one returns.
         var visT = params.dissipate && !hands.length ? 0 : 1;
@@ -137,9 +140,10 @@
           G.wasPinched = pinched;
         });
         // Centers: the pinch, or a spring to the hand (or home), plus mutual gravity while apart.
-        var wc = 2 * Math.PI * 1.6, Gk = 1.9 * wc * wc * Rsep * Rsep * Rsep;
+        var wc = 2 * Math.PI * 1.6, Gk = 1.2 * wc * wc * Rsep * Rsep * Rsep;
         groups.forEach(function (G, g) {
-          if (G.pin) { G.center.x = G.pin.x; G.center.y = G.pin.y; G.cv.x = G.cv.y = 0; return; }
+          // A pinched sphere glides to the pinch (time constant 0.12 s) rather than jumping there.
+          if (G.pin) { var kp = 1 - Math.exp(-dt / 0.12); G.center.x += (G.pin.x - G.center.x) * kp; G.center.y += (G.pin.y - G.center.y) * kp; G.cv.x = G.cv.y = 0; return; }
           var h0 = ownHand(g), aim = h0 ? h0.center : home;
           var ax = wc * wc * (aim.x - G.center.x) - 2 * 0.9 * wc * G.cv.x, ay = wc * wc * (aim.y - G.center.y) - 2 * 0.9 * wc * G.cv.y;
           if (!h0) { ax *= 0.15; ay *= 0.15; }
