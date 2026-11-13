@@ -14,7 +14,7 @@
 // Look: each particle a small ring; moving ones light up white with a streak back along their
 // motion, brighter the faster they go. Hide: resting particles are invisible, so only the reactive
 // ones show. Color tints them (far left white), Glow adds a soft halo to moving ones. Pointer: a red
-// dot on each index fingertip, as in the reference.
+// dot on each fingertip (all five push the particles).
 (function () {
   var TIPS = [4, 8, 12, 16, 20];
 
@@ -114,7 +114,7 @@
         ctx.globalCompositeOperation = 'source-over';
         if (params.pointer) {
           ctx.fillStyle = '#ff3b30';
-          ix.hands.forEach(function (hd) { var q = hd.points[8]; ctx.beginPath(); ctx.arc(q.x, q.y, 3.5 * u, 0, Math.PI * 2); ctx.fill(); });
+          ix.hands.forEach(function (hd) { TIPS.forEach(function (k) { var q = hd.points[k]; ctx.beginPath(); ctx.arc(q.x, q.y, 3.5 * u, 0, Math.PI * 2); ctx.fill(); }); });
         }
         ctx.restore();
         var tracker = Magi.tracking.hands;

@@ -550,7 +550,8 @@
   // attractor goes from a pair of tight rings to a broad spiral; with no hand α drifts slowly.
   // Turning your hand turns the view. Points that escape (|x|, |y| or |z| > 20) restart near the
   // origin. Each point leaves a pastel trail (hue by height z) added like light, fading by Trail.
-  // The equations and α read on the HUD; red squares sit on your fingertips, α at the index tip.
+  // The equations and α read on the HUD; red squares sit on your fingertips, α at the index tip
+  // (Marks shows or hides the squares, the thumb–index line and the α tag).
   // Strength: how bright and thick the trails are (light per segment 0.32 × Strength/50, width
   // grows with it), from a faint haze to a solid glow.
   // Two hands: two attractors, one per hand, each with its own α and view, beside its hand.
@@ -620,8 +621,8 @@
       ctx.globalCompositeOperation = 'lighter';
       ctx.drawImage(trail, 0, 0);
       ctx.restore();
-      // Fingertip squares and each hand's α.
-      hs.forEach(function (hd, k) {
+      // Fingertip squares, the thumb–index line and each hand's α (Marks hides them).
+      if (params.rmarks !== false) hs.forEach(function (hd, k) {
         ctx.save();
         ctx.strokeStyle = k ? '#ff9f43' : '#ff3b30'; ctx.lineWidth = Math.max(1, 1.2 * u);
         [4, 8, 12, 16, 20].forEach(function (k2) { var pt = hd.points[k2]; ctx.strokeRect(pt.x - 4 * u, pt.y - 4 * u, 8 * u, 8 * u); });

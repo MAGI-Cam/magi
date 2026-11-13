@@ -1,5 +1,5 @@
 // Polar: a ball of fur — tens of thousands of short, fine, straight strands combed into locks —
-// that breathes, rolls and twists round a pole, seen through a fisheye lens (after a reference of
+// that breathes, rolls and twists round a pole, in perspective (after a reference of
 // a "polar coordinates" fur study in TouchDesigner).
 //
 // Every strand is computed on the GPU each frame from its own fixed random numbers, so the fur is
@@ -14,15 +14,15 @@
 //   The strand: a segment of length ∝ Length through its root along d, its root swaying with the
 //     noise (Turbulence).
 // Drawing: segments added as light, then a soft halo (the same picture at a quarter size, scaled
-// up). The view is an equidistant fisheye: a point at angle θ off the lens axis lands at radius
-// θ/(fov/2), so the ball bulges toward you; Fisheye sets the field of view, 60°–200°.
+// up). The view is a perspective camera 3.2 units from the ball's plane: k = f/(f + z), so the near
+// side of the ball is drawn larger than the far side.
 // Color: white strands tinted by two colors that blend by a slow noise across the ball; Color 0
 // drifts through lilac, teal and white, or pick one.
 //
 // Gesture: your hand is the pole. The ball sits at your palm. A fist packs it small and dense; an
 // open hand lets it swell and the strands fly (the outline ripples harder). Roll your wrist to twist
 // the fur round the pole (either way). Pinch and drag to spin the ball; it coasts when you let go.
-// Two hands: the ball sits between them and their distance sets the field of view. No hand: it
+// Two hands: the ball sits between them and grows as they move apart. No hand: it
 // rolls slowly in the middle.
 (function () {
   var NOISE = [
@@ -53,7 +53,7 @@
   var VS = [
     '#version 300 es',
     'precision highp float;',
-    'uniform float time, len, R, turb, comb, twist, ripple, fov, focal, aspect, alpha;',
+    'uniform float time, len, R, turb, comb, twist, ripple, focal, aspect, alpha;',
     'uniform vec3 center, colA, colB;',
     'uniform mat3 view;',
     'out vec3 vC;',
@@ -77,10 +77,8 @@
     '  p += d * turb * 0.12 * R * snoise(q * 0.5 + vec3(time * 0.3));',
     '  float L = len * R * (0.4 + h(fi + 0.41));',
     '  vec3 w = view * (p + d * L * (end - 0.5)) + center;',
-    '  vec3 r3 = vec3(w.xy, w.z + focal); float th = atan(length(r3.xy), r3.z);',
-    '  vec2 dir = length(r3.xy) > 1e-6 ? normalize(r3.xy) : vec2(0.0);',
-    '  vec2 s = vec2(dir.x / aspect, dir.y) * th / (fov * 0.5);',
-    '  gl_Position = th > fov * 0.5 ? vec4(9.0, 9.0, 0.0, 1.0) : vec4(s, 0.0, 1.0);',
+    '  float kp = focal / max(0.05, focal + w.z);',
+    '  gl_Position = vec4(w.x * kp / aspect, w.y * kp, 0.0, 1.0);',
     '  float m = 0.5 + 0.5 * snoise(p / R * 0.8 + vec3(time * 0.05));',
     '  vec3 c = mix(vec3(1.0), mix(colA, colB, m), 0.25 + 0.6 * h(fi + 0.53));',
     '  vC = c * alpha * (0.5 + 0.5 * h(fi + 0.67)) * (0.75 + 0.5 * (1.0 - length(p) / max(R, 1e-3)));',
@@ -91,15 +89,6 @@
   var DRIFT = [[[0.78, 0.6, 1.0], [0.55, 0.95, 0.9]], [[0.6, 0.95, 0.9], [1.0, 1.0, 1.0]], [[0.75, 0.42, 1.0], [0.85, 0.75, 1.0]], [[0.6, 0.78, 1.0], [0.9, 0.6, 1.0]]];
   var FOCAL = 3.2;
   function toWorld(q, W, H) { var a = W / H; return [(q.x / W * 2 - 1) * a, 1 - q.y / H * 2, 0]; }
-  // Where on the plane z = 0 a screen point lands under the fisheye, so the ball sits under your
-  // palm: a point seen at screen radius ρ is at angle θ = ρ·fov/2 off the axis, so at distance
-  // focal·tan θ from it (θ capped below 90°).
-  function underLens(v, fov) {
-    var rho = Math.hypot(v[0], v[1]), th = Math.min(1.35, rho * fov / 2);
-    if (rho < 1e-5) return [0, 0, 0];
-    var r = FOCAL * Math.tan(th);
-    return [v[0] / rho * r, v[1] / rho * r, 0];
-  }
   function openness(h) { var o = ['index', 'middle', 'ring', 'pinky'].reduce(function (a, f) { return a + (1 - h.fingers[f].curl) / 4; }, 0); return Math.max(0, Math.min(1, (o - 0.25) / 0.6)); }
 
   function createGL() {
@@ -129,7 +118,7 @@
   }
 
   Magi.renderers.polar = function () {
-    var g, lastT = null, S = { c: [0, 0, 0], open: 0.5, twist: 0, fov: 0 }, spin = { yaw: 0, pitch: 0.3, vy: 0.15, vp: 0 }, grab = null;
+    var g, lastT = null, S = { c: [0, 0, 0], open: 0.5, twist: 0, span: 1 }, spin = { yaw: 0, pitch: 0.3, vy: 0.15, vp: 0 }, grab = null;
     var halo = document.createElement('canvas'), hctx = halo.getContext('2d');
     return {
       animated: true,
@@ -145,22 +134,23 @@
         var dt = lastT === null ? 1 / 60 : Math.max(1 / 240, Math.min(1 / 20, t - lastT)); lastT = t;
         var ix = Magi.interaction.read(frame), hands = ix.hands.slice(0, 2), hd = hands[0];
 
-        var fovP = (60 + params.fisheye / 100 * 140) * Math.PI / 180, T = { c: [0, 0, 0], open: 0.45, twist: 0, fov: fovP };
+        var T = { c: [0, 0, 0], open: 0.45, twist: 0, span: 1 };
         if (hands.length === 2) {
           var a = toWorld(hands[0].center, W, H), b = toWorld(hands[1].center, W, H);
           var d = Math.hypot(hands[0].center.x - hands[1].center.x, hands[0].center.y - hands[1].center.y) / W;
-          T.fov = (60 + Math.max(0, Math.min(1, (d - 0.15) / 0.6)) * 140) * Math.PI / 180;
-          T.c = underLens([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], T.fov);
+          // Two hands: the ball sits between them and grows as they move apart (0.6× to 1.8×).
+          T.span = 0.6 + 1.2 * Math.max(0, Math.min(1, (d - 0.15) / 0.6));
+          T.c = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, 0];
           T.open = (openness(hands[0]) + openness(hands[1])) / 2;
           T.twist = ((hands[0].rotation || 0) + (hands[1].rotation || 0)) / 2 / 50;
         } else if (hd) {
-          T.c = underLens(toWorld(hd.center, W, H), T.fov); T.open = hd.fist ? 0 : openness(hd); T.twist = (hd.rotation || 0) / 50;
+          T.c = toWorld(hd.center, W, H); T.open = hd.fist ? 0 : openness(hd); T.twist = (hd.rotation || 0) / 50;
         }
         var e = 1 - Math.exp(-dt / 0.3);
         S.c = S.c.map(function (v, i) { return v + (T.c[i] - v) * e; });
         S.open += (T.open - S.open) * e;
         S.twist += (Math.max(-1, Math.min(1, T.twist)) - S.twist) * e;
-        S.fov = S.fov ? S.fov + (T.fov - S.fov) * e : T.fov;
+        S.span += (T.span - S.span) * e;
 
         // Pinch and drag: spin the ball (trackball); it coasts and slows when released.
         var pin = hands.filter(function (h) { return h.pinched; })[0];
@@ -184,7 +174,7 @@
           f = f * f * (3 - 2 * f);
           A = P0[0].map(function (v, j) { return v + (P1[0][j] - v) * f; }); B = P0[1].map(function (v, j) { return v + (P1[1][j] - v) * f; });
         }
-        var R = (0.8 + 0.6 * S.open) * (0.5 + params.size / 100), N = Math.round(params.count) * 1000;
+        var R = (0.32 + 0.28 * S.open) * (0.5 + params.size / 100) * S.span, N = Math.round(params.count) * 1000;
         var sL = Math.min(1, 1280 / Math.max(W, H)), w = Math.max(1, Math.round(W * sL)), h = Math.max(1, Math.round(H * sL));
         // Brightness per strand: the ball's area over the strands' total ink, so density reads the
         // same at any count.
@@ -192,7 +182,7 @@
         g.draw(w, h, N, {
           time: t * (0.6 + params.speed / 100 * 1.6), len: 0.04 + params.length / 100 * 0.2, R: R, turb: 0.3 + params.turbulence / 100 * 1.4 * (0.6 + S.open),
           comb: 1.2 + params.turbulence / 100 * 2.5, twist: S.twist * params.twist / 100 * 1.6 + (hands.length ? 0 : 0.15 * params.twist / 100), ripple: 0.6 + 0.8 * S.open,
-          fov: S.fov, focal: FOCAL, aspect: w / h, alpha: alpha, center: S.c, colA: A, colB: B, view: M
+          focal: FOCAL, aspect: w / h, alpha: alpha, center: S.c, colA: A, colB: B, view: M
         });
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';

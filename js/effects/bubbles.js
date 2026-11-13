@@ -23,11 +23,22 @@
 // head-on. Films drain, so d is thinner at the top (d0 → 0.55·d0). How much light the film
 // reflects at all follows Schlick's Fresnel term, F = F0 + (1 − F0)(1 − cos θ)^5 with
 // F0 = 0.02: almost clear in the middle, bright at the rim. A specular highlight sits at the upper
-// left and a dimmer reflection of it at the lower right. Each bubble is drawn from a cached sprite
-// (12 sizes × 3 film thicknesses), so hundreds stay cheap.
+// left and a dimmer reflection of it at the lower right. The film's color is summed over seven
+// wavelengths (400–700 nm) and its thickness wanders in swirled bands, as real films do. Each bubble
+// is drawn from a cached sprite (21 sizes up to ~350 px radius, always scaled down, × 3 film
+// thicknesses), so hundreds stay cheap and big ones stay sharp.
 (function () {
   var TIPS = [4, 8, 12, 16, 20], MAX = 600, TAU = 0.5, N_FILM = 1.33, F0 = 0.02;
-  var LAMBDA = [650, 532, 450], THICK = [380, 470, 560], SIZES = 12;
+  var LAMBDA = [650, 532, 450], THICK = [380, 470, 560], SIZES = 21, STEP = 1.25;
+  // Soap's film color is summed over seven wavelengths across the visible spectrum (400–700 nm),
+  // each weighted by its color (Bruton's fit of the spectrum) and normalized so a film reflecting
+  // all of them equally is white: smoother, truer interference colors than three samples.
+  var SPEC = [400, 450, 500, 550, 600, 650, 700].map(function (l) {
+    var c = l < 440 ? [-(l - 440) / 60, 0, 1] : l < 490 ? [0, (l - 440) / 50, 1] : l < 510 ? [0, 1, -(l - 510) / 20] : l < 580 ? [(l - 510) / 70, 1, 0] : l < 645 ? [1, -(l - 645) / 65, 0] : [1, 0, 0];
+    var f = l < 420 ? 0.3 + 0.7 * (l - 380) / 40 : l > 645 ? 0.3 + 0.7 * (700 - l) / 55 : 1;
+    return { l: l, c: c.map(function (v) { return Math.max(0, Math.min(1, v)) * f; }) };
+  });
+  var SPEC_N = [0, 1, 2].map(function (k) { return SPEC.reduce(function (a, s) { return a + s.c[k]; }, 0); });
 
   var sprites = {};
   // Sprite for radius bucket `b` and film thickness index `f`, drawn at radius rb pixels; films
@@ -36,7 +47,7 @@
     k = k || 1;
     var key = b + ':' + f + ':' + k.toFixed(2);
     if (sprites[key]) return sprites[key];
-    var rb = Math.round(4 * Math.pow(1.32, b)), size = rb * 2 + 2;
+    var rb = Math.round(4 * Math.pow(STEP, b)), size = rb * 2 + 2;
     var c = document.createElement('canvas');
     c.width = c.height = size;
     var g = c.getContext('2d'), img = g.createImageData(size, size), d = img.data, cx = size / 2;
@@ -46,15 +57,23 @@
         var o = (y * size + x) * 4;
         if (rho > 1) { d[o + 3] = 0; continue; }
         var cosI = Math.sqrt(1 - rho * rho), sinT = rho / N_FILM, cosT = Math.sqrt(1 - sinT * sinT);
-        var film = THICK[f] * k * (0.55 + 0.45 * (dy + 1) / 2); // thinner at the top
+        // Thinner at the top (the film drains), with swirls: films are never even, and the thickness
+        // wanders in marbled bands (two crossed, bent sines, ±18% and ±10%).
+        var swirl = 1 + 0.18 * Math.sin(3.1 * dx + 2.3 * Math.sin(2.7 * dy + f)) + 0.1 * Math.sin(5.3 * dy - 1.7 * dx + 1.3 * f);
+        var film = THICK[f] * k * (0.55 + 0.45 * (dy + 1) / 2) * swirl;
         var F = F0 + (1 - F0) * Math.pow(1 - cosI, 5);
-        var rgb = LAMBDA.map(function (l) { var s = Math.sin(2 * Math.PI * N_FILM * film * cosT / l); return s * s; });
+        var rgb = [0, 0, 0];
+        for (var si = 0; si < SPEC.length; si++) {
+          var sv = Math.sin(2 * Math.PI * N_FILM * film * cosT / SPEC[si].l), R = sv * sv, sc = SPEC[si].c;
+          rgb[0] += R * sc[0]; rgb[1] += R * sc[1]; rgb[2] += R * sc[2];
+        }
+        rgb = rgb.map(function (v, ci) { return Math.min(1, v / SPEC_N[ci] * 1.9); });
         // Highlight (upper left) and its dim reflection (lower right).
         var h1 = Math.exp(-(Math.pow(dx + 0.38, 2) + Math.pow(dy + 0.42, 2)) / 0.018);
         var h2 = 0.35 * Math.exp(-(Math.pow(dx - 0.45, 2) + Math.pow(dy - 0.4, 2)) / 0.03);
         var edge = Math.max(0, 1 - (1 - rho) * rb / 1.2); // a crisp rim line, ~1 px
         var a = Math.min(1, 0.05 + F * 1.4 + h1 + h2 + edge * 0.35);
-        for (var k = 0; k < 3; k++) d[o + k] = Math.min(255, 255 * (0.55 + 0.45 * rgb[k] + h1 + h2) );
+        for (var ci = 0; ci < 3; ci++) d[o + ci] = Math.min(255, 255 * (0.35 + 0.65 * rgb[ci] + h1 + h2));
         d[o + 3] = Math.min(255, a * 255 * Math.min(1, (1 - rho) * rb + 0.5)); // antialiased edge
       }
     }
@@ -66,7 +85,9 @@
     switch (i % 6) { case 0: r = v; g = t; b = p; break; case 1: r = q; g = v; b = p; break; case 2: r = p; g = v; b = t; break; case 3: r = p; g = q; b = v; break; case 4: r = t; g = p; b = v; break; default: r = v; g = p; b = q; }
     return 'rgb(' + Math.round(r * 255) + ',' + Math.round(g * 255) + ',' + Math.round(b * 255) + ')';
   }
-  function bucketFor(r) { return Math.max(0, Math.min(SIZES - 1, Math.round(Math.log(Math.max(4, r) / 4) / Math.log(1.32)))); }
+  // The next size up, so a bubble is always drawn from a sprite at least its own size (scaled down,
+  // never up, so it stays sharp).
+  function bucketFor(r) { return Math.max(0, Math.min(SIZES - 1, Math.ceil(Math.log(Math.max(4, r) / 4) / Math.log(STEP) - 1e-6))); }
 
   // Electrokinetic glazing, as in the Facade effect: per cell, a dot of the cell's color whose area
   // is proportional to its brightness (radius = cell · √(luma / π) · 1.1), anti-aliased, on black.
@@ -117,6 +138,7 @@
     function drawBubble(ctx, x, y, r, film, spin, wob) {
       if (r < 1.5) return;
       var sp = sprite(bucketFor(r), film, filmK), k = r / sp.r;
+      ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
       ctx.setTransform(k * (1 + wob), 0, 0, k * (1 - wob), x, y);
       ctx.rotate(spin * 0.15);
       ctx.drawImage(sp.c, -sp.c.width / 2, -sp.c.height / 2);

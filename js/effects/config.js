@@ -158,6 +158,7 @@ Magi.effectConfig = [
       { id: 'trail', label: 'Trail', min: 0, max: 100, step: 1, default: 70, modes: ['rabinovich'] },
       { id: 'size', label: 'Size', min: 0, max: 100, step: 1, default: 50, modes: ['rabinovich'] },
       { id: 'strength', label: 'Strength', min: 0, max: 100, step: 1, default: 50, modes: ['rabinovich'] },
+      { id: 'rmarks', label: 'Marks', type: 'toggle', default: true, modes: ['rabinovich'], hint: 'The squares on your fingertips, the thumb–index line and its α.' },
       { id: 'zcount', label: 'Count', min: 300, max: 3000, step: 1, default: 1200, modes: ['zero'] },
       { id: 'zsize', label: 'Size', min: 0, max: 100, step: 1, default: 50, modes: ['zero'] },
       { id: 'ztext', label: 'Text', min: 0, max: 100, step: 1, default: 40, modes: ['zero'] },
@@ -199,11 +200,11 @@ Magi.effectConfig = [
     ready: true,
     photoType: 'image/jpeg',
     params: [
-      range('size', 'Size', 0, 100, 10),
-      range('thickness', 'Thickness', 0, 100, 100),
-      range('texture', 'Texture', 0, 100, 75),
+      range('size', 'Size', 0, 100, 0),
+      range('thickness', 'Thickness', 0, 100, 30),
+      range('texture', 'Texture', 0, 100, 0),
       range('spikiness', 'Spikiness', 0, 100, 100),
-      range('rate', 'Rate', 0, 100, 30),
+      range('rate', 'Rate', 0, 100, 100),
       range('points', 'Points', 40, 600, 200),
       { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
       range('dim', 'Dim', 0, 100, 0),
@@ -248,7 +249,8 @@ Magi.effectConfig = [
       { id: 'lightbeam', name: 'Lightbeam' },
       { id: 'thundercloud', name: 'Thundercloud' },
       { id: 'symbiote', name: 'Symbiote' },
-      { id: 'hurricane', name: 'Hurricane' }
+      { id: 'hurricane', name: 'Hurricane' },
+      { id: 'rabinovich', name: 'Rabinovich' }
     ],
     params: [
       range('count', 'Count', 20, 1000, 250),
@@ -342,16 +344,16 @@ Magi.effectConfig = [
     ready: true,
     photoType: 'image/jpeg',
     params: [
-      range('count', 'Count', 200, 5000, 2600),
-      range('stiffness', 'Stiffness', 0, 100, 35),
-      range('bounce', 'Bounce', 0, 100, 70),
+      range('count', 'Count', 200, 5000, 5000),
+      range('stiffness', 'Stiffness', 0, 100, 100),
+      range('bounce', 'Bounce', 0, 100, 0),
       range('push', 'Push', 0, 100, 50),
-      range('reach', 'Reach', 0, 100, 40),
-      { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 42, track: 'hue' },
+      range('reach', 'Reach', 0, 100, 80),
+      { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 1, track: 'hue' },
       range('glow', 'Glow', 0, 100, 80),
       range('dim', 'Dim', 0, 100, 0),
       toggle('hide', 'Hide', true, 'Hide resting particles: only the ones your hand moves show.'),
-      toggle('pointer', 'Pointer', false, 'A red dot on your index fingertip.'),
+      toggle('pointer', 'Pointer', false, 'A red dot on each fingertip.'),
       { id: 'text', label: 'Text', type: 'text', default: '', placeholder: 'Any characters (empty: whole screen)', maxLength: 40 }
     ]
   },
@@ -390,7 +392,6 @@ Magi.effectConfig = [
       range('length', 'Length', 0, 100, 50),
       range('turbulence', 'Turbulence', 0, 100, 50),
       range('twist', 'Twist', 0, 100, 45),
-      range('fisheye', 'Fisheye', 0, 100, 40),
       range('speed', 'Speed', 0, 100, 40),
       range('exposure', 'Exposure', 0, 100, 50),
       range('glow', 'Glow', 0, 100, 40),
@@ -450,10 +451,10 @@ Magi.effectConfig = [
       { id: 'mosaic', label: 'Mosaic', min: 0, max: 100, step: 1, default: 0, modes: ['blur'] },
       { id: 'speed', label: 'Speed', min: 0, max: 100, step: 1, default: 30, modes: ['acid', 'thermal'] },
       { id: 'line', label: 'Line', type: 'toggle', default: false, modes: ['acid', 'thermal', 'invert', 'blur', 'print'], hint: 'A crisp outline around the window, or around each sheet.' },
-      { id: 'border', label: 'Border', type: 'toggle', default: true, modes: ['print'], hint: 'A white paper margin around the print. Off: full bleed.' },
+      { id: 'border', label: 'Border', type: 'toggle', default: false, modes: ['print'], hint: 'A white paper margin around the print. Off: full bleed.' },
       { id: 'sheets', label: 'Sheets', min: 1, max: 4, step: 1, default: 1, modes: ['print'] },
-      { id: 'dots', label: 'Dots', min: 1, max: 9, step: 1, default: 4, modes: ['print'] },
-      { id: 'grain', label: 'Grain', min: 0, max: 100, step: 1, default: 60, modes: ['print'] },
+      { id: 'dots', label: 'Dots', min: 0, max: 9, step: 1, default: 0, modes: ['print'] },
+      { id: 'grain', label: 'Grain', min: 0, max: 100, step: 1, default: 0, modes: ['print'] },
       { id: 'shift', label: 'Shift', min: 0, max: 100, step: 1, default: 35, modes: ['print'] },
       { id: 'cells', label: 'Cells', min: 1, max: 9, step: 1, default: 3, modes: ['code'] },
       { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue', modes: ['code'] },
@@ -945,7 +946,7 @@ Magi.effectGuides = {
     'Attention: your image library as a Mapper graph: images that look alike gather into nodes, and nodes that share images are linked. View 0 Graph, 1 PCA (each image by its two main directions of variation). Feed: a JSON feed or Are.na channel; images with an embedding in the feed are grouped by it, others by color. Without a feed, camera snapshots stand in.',
     'Attention gestures: point (only the index up) to select the node under your fingertip and fan out its images; a fist pulls the graph in; an open palm spreads it out.',
     'Sequencer: three rings of Euclidean rhythms (events spread as evenly as possible over the steps). Grip and turn like a knob to change a ring’s number of events: thumb and index out for red, add the middle finger for yellow, all five for blue. Close your hand to randomize where the events sit. Tempo: speed. Sound: kick, snare and hi-hat, recorded into videos. Dim: darkens the camera.',
-    'Rabinovich: thousands of points ride the Rabinovich–Fabrikant equations. Open thumb and index to raise α (0.1 → 1.3) and reshape the attractor; turn and raise your hand to turn the view. Two hands: two attractors, one per hand. Speed, Trail, Size, Dim. Strength: how bright and thick the trails are.',
+    'Rabinovich: thousands of points ride the Rabinovich–Fabrikant equations. Open thumb and index to raise α (0.1 → 1.3) and reshape the attractor; turn and raise your hand to turn the view. Two hands: two attractors, one per hand. Speed, Trail, Size, Dim. Strength: how bright and thick the trails are. Marks: the fingertip squares and the thumb–index line with its α.',
     'Cohesion: a chord diagram of your hand’s 21 landmarks. Pairs close together are joined, so a fist fills the circle and spread fingers thin it; the level reads at the top with its recent history. Two hands: all 42 landmarks, chords across the hands in white as they come together, and each hand’s level plus the hands’ cohesion.',
     'Pollinate: point with your index finger: a small pad appears there, and only your index finger moves it (by pushing past an edge). Your fingertip’s place on it picks two concepts (across, down). Hold still on a cell for half a second: the cell is marked in red and they pollinate into “A + B = ?” and an idea that decodes on the right. Fist: clears the marks. The two concepts under the crosshair are named beside the pad. Pad: the pad’s size.',
     'Zero: a sphere of digits (each latitude band counts 0–9) with a wireframe cube inside, bent by real shape operators (twist, bend, and a collapse onto its equator), with the formulas and live values in the top-left corner. Pinch and drag: turns it. Spread thumb and index: twists it (roll left to reverse). Fist: collapses it into a flat ring, a zero; open palm: blooms back. Two hands: closer curls it tighter. Swipe left/right: shuffles the digits; up/down: new lines in the cube. Count, Size, Text, Twist, Curl, Spin, Glow, Cube, Color, Dim.',
@@ -961,7 +962,7 @@ Magi.effectGuides = {
   particles: [
     'How it works: every particle sits on a damped spring to its resting place; your fingertips push particles away as they pass, and the field springs back behind them. Moving particles light up and streak.',
     'Count: how many. Stiffness: how fast they spring back. Bounce: how much they overshoot and swing back after being pushed (0: they settle straight back, no bounce). Push, Reach: how hard and how far your fingertips push.',
-    'Text: type any characters to make the particles form them (empty: the whole screen). Hide: only the particles your hand moves show. Pointer: a red dot on your index fingertip. Color, Glow: tint and halo. Dim: darkens the camera.'
+    'Text: type any characters to make the particles form them (empty: the whole screen). Hide: only the particles your hand moves show. Pointer: a red dot on each fingertip. Color, Glow: tint and halo. Dim: darkens the camera.'
   ],
   'particle-life': [
     'How it works: every color is a species. Each species feels every other one as an attraction or a repulsion, set by a hidden random table that isn’t symmetric: red may chase yellow while yellow runs from red. Up close, everything pushes apart so particles never overlap.',
@@ -1083,9 +1084,9 @@ Magi.effectGuides = {
     'Ribbons: how many with no hand up. Palette: 0 Spectrum, 1 Aurora, 2 Ice, 3 Ember, 4 Gold, 5 White. Spread: how far the colors split. Wave: how much the ribbons wave on their own. Width: each ribbon’s width. Exposure, Speed. Paper: colored ribbons on cream paper. Dim.'
   ],
   polar: [
-    'How it works: a ball of fur, tens of thousands of short fine strands combed into locks, seen through a fisheye lens. Each strand grows from a root inside a ball whose outline ripples (its radius is noise in polar coordinates) and points along a smooth 3D noise field, so neighbors point alike; Twist wraps them round the pole.',
-    'Your hand is the pole: the ball sits at your palm. Close your hand for a small dense ball; open it and the ball swells and the fur flies. Roll your wrist to twist the fur round the pole. Pinch and drag to spin it. Two hands: the ball sits between them and their distance sets the fisheye’s field of view.',
-    'Count: strands, in thousands. Size: the ball. Length: the strands. Turbulence: how wild and finely combed. Twist: how strongly rolling your wrist twists them. Fisheye: the lens’s field of view. Speed: how fast it changes. Exposure, Glow. Color: 0 drifts through lilac, teal and white. Dim.'
+    'How it works: a ball of fur, tens of thousands of short fine strands combed into locks. Each strand grows from a root inside a ball whose outline ripples (its radius is noise in polar coordinates) and points along a smooth 3D noise field, so neighbors point alike; Twist wraps them round the pole.',
+    'Your hand is the pole: the ball sits at your palm. Close your hand for a small dense ball; open it and the ball swells and the fur flies. Roll your wrist to twist the fur round the pole. Pinch and drag to spin it. Two hands: the ball sits between them and grows as they move apart.',
+    'Count: strands, in thousands. Size: the ball. Length: the strands. Turbulence: how wild and finely combed. Twist: how strongly rolling your wrist twists them. Speed: how fast it changes. Exposure, Glow. Color: 0 drifts through lilac, teal and white. Dim.'
   ],
   'face-landmarks': [
     'How it works: the 478-point face mesh, contours, head pose and strongest expressions.',
@@ -1132,6 +1133,7 @@ Magi.effectGuides = {
     'How it works: hundreds of thousands of particles on the graphics card, stirred by synthetic turbulence (waves with the energy spectrum of real turbulence); their paths fade slowly, so each draws a strand. Six modes (tap the tile).',
     'Fibre: a sphere held by a spring. One hand moves it, two hands hold it between them. Open palm: fibres fly loose. Fist: it pulls tight. Pinch and drag: turns it. A fast sweep blows the fibres away.',
     'Tidal: your hand is a moon. Its tidal pull (stronger the closer it is, by the inverse cube of the distance) raises two opposite bulges that stream toward and away from it. Open palm: a heavier moon. Fist: the two bulges orbit each other round the middle, faster the longer you hold it; open your hand and they slow down.',
+    'Rabinovich: the whole cloud traces the Rabinovich–Fabrikant attractor (as in the Landmarks mode), each particle following the equations’ flow so the trails draw its rings and sheets. Open and close thumb and index to change α and reshape it; pinch and drag to turn it. Fist: smaller; open palm: bigger. Turbulence: how fast they run.',
     'Hurricane: a storm seen from above, its eye at your palm. Particles are drawn inward and swept round the eye (a vortex that turns like a solid body near the middle and slows farther out), so they wind into spiral rainbands. Pinch and spread thumb and index: the eye closes and opens with them, and the faster you do it the harder the storm spins. Roll your wrist to spin it harder, or the other way to slow and reverse it. Fist: tightens it. Open palm: widens it. Color speed: the color turns round the hue wheel.',
     'Horizon: particles pour along a line, lifted off it like smoke. The line runs through the middle of the picture. It uses the Landmarks Wheel: make a fist and the wheel opens; push or roll toward a number to tilt the line, 1 level and each number 22.5° more; open your hand and it keeps that angle. Wheel: shows or hides the wheel. Open palm: raises a plume.',
     'Lightbeam: a blade of light follows your index finger, fluid like a sword trail in a slicing game: widest at your fingertip, tapering away behind, thinner and brighter the faster you slash; sparks fly off fast strokes. Trails: how long the light lingers (short slashes to long-exposure loops). Size: blade width. Leak: strokes take turns in gold, red and ice blue, with warm light leaks at the edges. Flash: a pinch flashes the background. Fist: wipes it.',

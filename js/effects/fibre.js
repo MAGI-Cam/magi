@@ -26,6 +26,10 @@
 //     a fist opens the wheel; choosing number k tilts the line by (k − 1)·180°/8, and it keeps
 //     that angle. Wheel hides the wheel (the gesture still works). An open palm pushes the
 //     particles away from it (a repelling attractor), raising a plume where it is.
+//   Rabinovich — the cloud traces the Rabinovich–Fabrikant attractor: each particle follows the
+//     system's velocity, ẋ = y(z − 1 + x²) + γx, ẏ = x(3z + 1 − x²) + γy, ż = −2z(α + xy), with
+//     γ = 0.1 and α from your thumb–index opening (0.1–1.3), so the trails draw its rings and
+//     sheets and reshape as you open your fingers. Stragglers past 10 units are reborn.
 //   Hurricane — a storm from above: poured in from four feeder points turning round a ring about
 //     the eye (your palm), held to a disk by a
 //     plane spring, and carried by a vortex with inflow (the engine's twist and inflow,
@@ -78,7 +82,7 @@
 
   function createFibre() {
     var sys = undefined, camCopy = document.createElement('canvas'), lastT = null, center = [0, 0, 0], radius = 0.5, view = { yaw: 0, pitch: 0.2 }, vel = { yaw: 0.15, pitch: 0 }, grab = null, seen = 0;
-    var tk = { amp: 1, hold: 1, rad: 1, tide: 1, heat: 1, spin: 1, inflow: 1 }, cvel = [0, 0, 0], strike = null, strokes = [], curStroke = null, strokeN = 0, tipS = null, lastMode = null, prevTip = null, lineAng = 0, lineY = 0, orbA = 0, orbW = 0, eyeR = 0.1, whip = 0, hueT = 0, wheel = null, flash = 0, wasPinched = {}, wasFist = false;
+    var tk = { amp: 1, hold: 1, rad: 1, tide: 1, heat: 1, spin: 1, inflow: 1 }, cvel = [0, 0, 0], strike = null, strokes = [], curStroke = null, strokeN = 0, tipS = null, lastMode = null, prevTip = null, lineAng = 0, lineY = 0, orbA = 0, orbW = 0, rfA = 0.7, eyeR = 0.1, whip = 0, hueT = 0, wheel = null, flash = 0, wasPinched = {}, wasFist = false;
     return {
       animated: true,
       render: function (frame, out, params) {
@@ -236,6 +240,22 @@
           step.twist = (0.25 + turb * 0.3) * tk.spin; step.inflow = (0.12 + hold * 0.2) * tk.inflow; step.eyeR = eyeR; step.twistAxis = [0, 0, 1];
           step.amp = (0.02 + turb * 0.15) * tk.amp; step.follow = 6; step.kscale = kscale * 1.4; step.lifeMin = 2.5; step.lifeMax = 7; step.soft = 0.25;
           look.areaR = Rh * 0.7; look.pivot = center; look.spin = false; look.depthK = 0.15;
+        } else if (mode === 'rabinovich') {
+          // The Rabinovich–Fabrikant attractor traced by the whole cloud: each particle follows the
+          // system's velocity (the engine's rf flow), so their trails draw the attractor's rings and
+          // sheets. As in the Landmarks mode, γ = 0.1 and your thumb–index opening sets α from 0.1
+          // to 1.3 (pinched to wide open), reshaping it; with no hand α drifts slowly. The attractor
+          // sits at your palm; a fist shrinks it, an open palm enlarges it. Pinch and drag turns it.
+          if (hd) want.c = toW(hd.center);
+          var aT = hd ? 0.1 + 1.2 * Math.max(0, Math.min(1, ((hd.pinchWith.index.distance || 0) - 0.15) / 1.2)) : 0.7 + 0.55 * Math.sin(t * 0.07);
+          rfA += (aT - rfA) * e;
+          hands.forEach(function (h) { if (h.fist) want.rad *= 0.7; else if (h.count >= 4 && !h.pinched) want.rad *= 1.2; });
+          var sc = radius * tk.rad * 0.45;
+          step.rf = true; step.rfAlpha = rfA; step.rfGamma = 0.1; step.rfScale = sc; step.rfSpeed = 0.5 + turb * 1.3;
+          step.follow = 8; step.amp = 0.01 + turb * 0.05; step.emitShape = 3; step.center = center; step.radius = sc * 1.2; step.jitter = 0;
+          step.lifeMin = 3; step.lifeMax = 9;
+          look.areaR = sc * 1.6; look.depthK = 0.4;
+          if (hd) { var hud2 = frame.hud; hud2.save(); hud2.fillStyle = '#fff'; hud2.font = '400 ' + Math.round(9 * frame.pxPerCss) + 'px ' + Magi.fx.MONO; hud2.fillText('α ' + rfA.toFixed(3), hd.points[8].x + 8 * frame.pxPerCss, hd.points[8].y); hud2.restore(); }
         } else if (mode === 'symbiote') {
           var emit = [], hv = [0, 0, 0], hs = 0;
           hands.forEach(function (h) {
@@ -373,6 +393,7 @@
           lightbeam: 'Raise your index finger and draw with light. Fist wipes it; pinch flashes.',
           thundercloud: 'Raise your hand to move the cloud. Fist heats it, open palm swells it, pinch for lightning.',
           symbiote: 'Raise your hands: the ink grows from them and lashes when you move.',
+          rabinovich: 'Raise your hand: open and close thumb and index to reshape the attractor (α); pinch and drag to turn it.',
           hurricane: 'Raise your hand: it is the eye of the storm. Pinch and spread thumb and index to close and open the eye (faster spins it up); roll your wrist to spin it either way.'
         }[mode]);
       },
