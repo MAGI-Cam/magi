@@ -1,6 +1,6 @@
-// Hand, face and body tracking for effects, using Google's MediaPipe Tasks: Hand Landmarker (21
-// points per hand, handedness), Face Landmarker (478 points, 52 blendshape scores, head pose) and
-// Image Segmenter (a person mask).
+// Hand, face, body and object tracking for effects, using Google's MediaPipe Tasks: Hand Landmarker
+// (21 points per hand, handedness), Face Landmarker (478 points, 52 blendshape scores, head pose),
+// Image Segmenter (a person mask) and Object Detector (boxes for 80 kinds of object).
 // These are the same models TouchDesigner's MediaPipe plugin runs. Nothing loads until an effect
 // first asks, so effects that don't track cost nothing.
 //
@@ -20,7 +20,8 @@
   var MODELS = {
     hands: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
     face: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
-    body: 'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/1/selfie_segmenter.tflite'
+    body: 'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/1/selfie_segmenter.tflite',
+    objects: 'https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float16/1/efficientdet_lite0.tflite'
   };
   // One Euro settings, in frame pixels: steady at rest (1.5 Hz cutoff), opening up by 0.05 Hz per
   // pixel/second of speed, with the speed itself filtered at 4 Hz so the filter opens within a few
@@ -308,9 +309,74 @@
     };
   }
 
+  // Objects: MediaPipe's Object Detector (EfficientDet-Lite0, the 80 COCO classes) on a copy of
+  // the frame at most 320 px across, mirrored like the preview, about 10 times a second (it is
+  // heavier than the landmarkers). Detections are followed between runs: each is matched to the
+  // track it overlaps most (intersection over union ≥ 0.3), so an object keeps its id; a track's
+  // box eases toward each new detection (half-life about 0.1 s) and is dropped after 0.5 s unseen.
+  // detect(frame) → [{ id, x, y, w, h, label, score }] in frame pixels.
+  function createObjects() {
+    var status = 'idle', task = null, lastTs = 0, lastRun = -1e9, tracks = [], nextId = 1, lastT = null;
+    var small = document.createElement('canvas'), sctx = small.getContext('2d');
+    function load() {
+      status = 'loading';
+      loadVision().then(function (v) {
+        function create(delegate) {
+          return v.m.ObjectDetector.createFromOptions(v.files, {
+            baseOptions: { modelAssetPath: MODELS.objects, delegate: delegate },
+            runningMode: 'VIDEO', scoreThreshold: 0.35, maxResults: 8
+          });
+        }
+        return create('GPU').catch(function () { return create('CPU'); });
+      }).then(function (t) { task = t; status = 'ready'; })
+        .catch(function (err) { console.warn('Magi: object tracking could not load', err); status = 'failed'; });
+    }
+    function iou(a, b) {
+      var x0 = Math.max(a.x, b.x), y0 = Math.max(a.y, b.y), x1 = Math.min(a.x + a.w, b.x + b.w), y1 = Math.min(a.y + a.h, b.y + b.h);
+      var i = Math.max(0, x1 - x0) * Math.max(0, y1 - y0);
+      return i / Math.max(1e-6, a.w * a.h + b.w * b.h - i);
+    }
+    return {
+      status: function () { return status; },
+      detect: function (frame) {
+        if (status === 'idle') load();
+        var now = frame.time, dt = lastT === null ? 1 / 60 : Math.max(0, Math.min(0.2, (now - lastT) / 1000));
+        lastT = now;
+        if (task && now - lastRun >= 100) {
+          lastRun = now;
+          var k = Math.min(1, 320 / Math.max(frame.width, frame.height));
+          var w = Math.max(1, Math.round(frame.width * k)), h = Math.max(1, Math.round(frame.height * k));
+          if (small.width !== w || small.height !== h) { small.width = w; small.height = h; }
+          frame.draw(sctx, w, h);
+          var ts = Math.max(now, lastTs + 1); lastTs = ts;
+          var res = null;
+          try { res = task.detectForVideo(small, ts); } catch (e) { res = null; }
+          if (res) {
+            var found = (res.detections || []).map(function (d) {
+              var b = d.boundingBox, c = (d.categories || [])[0] || {};
+              return { x: b.originX / k, y: b.originY / k, w: b.width / k, h: b.height / k, label: c.categoryName || c.displayName || 'object', score: c.score || 0 };
+            });
+            var used = {};
+            found.forEach(function (f) {
+              var best = null, bi = 0.3;
+              tracks.forEach(function (t) { if (!used[t.id] && t.label === f.label) { var v = iou(t, f); if (v > bi) { bi = v; best = t; } } });
+              if (!best) { best = { id: nextId++, x: f.x, y: f.y, w: f.w, h: f.h, label: f.label }; tracks.push(best); }
+              used[best.id] = true; best.target = f; best.score = f.score; best.seen = now;
+            });
+            tracks = tracks.filter(function (t) { return now - t.seen < 500; });
+          }
+        }
+        var e = 1 - Math.pow(0.5, dt / 0.1);
+        tracks.forEach(function (t) { var f = t.target; if (!f) return; t.x += (f.x - t.x) * e; t.y += (f.y - t.y) * e; t.w += (f.w - t.w) * e; t.h += (f.h - t.h) * e; });
+        return tracks.map(function (t) { return { id: t.id, x: t.x, y: t.y, w: t.w, h: t.h, label: t.label, score: t.score }; });
+      }
+    };
+  }
+
   Magi.tracking.hands = createTracker('hands');
   Magi.tracking.face = createTracker('face');
   Magi.tracking.body = createSegmenter();
+  Magi.tracking.objects = createObjects();
 
   // A quiet status line while a tracker loads or after it fails, so the effect never looks broken
   // without saying why. Shown as text over the preview through frame.say.

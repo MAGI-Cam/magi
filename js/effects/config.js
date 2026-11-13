@@ -620,7 +620,40 @@ Magi.effectConfig = [
       { id: 'feed', label: 'Feed', type: 'text', default: '', placeholder: 'Feed URL or Are.na channel', maxLength: 300 }
     ]
   },
+  {
+    id: 'siri',
+    name: 'Siri',
+    group: 'hand',
+    ready: true,
+    photoType: 'image/jpeg',
+    modes: [
+      { id: 'wave', name: 'Wave' },
+      { id: 'pill', name: 'Pill' }
+    ],
+    params: [
+      range('height', 'Height', 0, 100, 60),
+      range('size', 'Size', 0, 100, 60),
+      range('speed', 'Speed', 0, 100, 40),
+      range('glow', 'Glow', 0, 100, 60),
+      range('dim', 'Dim', 0, 100, 55)
+    ]
+  },
 
+  {
+    id: 'swarm',
+    name: 'Swarm',
+    group: 'hand',
+    ready: true,
+    photoType: 'image/jpeg',
+    params: [
+      range('count', 'Count', 4, 80, 30),
+      range('size', 'Size', 0, 100, 40),
+      range('speed', 'Speed', 0, 100, 50),
+      toggle('labels', 'Labels', true, 'A tag on each found object: what it is and how sure.'),
+      toggle('guides', 'Guides', true, 'Lines from each object’s box out to the edges of the frame.'),
+      range('dim', 'Dim', 0, 100, 25)
+    ]
+  },
   {
     id: 'face-landmarks',
     name: 'Landmarks',
@@ -988,6 +1021,16 @@ Magi.effectGuides = {
     'Open palm: zooms in, steadily, while you hold it open. Fist: zooms out.',
     'Swipe left or right: flings it into a spin. Tap the tile to change space (Lab, HSL, RGB).',
     'Labels, Text: how many names and how big. Spin: turning with no hand. Dim, Squares, Axes: background, color squares, axes.'
+  ],
+  siri: [
+    'How it works: a voice assistant’s listening wave, driven by your hand instead of your voice. Open your hand to wake it; how open your hand is sets how loud it is, so the waves swell and shrink like a voice. Close your hand, or take it out of the picture, and it shrinks away to the bottom.',
+    'Modes: tap the tile. Wave: three colored waves that mix toward white where they cross, curling into a small glass orb when asleep. Pill: a dark glass pill whose lower edge glows with a moving spectrum, shrinking to a bar when asleep.',
+    'Height: how tall the waves (or the glow) get. Size: how wide. Speed: how fast they move. Glow: the halo. Dim: darkens the camera while it is awake.'
+  ],
+  swarm: [
+    'How it works: a flock of mouse cursors. Each is steered to its own target by a critically damped spring and kept apart from its neighbors (a boid rule), so a moving target pulls them into a stream.',
+    'Point: the cursors follow your index finger in a loose cloud. Fist: they merge into a single cursor. Open palm: unleash them; they leave your hand for the objects in the picture (MediaPipe’s Object Detector, 80 kinds of everyday thing such as people, cups, phones, chairs and plants) and run round each one, which is marked like a design tool’s selection: a box with handles, guides to the edges and a tag.',
+    'Count: how many cursors. Size: how big. Speed: how fast they move and circle. Labels: the tags. Guides: the lines to the edges. Dim: darkens the camera.'
   ],
   'face-landmarks': [
     'How it works: the 478-point face mesh, contours, head pose and strongest expressions.',
