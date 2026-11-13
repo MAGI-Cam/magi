@@ -246,7 +246,8 @@ Magi.effectConfig = [
       { id: 'horizon', name: 'Horizon' },
       { id: 'lightbeam', name: 'Lightbeam' },
       { id: 'thundercloud', name: 'Thundercloud' },
-      { id: 'symbiote', name: 'Symbiote' }
+      { id: 'symbiote', name: 'Symbiote' },
+      { id: 'hurricane', name: 'Hurricane' }
     ],
     params: [
       range('count', 'Count', 20, 1000, 250),
@@ -258,7 +259,7 @@ Magi.effectConfig = [
       range('exposure', 'Exposure', 0, 100, 50),
       range('glow', 'Glow', 0, 100, 35),
       toggle('camera', 'Camera', false, 'Each particle takes the color of the video under it.'),
-      { id: 'ink', label: 'Ink', type: 'toggle', default: false, modes: ['fibre', 'tidal', 'horizon', 'thundercloud'], hint: 'Dark strands on white paper instead of light on dark.' },
+      { id: 'ink', label: 'Ink', type: 'toggle', default: false, modes: ['fibre', 'tidal', 'horizon', 'thundercloud', 'hurricane'], hint: 'Dark strands on white paper instead of light on dark.' },
       { id: 'wheel', label: 'Wheel', type: 'toggle', default: true, modes: ['horizon'], hint: 'Show the wheel while you choose an angle (off: the gesture still works, unseen).' },
       { id: 'leak', label: 'Leak', type: 'toggle', default: true, modes: ['lightbeam'], hint: 'Warm light leaks at the edges and some red-orange strokes.' },
       { id: 'flash', label: 'Flash', type: 'toggle', default: true, modes: ['lightbeam'], hint: 'A pinch fires a white flash over the background.' },
@@ -382,13 +383,14 @@ Magi.effectConfig = [
     group: 'particle',
     ready: true,
     params: [
-      range('count', 'Count', 20, 300, 90),
+      range('count', 'Count', 10, 200, 120),
       range('size', 'Size', 0, 100, 50),
-      range('strands', 'Strands', 0, 100, 75),
-      range('turbulence', 'Turbulence', 0, 100, 55),
+      range('length', 'Length', 0, 100, 50),
+      range('turbulence', 'Turbulence', 0, 100, 50),
       range('twist', 'Twist', 0, 100, 45),
-      range('fisheye', 'Fisheye', 0, 100, 50),
-      range('exposure', 'Exposure', 0, 100, 45),
+      range('fisheye', 'Fisheye', 0, 100, 40),
+      range('speed', 'Speed', 0, 100, 40),
+      range('exposure', 'Exposure', 0, 100, 50),
       range('glow', 'Glow', 0, 100, 40),
       { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
       range('dim', 'Dim', 0, 100, 85)
@@ -681,16 +683,22 @@ Magi.effectConfig = [
     ready: true,
     photoType: 'image/jpeg',
     modes: [
-      { id: 'dark', name: 'Dark' },
-      { id: 'paper', name: 'Paper' }
+      { id: 'beam', name: 'Beam' },
+      { id: 'curtain', name: 'Curtain' },
+      { id: 'corona', name: 'Corona' },
+      { id: 'swirl', name: 'Swirl' },
+      { id: 'rays', name: 'Rays' },
+      { id: 'oval', name: 'Oval' }
     ],
     params: [
+      range('ribbons', 'Ribbons', 1, 20, 8),
+      range('palette', 'Palette', 0, 5, 0),
       range('spread', 'Spread', 0, 100, 60),
       range('wave', 'Wave', 0, 100, 35),
-      range('ribbons', 'Ribbons', 1, 5, 3),
       range('width', 'Width', 0, 100, 40),
       range('exposure', 'Exposure', 0, 100, 50),
       range('speed', 'Speed', 0, 100, 40),
+      toggle('paper', 'Paper', false, 'Colored ribbons on cream paper instead of light over the camera.'),
       range('dim', 'Dim', 0, 100, 70)
     ]
   },
@@ -1074,14 +1082,15 @@ Magi.effectGuides = {
     'Count: how many cursors. Size: how big. Speed: how fast they move and circle. Labels: the tags. Guides: the lines to the edges. Dim: darkens the camera.'
   ],
   aurora: [
-    'How it works: light through a prism in your hand. A beam pinches to a narrow waist at your palm and fans out on both sides into rainbow ribbons: a Gaussian beam that widens away from its waist, split by dispersion (each color bends by its own refractive index, so violet fans out most and red least).',
-    'Your hand is the prism: the waist follows your palm, turning your hand aims the beam, and opening your hand fans out the colors (fist: one tight white beam). Pinch and drag up or down to make the ribbons wave; let go and they slowly calm.',
-    'Modes: tap the tile. Dark: light over the camera. Paper: colored ribbons on cream paper. Spread: how far the colors fan out. Wave: how much the ribbons wave on their own. Ribbons: how many sheets. Width: the beam’s width at the waist. Exposure, Speed, Dim.'
+    'How it works: ribbons of light in your hand, each split into its colors by dispersion (each color bends by its own refractive index, so violet fans out most and red least), in six shapes.',
+    'Shapes: tap the tile, or swipe up or down. Beam: light pinched to a waist at your palm, fanning out on both sides. Curtain: folded auroral curtains, a sharp lower edge and rays fading upward. Corona: rays streaming from your palm, as an aurora looks overhead. Swirl: the Parker spiral, the solar wind’s field winding out as the Sun turns. Rays: a fan of beams. Oval: rings round your palm as the pole, like the auroral oval.',
+    'Your hand holds the light: the shape follows your palm, and turning your hand turns it. Open your hand for more ribbons, close it for fewer (a fist: one). Pinch and drag up or down to make them wave; let go and they slowly calm. Swipe left or right: the next palette.',
+    'Ribbons: the most an open hand gives (up to 20). Palette: 0 Spectrum, 1 Aurora, 2 Ice, 3 Ember, 4 Gold, 5 White. Spread: how far the colors split. Wave: how much the ribbons wave on their own. Width: each ribbon’s width. Exposure, Speed. Paper: colored ribbons on cream paper. Dim.'
   ],
   polar: [
-    'How it works: a ball of hair-like strands swirling round a pole, seen through a fisheye lens. Particles follow fine turbulence and a twist round the pole (in polar coordinates about its axis), and their trails draw the strands; the fisheye bows the ball toward you.',
-    'Your hand is the pole: the ball sits at your palm. Close your hand for a small dense ball; open it and the strands fly out. Roll your wrist to twist them. Pinch and drag to spin the sphere. Two hands: the ball sits between them and their distance sets the fisheye’s field of view.',
-    'Count: particles, in thousands. Size: the ball. Strands: how long the strands are. Turbulence: how much they kink. Twist: how strongly rolling your wrist twists them. Fisheye: the lens’s field of view. Exposure, Glow. Color: 0 drifts through lilac, teal and white. Dim.'
+    'How it works: a ball of fur, tens of thousands of short fine strands combed into locks, seen through a fisheye lens. Each strand grows from a root inside a ball whose outline ripples (its radius is noise in polar coordinates) and points along a smooth 3D noise field, so neighbors point alike; Twist wraps them round the pole.',
+    'Your hand is the pole: the ball sits at your palm. Close your hand for a small dense ball; open it and the ball swells and the fur flies. Roll your wrist to twist the fur round the pole. Pinch and drag to spin it. Two hands: the ball sits between them and their distance sets the fisheye’s field of view.',
+    'Count: strands, in thousands. Size: the ball. Length: the strands. Turbulence: how wild and finely combed. Twist: how strongly rolling your wrist twists them. Fisheye: the lens’s field of view. Speed: how fast it changes. Exposure, Glow. Color: 0 drifts through lilac, teal and white. Dim.'
   ],
   'face-landmarks': [
     'How it works: the 478-point face mesh, contours, head pose and strongest expressions.',
@@ -1128,6 +1137,7 @@ Magi.effectGuides = {
     'How it works: hundreds of thousands of particles on the graphics card, stirred by synthetic turbulence (waves with the energy spectrum of real turbulence); their paths fade slowly, so each draws a strand. Six modes (tap the tile).',
     'Fibre: a sphere held by a spring. One hand moves it, two hands hold it between them. Open palm: fibres fly loose. Fist: it pulls tight. Pinch and drag: turns it. A fast sweep blows the fibres away.',
     'Tidal: your hand is a moon. Its tidal pull (stronger the closer it is, by the inverse cube of the distance) raises two opposite bulges that stream toward and away from it. Open palm: a heavier moon; fist: lighter.',
+    'Hurricane: a storm seen from above, its eye at your palm. Particles are drawn inward and swept round the eye (a vortex that turns like a solid body near the middle and slows farther out), so they wind into spiral rainbands. Roll your wrist to spin it harder, or the other way to slow and reverse it. Fist: tightens it and spins it faster. Open palm: widens it.',
     'Horizon: particles pour along a line, lifted off it like smoke. The line runs through the middle of the picture. It uses the Landmarks Wheel: make a fist and the wheel opens; push or roll toward a number to tilt the line, 1 level and each number 22.5° more; open your hand and it keeps that angle. Wheel: shows or hides the wheel. Open palm: raises a plume.',
     'Lightbeam: a blade of light follows your index finger, fluid like a sword trail in a slicing game: widest at your fingertip, tapering away behind, thinner and brighter the faster you slash; sparks fly off fast strokes. Trails: how long the light lingers (short slashes to long-exposure loops). Size: blade width. Leak: strokes take turns in gold, red and ice blue, with warm light leaks at the edges. Flash: a pinch flashes the background. Fist: wipes it.',
     'Thundercloud: a dense, heavy cloud, grey outside and glowing at its heart; the nearer a particle is to the center, the more it takes the Core color (far left: ember orange). It follows your hand slowly, like a heavy mass. Fist heats and compresses it, open palm swells it. Pinch: lightning that lights up the cloud from inside, a searing flash and a ripple of light through the particles, flickering like real lightning.',

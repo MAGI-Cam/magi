@@ -1,28 +1,99 @@
-// Polar: a ball of hair-like strands swirling round a pole, seen through a fisheye lens (after a
-// reference of a "polar coordinates" study in TouchDesigner). Runs on Magi.gpuParticles.
+// Polar: a ball of fur — tens of thousands of short, fine, straight strands combed into locks —
+// that breathes, rolls and twists round a pole, seen through a fisheye lens (after a reference of
+// a "polar coordinates" fur study in TouchDesigner).
 //
-// The strands are particle trails: particles are born in a ball (uniform in volume) and follow fine
-// turbulence (Kinematic Simulation at a small scale, so each path kinks like a hair) plus a twist
-// about the pole's axis — in polar coordinates (r, θ) about that axis, an azimuthal speed
-// θ̇·r = τ·r/(0.15 + r²) — so the strands comb round the pole. A soft attractor at the center keeps
-// the ball together (a softened inverse-square pull, nearly a spring near the center); short lives
-// keep it from drifting off. Frame feedback (Strands) draws each
-// particle's path as a strand.
-// The view is an equidistant fisheye (image radius ∝ the angle off the lens axis): the ball bulges
-// toward you and its edges bow, and Fisheye sets the field of view, 100°–260°.
+// Every strand is computed on the GPU each frame from its own fixed random numbers, so the fur is
+// coherent and moves smoothly:
+//   Root: a direction û on the unit sphere and a depth ρ ∈ [0, 1], placed at û·ρ^0.42·R(û, t). The
+//     outline is a radius in polar (spherical) coordinates, R(û, t) = R₀(1 + 0.35·n(1.3û, t) +
+//     0.15·n(3.1û, −t)) with n simplex noise (Gustavson's 3D simplex), so the ball's edge ripples
+//     and its shape slowly changes; ρ^0.42 spreads them through the volume, a little denser inside.
+//   Direction: a 3D field d = (n(q), n(q + a), n(q + b)), q the root scaled by Comb and drifting in
+//     time: neighboring strands point alike, so they read as combed locks of hair. Twist blends d
+//     toward the circle around the pole's axis, ŷ × p (azimuthal in polar coordinates about it).
+//   The strand: a segment of length ∝ Length through its root along d, its root swaying with the
+//     noise (Turbulence).
+// Drawing: segments added as light, then a soft halo (the same picture at a quarter size, scaled
+// up). The view is an equidistant fisheye: a point at angle θ off the lens axis lands at radius
+// θ/(fov/2), so the ball bulges toward you; Fisheye sets the field of view, 60°–200°.
+// Color: white strands tinted by two colors that blend by a slow noise across the ball; Color 0
+// drifts through lilac, teal and white, or pick one.
 //
-// Gesture: your hand is the pole. The ball sits at your palm. How open your hand is sets its size:
-// a fist packs it into a small dense ball, an open hand lets the strands fly out (bigger, wilder).
-// Rolling your wrist twists the strands (either way). Pinch and drag to spin the sphere; it coasts
-// when you let go. Two hands: the ball sits between them and their distance sets the field of
-// view. No hand: it turns slowly in the middle. Color: 0 drifts through lilac, teal and white.
+// Gesture: your hand is the pole. The ball sits at your palm. A fist packs it small and dense; an
+// open hand lets it swell and the strands fly (the outline ripples harder). Roll your wrist to twist
+// the fur round the pole (either way). Pinch and drag to spin the ball; it coasts when you let go.
+// Two hands: the ball sits between them and their distance sets the field of view. No hand: it
+// rolls slowly in the middle.
 (function () {
-  var DRIFT = [[0.78, 0.62, 1.0], [0.55, 0.95, 0.88], [1.0, 1.0, 1.0], [0.72, 0.45, 1.0], [0.6, 0.75, 1.0]];
+  var NOISE = [
+    // Simplex noise 3D (Stefan Gustavson, Ian McEwan; MIT), returns about −1…1.
+    'vec4 permute(vec4 x) { return mod(((x * 34.0) + 1.0) * x, 289.0); }',
+    'vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }',
+    'float snoise(vec3 v) {',
+    '  const vec2 C = vec2(1.0 / 6.0, 1.0 / 3.0); const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);',
+    '  vec3 i = floor(v + dot(v, C.yyy)); vec3 x0 = v - i + dot(i, C.xxx);',
+    '  vec3 g = step(x0.yzx, x0.xyz); vec3 l = 1.0 - g; vec3 i1 = min(g.xyz, l.zxy); vec3 i2 = max(g.xyz, l.zxy);',
+    '  vec3 x1 = x0 - i1 + C.xxx; vec3 x2 = x0 - i2 + 2.0 * C.xxx; vec3 x3 = x0 - 1.0 + 3.0 * C.xxx;',
+    '  i = mod(i, 289.0);',
+    '  vec4 p = permute(permute(permute(i.z + vec4(0.0, i1.z, i2.z, 1.0)) + i.y + vec4(0.0, i1.y, i2.y, 1.0)) + i.x + vec4(0.0, i1.x, i2.x, 1.0));',
+    '  float n_ = 1.0 / 7.0; vec3 ns = n_ * D.wyz - D.xzx;',
+    '  vec4 j = p - 49.0 * floor(p * ns.z * ns.z); vec4 x_ = floor(j * ns.z); vec4 y_ = floor(j - 7.0 * x_);',
+    '  vec4 x = x_ * ns.x + ns.yyyy; vec4 y = y_ * ns.x + ns.yyyy; vec4 h = 1.0 - abs(x) - abs(y);',
+    '  vec4 b0 = vec4(x.xy, y.xy); vec4 b1 = vec4(x.zw, y.zw);',
+    '  vec4 s0 = floor(b0) * 2.0 + 1.0; vec4 s1 = floor(b1) * 2.0 + 1.0; vec4 sh = -step(h, vec4(0.0));',
+    '  vec4 a0 = b0.xzyw + s0.xzyw * sh.xxyy; vec4 a1 = b1.xzyw + s1.xzyw * sh.zzww;',
+    '  vec3 p0 = vec3(a0.xy, h.x); vec3 p1 = vec3(a0.zw, h.y); vec3 p2 = vec3(a1.xy, h.z); vec3 p3 = vec3(a1.zw, h.w);',
+    '  vec4 norm = taylorInvSqrt(vec4(dot(p0, p0), dot(p1, p1), dot(p2, p2), dot(p3, p3)));',
+    '  p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;',
+    '  vec4 m = max(0.6 - vec4(dot(x0, x0), dot(x1, x1), dot(x2, x2), dot(x3, x3)), 0.0); m = m * m;',
+    '  return 42.0 * dot(m * m, vec4(dot(p0, x0), dot(p1, x1), dot(p2, x2), dot(p3, x3)));',
+    '}'
+  ].join('\n');
+
+  var VS = [
+    '#version 300 es',
+    'precision highp float;',
+    'uniform float time, len, R, turb, comb, twist, ripple, fov, focal, aspect, alpha;',
+    'uniform vec3 center, colA, colB;',
+    'uniform mat3 view;',
+    'out vec3 vC;',
+    NOISE,
+    // Integer hash (lowbias32, Chris Wellons): every strand gets its own independent random
+    // numbers. (fract(sin(n)·43758) loses precision past a few thousand strands, so many shared
+    // the same numbers and stacked into a few bright spikes.)
+    'uint hu(uint x) { x ^= x >> 16; x *= 0x7feb352du; x ^= x >> 15; x *= 0x846ca68bu; x ^= x >> 16; return x; }',
+    'uint SID;',
+    'float h(float k) { return float(hu(SID * 16u + uint(k * 100.0))) / 4294967295.0; }',
+    'void main() {',
+    '  int sid = gl_VertexID / 2; float end = float(gl_VertexID - sid * 2), fi = 0.0; SID = uint(sid);',
+    '  float z = h(fi) * 2.0 - 1.0, a = h(fi + 0.13) * 6.2831853, rs = sqrt(max(0.0, 1.0 - z * z));',
+    '  vec3 u = vec3(rs * cos(a), z, rs * sin(a));',
+    '  float bound = R * (1.0 + ripple * (0.35 * snoise(u * 1.3 + vec3(0.0, 0.0, time * 0.15)) + 0.15 * snoise(u * 3.1 - vec3(time * 0.1))));',
+    '  vec3 p = u * pow(h(fi + 0.29), 0.42) * bound;',
+    '  vec3 q = p / R * comb + vec3(0.0, 0.0, time * 0.12);',
+    '  vec3 d = vec3(snoise(q), snoise(q + vec3(31.4, 0.0, 0.0)), snoise(q + vec3(0.0, 47.2, 0.0))) + 1e-4;',
+    '  vec3 tw = cross(vec3(0.0, 1.0, 0.0), p) + 1e-4;',
+    '  d = normalize(mix(normalize(d), normalize(tw) * sign(twist + 1e-6), clamp(abs(twist), 0.0, 0.95)));',
+    '  p += d * turb * 0.12 * R * snoise(q * 0.5 + vec3(time * 0.3));',
+    '  float L = len * R * (0.4 + h(fi + 0.41));',
+    '  vec3 w = view * (p + d * L * (end - 0.5)) + center;',
+    '  vec3 r3 = vec3(w.xy, w.z + focal); float th = atan(length(r3.xy), r3.z);',
+    '  vec2 dir = length(r3.xy) > 1e-6 ? normalize(r3.xy) : vec2(0.0);',
+    '  vec2 s = vec2(dir.x / aspect, dir.y) * th / (fov * 0.5);',
+    '  gl_Position = th > fov * 0.5 ? vec4(9.0, 9.0, 0.0, 1.0) : vec4(s, 0.0, 1.0);',
+    '  float m = 0.5 + 0.5 * snoise(p / R * 0.8 + vec3(time * 0.05));',
+    '  vec3 c = mix(vec3(1.0), mix(colA, colB, m), 0.25 + 0.6 * h(fi + 0.53));',
+    '  vC = c * alpha * (0.5 + 0.5 * h(fi + 0.67)) * (0.75 + 0.5 * (1.0 - length(p) / max(R, 1e-3)));',
+    '}'
+  ].join('\n');
+  var FS = '#version 300 es\nprecision highp float; in vec3 vC; out vec4 o; void main() { o = vec4(vC, 1.0); }';
+
+  var DRIFT = [[[0.78, 0.6, 1.0], [0.55, 0.95, 0.9]], [[0.6, 0.95, 0.9], [1.0, 1.0, 1.0]], [[0.75, 0.42, 1.0], [0.85, 0.75, 1.0]], [[0.6, 0.78, 1.0], [0.9, 0.6, 1.0]]];
+  var FOCAL = 3.2;
   function toWorld(q, W, H) { var a = W / H; return [(q.x / W * 2 - 1) * a, 1 - q.y / H * 2, 0]; }
   // Where on the plane z = 0 a screen point lands under the fisheye, so the ball sits under your
   // palm: a point seen at screen radius ρ is at angle θ = ρ·fov/2 off the axis, so at distance
   // focal·tan θ from it (θ capped below 90°).
-  var FOCAL = 1.6;
   function underLens(v, fov) {
     var rho = Math.hypot(v[0], v[1]), th = Math.min(1.35, rho * fov / 2);
     if (rho < 1e-5) return [0, 0, 0];
@@ -31,42 +102,67 @@
   }
   function openness(h) { var o = ['index', 'middle', 'ring', 'pinky'].reduce(function (a, f) { return a + (1 - h.fingers[f].curl) / 4; }, 0); return Math.max(0, Math.min(1, (o - 0.25) / 0.6)); }
 
+  function createGL() {
+    var c = document.createElement('canvas'), gl = c.getContext('webgl2', { premultipliedAlpha: false, antialias: true, preserveDrawingBuffer: true });
+    if (!gl) return null;
+    function sh(type, src) { var s = gl.createShader(type); gl.shaderSource(s, src); gl.compileShader(s); if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) console.warn('Magi polar:', gl.getShaderInfoLog(s)); return s; }
+    var pr = gl.createProgram(); gl.attachShader(pr, sh(gl.VERTEX_SHADER, VS)); gl.attachShader(pr, sh(gl.FRAGMENT_SHADER, FS)); gl.linkProgram(pr);
+    if (!gl.getProgramParameter(pr, gl.LINK_STATUS)) return null;
+    var vao = gl.createVertexArray(), loc = {};
+    function U(n) { return n in loc ? loc[n] : (loc[n] = gl.getUniformLocation(pr, n)); }
+    return {
+      canvas: c,
+      draw: function (w, h, n, u) {
+        if (c.width !== w || c.height !== h) { c.width = w; c.height = h; }
+        gl.viewport(0, 0, w, h); gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+        gl.useProgram(pr); gl.bindVertexArray(vao);
+        gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+        Object.keys(u).forEach(function (k) {
+          var v = u[k], l = U(k);
+          if (typeof v === 'number') gl.uniform1f(l, v);
+          else if (v.length === 9) gl.uniformMatrix3fv(l, false, v);
+          else gl.uniform3f(l, v[0], v[1], v[2]);
+        });
+        gl.drawArrays(gl.LINES, 0, n * 2);
+      }
+    };
+  }
+
   Magi.renderers.polar = function () {
-    var sys, lastT = null, S = { c: [0, 0, 0], r: 0.35, open: 0.5, twist: 0, fov: 0 }, spin = { yaw: 0, pitch: 0.3, vy: 0.12, vp: 0 }, grab = null;
+    var g, lastT = null, S = { c: [0, 0, 0], open: 0.5, twist: 0, fov: 0 }, spin = { yaw: 0, pitch: 0.3, vy: 0.15, vp: 0 }, grab = null;
+    var halo = document.createElement('canvas'), hctx = halo.getContext('2d');
     return {
       animated: true,
       render: function (frame, out, params) {
-        var W = frame.width, H = frame.height, u = frame.pxPerCss, t = frame.time / 1000;
+        var W = frame.width, H = frame.height, t = frame.time / 1000;
         if (out.width !== W || out.height !== H) { out.width = W; out.height = H; }
         var ctx = out.getContext('2d');
         frame.draw(ctx, W, H);
-        if (sys === undefined) sys = Magi.gpuParticles();
         ctx.fillStyle = 'rgba(0,0,0,' + (params.dim / 100).toFixed(3) + ')';
         ctx.fillRect(0, 0, W, H);
-        if (!sys) { frame.say('This effect needs WebGL2 with float textures, which this browser doesn’t offer.'); return; }
-        var dt = lastT === null ? 1 / 60 : Math.max(1 / 240, Math.min(1 / 30, t - lastT)); lastT = t;
+        if (g === undefined) g = createGL();
+        if (!g) { frame.say('This effect needs WebGL2, which this browser doesn’t offer.'); return; }
+        var dt = lastT === null ? 1 / 60 : Math.max(1 / 240, Math.min(1 / 20, t - lastT)); lastT = t;
         var ix = Magi.interaction.read(frame), hands = ix.hands.slice(0, 2), hd = hands[0];
 
-        // Targets from the hands.
-        var fovP = (100 + params.fisheye / 100 * 160) * Math.PI / 180;
-        var T = { c: [0, 0, 0], open: 0.5, twist: 0, fov: fovP };
+        var fovP = (60 + params.fisheye / 100 * 140) * Math.PI / 180, T = { c: [0, 0, 0], open: 0.45, twist: 0, fov: fovP };
         if (hands.length === 2) {
           var a = toWorld(hands[0].center, W, H), b = toWorld(hands[1].center, W, H);
-          T.open = (openness(hands[0]) + openness(hands[1])) / 2;
           var d = Math.hypot(hands[0].center.x - hands[1].center.x, hands[0].center.y - hands[1].center.y) / W;
-          T.fov = (100 + Math.max(0, Math.min(1, (d - 0.15) / 0.6)) * 160) * Math.PI / 180;
+          T.fov = (60 + Math.max(0, Math.min(1, (d - 0.15) / 0.6)) * 140) * Math.PI / 180;
           T.c = underLens([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], T.fov);
-          T.twist = ((hands[0].rotation || 0) + (hands[1].rotation || 0)) / 2 / 60;
+          T.open = (openness(hands[0]) + openness(hands[1])) / 2;
+          T.twist = ((hands[0].rotation || 0) + (hands[1].rotation || 0)) / 2 / 50;
         } else if (hd) {
-          T.c = underLens(toWorld(hd.center, W, H), T.fov); T.open = openness(hd); T.twist = (hd.rotation || 0) / 60;
+          T.c = underLens(toWorld(hd.center, W, H), T.fov); T.open = hd.fist ? 0 : openness(hd); T.twist = (hd.rotation || 0) / 50;
         }
-        var e = 1 - Math.exp(-dt / 0.25);
+        var e = 1 - Math.exp(-dt / 0.3);
         S.c = S.c.map(function (v, i) { return v + (T.c[i] - v) * e; });
         S.open += (T.open - S.open) * e;
-        S.twist += (Math.max(-1.5, Math.min(1.5, T.twist)) - S.twist) * e;
+        S.twist += (Math.max(-1, Math.min(1, T.twist)) - S.twist) * e;
         S.fov = S.fov ? S.fov + (T.fov - S.fov) * e : T.fov;
 
-        // Pinch and drag: spin the sphere (trackball); it coasts and slows when released.
+        // Pinch and drag: spin the ball (trackball); it coasts and slows when released.
         var pin = hands.filter(function (h) { return h.pinched; })[0];
         if (pin) {
           var pm = { x: (pin.points[4].x + pin.points[8].x) / 2, y: (pin.points[4].y + pin.points[8].y) / 2 };
@@ -74,45 +170,48 @@
           grab = pm;
         } else {
           grab = null;
-          var base = hands.length ? 0 : 0.12;
-          spin.vy += (base - spin.vy) * (1 - Math.exp(-dt / 1.5)); spin.vp *= Math.exp(-dt / 1.2);
+          spin.vy += ((hands.length ? 0.05 : 0.15) - spin.vy) * (1 - Math.exp(-dt / 1.5)); spin.vp *= Math.exp(-dt / 1.2);
         }
         spin.yaw += spin.vy * dt; spin.pitch = Math.max(-1.2, Math.min(1.2, spin.pitch + spin.vp * dt));
-
-        var R = (0.16 + 0.5 * S.open) * (0.5 + params.size / 100);
-        var N = Math.round(params.count) * 1000;
-        sys.setCount(N);
-        var tw = (params.twist / 100 * 2.5) * (hands.length ? S.twist : 0.6);
-        sys.step({
-          dt: dt, time: t, count: N, emitShape: 3, center: S.c, radius: R, jitter: 0,
-          amp: (0.08 + params.turbulence / 100 * 0.5) * (0.5 + S.open), kscale: 4 + params.turbulence / 100 * 4, follow: 3,
-          twist: tw, twistAxis: [0, 1, 0],
-          attract: [S.c.concat([0.02 * (1.6 - S.open)])], soft: 0.15, lifeMin: 0.8, lifeMax: 2.6
-        });
-
-        var sL = Math.min(1, 1280 / Math.max(W, H)), w = Math.max(1, Math.round(W * sL)), h = Math.max(1, Math.round(H * sL));
         var cy = Math.cos(spin.yaw), sy = Math.sin(spin.yaw), cp = Math.cos(spin.pitch), sp = Math.sin(spin.pitch);
-        // View rotation: yaw about y, then pitch about x (column-major mat3).
         var M = [cy, sy * sp, -sy * cp, 0, cp, sp, sy, -cy * sp, cy * cp];
-        var col;
-        if (params.color) col = Magi.fx.inkColor(params.color);
-        else { var k = (t * 0.08) % DRIFT.length, i0 = Math.floor(k), f = k - i0, A = DRIFT[i0], B = DRIFT[(i0 + 1) % DRIFT.length]; f = f * f * (3 - 2 * f); col = A.map(function (v, j) { return v + (B[j] - v) * f; }); }
-        var decay = 0.6 + params.strands / 100 * 0.37, nEff = sys.count() / (1 - decay), area = Math.PI * Math.pow(R * h / 2, 2) * 2;
-        sys.draw({
-          w: w, h: h, view: M, pivot: S.c, color: col, focal: FOCAL, psize: Math.max(1, Math.round(0.8 * u * sL)),
-          bright: 0.12 * area / nEff, decay: decay, exposure: 0.3 + params.exposure / 100 * 2.4, glow: params.glow / 100 * 1.5, depthK: 0.5,
-          fisheye: true, fov: S.fov
+
+        // Colors: two tints blending across the ball (Color 0: a slow drift through the pairs).
+        var A, B;
+        if (params.color) { A = Magi.fx.inkColor(params.color); B = A.map(function (v) { return 0.6 + 0.4 * v; }); }
+        else {
+          var k = (t * 0.06) % DRIFT.length, i0 = Math.floor(k), f = k - i0, P0 = DRIFT[i0], P1 = DRIFT[(i0 + 1) % DRIFT.length];
+          f = f * f * (3 - 2 * f);
+          A = P0[0].map(function (v, j) { return v + (P1[0][j] - v) * f; }); B = P0[1].map(function (v, j) { return v + (P1[1][j] - v) * f; });
+        }
+        var R = (0.8 + 0.6 * S.open) * (0.5 + params.size / 100), N = Math.round(params.count) * 1000;
+        var sL = Math.min(1, 1280 / Math.max(W, H)), w = Math.max(1, Math.round(W * sL)), h = Math.max(1, Math.round(H * sL));
+        // Brightness per strand: the ball's area over the strands' total ink, so density reads the
+        // same at any count.
+        var alpha = (0.01 + params.exposure / 100 * 0.06) * Math.min(2, 60000 / N);
+        g.draw(w, h, N, {
+          time: t * (0.6 + params.speed / 100 * 1.6), len: 0.04 + params.length / 100 * 0.2, R: R, turb: 0.3 + params.turbulence / 100 * 1.4 * (0.6 + S.open),
+          comb: 1.2 + params.turbulence / 100 * 2.5, twist: S.twist * params.twist / 100 * 1.6 + (hands.length ? 0 : 0.15 * params.twist / 100), ripple: 0.6 + 0.8 * S.open,
+          fov: S.fov, focal: FOCAL, aspect: w / h, alpha: alpha, center: S.c, colA: A, colB: B, view: M
         });
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
         ctx.imageSmoothingEnabled = true;
-        ctx.drawImage(sys.canvas, 0, 0, W, H);
+        ctx.drawImage(g.canvas, 0, 0, W, H);
+        if (params.glow > 0) {
+          var hw = Math.max(1, Math.round(W / 6)), hh = Math.max(1, Math.round(H / 6));
+          if (halo.width !== hw || halo.height !== hh) { halo.width = hw; halo.height = hh; }
+          hctx.clearRect(0, 0, hw, hh); hctx.drawImage(g.canvas, 0, 0, hw, hh);
+          ctx.globalAlpha = params.glow / 100 * 0.9;
+          ctx.drawImage(halo, 0, 0, W, H);
+          ctx.drawImage(halo, -W * 0.03, -H * 0.03, W * 1.06, H * 1.06);
+        }
         ctx.restore();
         var tracker = Magi.tracking.hands;
         if (tracker.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, tracker, 'hand');
-        else if (!hands.length) frame.say('Raise your hand: it is the pole. Close it for a tight ball, open it to let the strands fly, roll your wrist to twist them, pinch and drag to spin.');
+        else if (!hands.length) frame.say('Raise your hand: it is the pole. Close it for a tight ball, open it to let the fur fly, roll your wrist to twist it, pinch and drag to spin.');
       },
-      reset: function () { lastT = null; if (sys) sys.reset(); }
+      reset: function () { lastT = null; }
     };
   };
 })();

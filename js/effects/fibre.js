@@ -25,6 +25,11 @@
 //     a fist opens the wheel; choosing number k tilts the line by (k − 1)·180°/8, and it keeps
 //     that angle. Wheel hides the wheel (the gesture still works). An open palm pushes the
 //     particles away from it (a repelling attractor), raising a plume where it is.
+//   Hurricane — a storm from above: poured in from four feeder points turning round a ring about
+//     the eye (your palm), held to a disk by a
+//     plane spring, and carried by a vortex with inflow (the engine's twist and inflow,
+//     (τ·ẑ×r − κ·r)/(0.15 + r²), close to a Rankine vortex), so they wind inward into spiral
+//     rainbands round a clear eye. Wrist roll sets the spin (either way), fist tightens, open palm widens.
 //   Lightbeam — a blade of light that follows your index finger, fluid like a sword trail in a
 //     slicing game. The fingertip's recent path (smoothed by an adaptive low-pass, then a
 //     Catmull-Rom spline through the samples) is drawn as a ribbon that is widest at the finger and
@@ -72,7 +77,7 @@
 
   function createFibre() {
     var sys = undefined, camCopy = document.createElement('canvas'), lastT = null, center = [0, 0, 0], radius = 0.5, view = { yaw: 0, pitch: 0.2 }, vel = { yaw: 0.15, pitch: 0 }, grab = null, seen = 0;
-    var tk = { amp: 1, hold: 1, rad: 1, tide: 1, heat: 1 }, cvel = [0, 0, 0], strike = null, strokes = [], curStroke = null, strokeN = 0, tipS = null, lastMode = null, prevTip = null, lineAng = 0, lineY = 0, wheel = null, flash = 0, wasPinched = {}, wasFist = false;
+    var tk = { amp: 1, hold: 1, rad: 1, tide: 1, heat: 1, spin: 1, inflow: 1 }, cvel = [0, 0, 0], strike = null, strokes = [], curStroke = null, strokeN = 0, tipS = null, lastMode = null, prevTip = null, lineAng = 0, lineY = 0, wheel = null, flash = 0, wasPinched = {}, wasFist = false;
     return {
       animated: true,
       render: function (frame, out, params) {
@@ -100,7 +105,7 @@
         var turb = params.turbulence / 100, hold = params.hold / 100, kscale = 0.5 + params.scale / 100 * 2.5;
         var step = { dt: dt, time: t, count: 0, kscale: kscale, follow: 2.5, soft: 0.1, lifeMin: 3, lifeMax: 9, jitter: 0.04 };
         var look = { depthK: 0.6, areaR: radius, pivot: center, spin: true, trailsOverride: null };
-        var want = { c: [0, 0, 0], r: baseR, amp: 1, hold: 1, rad: 1, tide: 1, heat: 1 }, attract = [];
+        var want = { c: [0, 0, 0], r: baseR, amp: 1, hold: 1, rad: 1, tide: 1, heat: 1, spin: 1, inflow: 1 }, attract = [];
         var pinchStart = hands.filter(function (h) { var s = h.pinched && !wasPinched[h.id]; return s; })[0];
         hands.forEach(function (h) { wasPinched[h.id] = h.pinched; });
 
@@ -187,6 +192,31 @@
           step.lifeMin = 4; step.lifeMax = 10; step.soft = 0.35; attract.push(center.concat([0.05 * (0.5 + hold) * (1 + (tk.heat - 1) * 0.6)]));
           look.coreK = 0.75 * tk.heat; look.depthK = 0.5; look.areaR = radius * tk.rad * 0.75;
           heavy = true;
+        } else if (mode === 'hurricane') {
+          // A tropical cyclone seen from above. Particles are born on a ring round the eye (your
+          // palm), squashed into a disk by a plane spring, drawn inward by a soft attractor (the
+          // inflow) and swept round it by the engine's twist, azimuthal speed τ·r/(0.15 + r²): near
+          // a Rankine vortex (solid-body rotation inside, falling off as 1/r outside). Inflow plus
+          // rotation winds them into spiral rainbands; short lives keep the eye clear.
+          if (hd) want.c = toW(hd.center);
+          var roll = hd ? Math.max(-1.5, Math.min(1.5, (hd.rotation || 0) / 60)) : 0;
+          want.spin = 1 + roll * 1.2;
+          hands.forEach(function (h) {
+            if (h.fist) { want.rad *= 0.7; want.spin *= 1.6; want.inflow *= 1.6; want.amp *= 0.6; }
+            else if (h.count >= 4 && !h.pinched) { want.rad *= 1.3; want.spin *= 0.8; want.inflow *= 0.7; }
+          });
+          var Rh = radius * tk.rad * 1.2, feeders = [];
+          // Four feeder points turning round the outer ring: each pours a stream that the inflow
+          // and the swirl wind inward into a spiral rainband.
+          for (var fk = 0; fk < 4; fk++) { var fa = fk * Math.PI / 2 + t * 0.4 * tk.spin; feeders.push([center[0] + Math.cos(fa) * Rh, center[1] + Math.sin(fa) * Rh, 0]); }
+          step.emitShape = 2; step.emitPoints = feeders; step.center = center; step.radius = Rh; step.jitter = Rh * 0.25;
+          step.planeK = 40; step.planeP = center; step.planeN = [0, 0, 1];
+          // Swirl and inflow in the flow itself (a pull alone is damped away by the follow and the
+          // swirl's lag flings particles outward): with τ ≈ 0.4, inflow 0.2, follow 6 they wind
+          // from the ring to a fifth of its radius in about 4 s.
+          step.twist = (0.25 + turb * 0.3) * tk.spin; step.inflow = (0.12 + hold * 0.2) * tk.inflow; step.twistAxis = [0, 0, 1];
+          step.amp = (0.02 + turb * 0.15) * tk.amp; step.follow = 6; step.kscale = kscale * 1.4; step.lifeMin = 2.5; step.lifeMax = 7; step.soft = 0.25;
+          look.areaR = Rh * 0.7; look.pivot = center; look.spin = false; look.depthK = 0.15;
         } else if (mode === 'symbiote') {
           var emit = [], hv = [0, 0, 0], hs = 0;
           hands.forEach(function (h) {
@@ -208,7 +238,7 @@
           center = center.map(function (v, i) { cvel[i] += (wcn * wcn * (want.c[i] - v) - 2 * 0.45 * wcn * cvel[i]) * dt; return v + cvel[i] * dt; });
         } else center = center.map(function (v, i) { return v + (want.c[i] - v) * e; });
         radius += (want.r - radius) * e;
-        ['amp', 'hold', 'rad', 'tide', 'heat'].forEach(function (k) { tk[k] += (want[k] - tk[k]) * e; });
+        ['amp', 'hold', 'rad', 'tide', 'heat', 'spin', 'inflow'].forEach(function (k) { tk[k] += (want[k] - tk[k]) * e; });
         flash *= Math.exp(-dt / 0.3);
         // Lightning's return strokes: four pulses, each decaying in 50 ms, and a shell of light that
         // restarts from the strike with each.
@@ -317,7 +347,8 @@
           horizon: 'Make a fist: the wheel opens. Push toward a number to tilt the horizon, open your hand to keep it. An open palm raises a plume.',
           lightbeam: 'Raise your index finger and draw with light. Fist wipes it; pinch flashes.',
           thundercloud: 'Raise your hand to move the cloud. Fist heats it, open palm swells it, pinch for lightning.',
-          symbiote: 'Raise your hands: the ink grows from them and lashes when you move.'
+          symbiote: 'Raise your hands: the ink grows from them and lashes when you move.',
+          hurricane: 'Raise your hand: it is the eye of the storm. Roll your wrist to spin it harder or reverse it, fist tightens it, open palm widens it.'
         }[mode]);
       },
       reset: function () { lastT = null; grab = null; prevTip = null; strike = null; strokes = []; curStroke = null; tipS = null; if (sys) sys.reset(); }
