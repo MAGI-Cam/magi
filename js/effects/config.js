@@ -1063,7 +1063,7 @@ Magi.effectGuides = {
     'Labels, Text: how many names and how big. Spin: turning with no hand. Dim, Squares, Axes: background, color squares, axes.'
   ],
   siri: [
-    'How it works: a voice assistant’s listening wave, driven by your hand instead of your voice. Raise an open hand to wake it; how open it is sets how loud it is, and a closed palm damps it to a murmur. It stays at mid-height and follows your hand from side to side; pinch and spread thumb and index to shrink and grow it. Lower your hand (or take it away) and it goes back down to rest at the bottom.',
+    'How it works: a voice assistant’s listening wave, driven by your hand instead of your voice. Raise a hand to wake it, even one finger up; the more fingers and the more open your hand, the louder it is, and a closed palm damps it to a murmur. It stays at mid-height and follows your hand from side to side; pinch and spread thumb and index to shrink and grow it. When your hand leaves the picture it goes back down to rest at the bottom.',
     'Modes: tap the tile. iOS 10: the classic wave, blue, green and red curves that make cyan, magenta and white where they cross, over a thin white line, endlessly reshaping. iOS 27: the newer glowing wave in blue, magenta, amber and cyan with a white-hot core, resting as a small glass orb.',
     'Height: how tall the waves get. Size: how wide. Speed: how fast they move. Glow (iOS 27): the halo. Dim: darkens the camera while it is awake.'
   ],

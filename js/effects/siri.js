@@ -1,18 +1,18 @@
 // Siri: a voice assistant's listening wave, driven by your hand instead of your voice.
 //
-// Gesture: raise an open hand to wake it. How open your hand is (mean straightness of the four
-// fingers, 1 − curl, mapped so a fist is 0 and a flat hand 1) is the loudness, followed like an
-// audio level meter (0.06 s attack, 0.18 s release); a closed palm damps the wave down to a murmur.
-// The wave sits at mid-height and follows your hand from side to side (time constant 0.15 s);
-// pinch and spread thumb and index to shrink and grow it (0.4× to 1.4×). Lower your hand toward
-// the bottom of the picture (below 78% of its height), or take it away, and Siri goes back to the
-// bottom to rest.
+// Gesture: any hand in the picture wakes it, even a single finger up. The loudness is how open
+// the hand is: the larger of the share of fingers up (one finger 0.2) and the mean straightness of
+// the four fingers (1 − curl, mapped so a fist is 0 and a flat hand 1), followed like an audio level
+// meter (0.06 s attack, 0.18 s release); a closed palm damps the wave down to a murmur but keeps it
+// awake. The wave sits at mid-height and follows your hand from side to side (time constant
+// 0.15 s); pinch and spread thumb and index to shrink and grow it (0.4× to 1.4×). Only when your
+// hand leaves the picture does Siri go back to the bottom to rest.
 //
 // iOS 10 (after the classic iOS 9/10 Siri wave, as in the SiriWave library): three colors, blue
 // (32, 133, 252), green (94, 252, 169) and red (253, 71, 103), added as light ('lighter'), so where
 // they cross they make cyan, magenta and white, over a thin white line across the screen. Each
-// color is the sum of 2–5 curves, each |A·sin(f·x − φ)|·att((x − c)/w) with
-// att(u) = (4 / (4 + u²))⁴: a few lobes pinched to points between them, under a window placed and
+// color is the sum of 2–5 curves, each A·sin²(f·x − φ)·att((x − c)/w) with
+// att(u) = (4 / (4 + u²))⁴: a few rounded lobes (sin² meets the line smoothly), under a window placed and
 // sized at random (center c across the middle, width w, amplitude 0.35–1, 2.2–3.8 radians per unit,
 // either direction), filled between y and −y, lens-shaped. Each
 // curve lives 1.5–3.5 s, swelling and fading as sin(π·age/life), then is born again elsewhere,
@@ -46,16 +46,18 @@
       });
     }
     // One color's height at i ∈ [−3, 3] across the wave, about 0…1: the sum of its curves, each
-    // |A·sin(f·i − φ)| (2.2–3.8 radians per unit, so a few lobes pinched to points between them) under
+    // A·sin²(f·i − φ) (2.2–3.8 radians per unit, a few rounded lobes) under
     // its own window att((i − c)/w) (center c, width w), swelling and fading over its life, all
-    // under a gentle global taper so the ends thin to the line.
+    // under a gentle global taper so the ends thin to the line; tall sums are eased by a soft limit,
+    // 1.2·tanh(y/1.2), rather than clipped flat.
     function yOf(cs, i) {
       var y = 0;
       for (var k = 0; k < cs.length; k++) {
         var q = cs[k];
-        y += Math.abs(q.A * Math.sin(q.f * i - q.ph)) * att((i - q.c) / q.w) * Math.sin(Math.PI * Math.min(1, q.age / q.life));
+        var sn = Math.sin(q.f * i - q.ph);
+        y += q.A * sn * sn * att((i - q.c) / q.w) * Math.sin(Math.PI * Math.min(1, q.age / q.life));
       }
-      return Math.min(1.2, y) * att(i * 0.45);
+      return 1.2 * Math.tanh(y / 1.2) * att(i * 0.45);
     }
     function lobes(g, set, colors, x0, y0, half, amp, alpha, white) {
       g.save();
@@ -84,8 +86,8 @@
 
         // Hand: awake unless low or gone; loudness = openness (a fist damps it); x and size.
         var hands = Magi.interaction.read(frame).hands, hd = hands[0], open = 0;
-        var up = !!hd && hd.center.y < H * 0.78;
-        if (hd) open = hd.fist ? 0 : Math.max(0, Math.min(1, (['index', 'middle', 'ring', 'pinky'].reduce(function (a, f) { return a + (1 - hd.fingers[f].curl) / 4; }, 0) - 0.25) / 0.6));
+        var up = !!hd;
+        if (hd) open = hd.fist ? 0 : Math.max((hd.count || 0) / 5, Math.max(0, Math.min(1, (['index', 'middle', 'ring', 'pinky'].reduce(function (a, f) { return a + (1 - hd.fingers[f].curl) / 4; }, 0) - 0.25) / 0.6)));
         wake += ((up ? 1 : 0) - wake) * (1 - Math.exp(-dt / 0.25));
         var target = up ? 0.08 + 0.92 * open : 0;
         level += (target - level) * (1 - Math.exp(-dt / (target > level ? 0.06 : 0.18)));
@@ -141,7 +143,7 @@
 
         var tracker = Magi.tracking.hands;
         if (tracker.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, tracker, 'hand');
-        else if (!hands.length) frame.say('Raise an open hand to wake it; open it wider to make it louder, close it to quiet it. Lower your hand to send it back down.');
+        else if (!hands.length) frame.say('Raise a hand to wake it (one finger is enough); open it wider to make it louder, close it to quiet it.');
       },
       reset: function () { lastT = null; wake = 0; level = 0; cx = null; sz = 1; groups = {}; }
     };
