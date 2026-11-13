@@ -21,8 +21,9 @@
 //     moon circles slowly and the tides sweep around.
 //   Horizon — particles pour along a line across the picture (a line emitter), held to it by a
 //     plane spring (Hold) and lifted off it by turbulence, so it reads as a horizon breathing smoke.
-//     A closed fist sets the line: it passes through your fist at your fist's angle (roll). An open
-//     palm pushes the particles away from it (a repelling attractor), raising a plume where it is.
+//     It is set with the Landmarks Wheel's gesture: a fist opens the wheel and moves the line to
+//     your fist's height; choosing number k tilts it by (k − 1)·180°/8. An open palm pushes the
+//     particles away from it (a repelling attractor), raising a plume where it is.
 //   Lightbeam — a blade of light that follows your index finger, fluid like a sword trail in a
 //     slicing game. The fingertip's recent path (smoothed by an adaptive low-pass, then a
 //     Catmull-Rom spline through the samples) is drawn as a ribbon that is widest at the finger and
@@ -70,7 +71,7 @@
 
   function createFibre() {
     var sys = undefined, camCopy = document.createElement('canvas'), lastT = null, center = [0, 0, 0], radius = 0.5, view = { yaw: 0, pitch: 0.2 }, vel = { yaw: 0.15, pitch: 0 }, grab = null, seen = 0;
-    var tk = { amp: 1, hold: 1, rad: 1, tide: 1, heat: 1 }, cvel = [0, 0, 0], strike = null, strokes = [], curStroke = null, strokeN = 0, tipS = null, lastMode = null, prevTip = null, lineAng = 0, lineY = 0, flash = 0, wasPinched = {}, wasFist = false;
+    var tk = { amp: 1, hold: 1, rad: 1, tide: 1, heat: 1 }, cvel = [0, 0, 0], strike = null, strokes = [], curStroke = null, strokeN = 0, tipS = null, lastMode = null, prevTip = null, lineAng = 0, lineY = 0, holdY = 0, wheel = null, flash = 0, wasPinched = {}, wasFist = false;
     return {
       animated: true,
       render: function (frame, out, params) {
@@ -130,10 +131,14 @@
           }
           step.jitter = 0.04;
         } else if (mode === 'horizon') {
-          // The line: through a closed fist at its angle, else level across the middle.
+          // The line, set with the Landmarks Wheel's gesture (Magi.gestureWheel, 8 numbers): a fist
+          // opens the wheel and the line rises or falls to your fist; push or roll toward a number
+          // to tilt it, number k by (k − 1)·180°/8 (1 is level), and open your hand to keep it.
           var fist = hands.filter(function (h) { return h.fist; })[0];
-          if (fist) { var fc = toW(fist.center); lineY += (fc[1] - lineY) * e; var ra = -fist.rotation * Math.PI / 180; lineAng += (Math.atan2(Math.sin(ra), Math.cos(ra)) - lineAng) * e; }
-          else { lineY += (0 - lineY) * e * 0.3; lineAng += (0 - lineAng) * e * 0.3; }
+          (wheel || (wheel = Magi.gestureWheel())).update(ix, frame, 8);
+          if (fist) holdY = toW(fist.center)[1];
+          var tA = -wheel.selected() * Math.PI / 8;
+          lineY += (holdY - lineY) * e; lineAng += (Math.atan2(Math.sin(tA - lineAng), Math.cos(tA - lineAng))) * e;
           var dx = Math.cos(lineAng), dy = Math.sin(lineAng), L = aspect * 2.4, lc = [0, lineY, 0];
           step.emitShape = 1; step.lineA = [lc[0] - dx * L, lc[1] - dy * L, 0]; step.lineB = [lc[0] + dx * L, lc[1] + dy * L, 0];
           step.planeK = 4 + hold * 40; step.planeP = lc; step.planeN = [-dy, dx, 0];
@@ -293,6 +298,7 @@
             });
           });
         }
+        if (mode === 'horizon' && wheel) wheel.draw(ctx, frame, 8);
         // Light leaks (Lightbeam): warm gradients drifting along the edges, added like light.
         if (mode === 'lightbeam' && params.leak) {
           ctx.globalCompositeOperation = 'lighter';
@@ -308,7 +314,7 @@
         else if (!hands.length) frame.say({
           fibre: 'Open your hand to let the fibres fly, make a fist to pull them in, pinch and drag to turn it.',
           tidal: 'Raise your hand: it is a moon. Bring it close and the tides stream toward it.',
-          horizon: 'Close a fist to set the horizon and turn it to tilt the line. Open your hand to raise a plume.',
+          horizon: 'Make a fist: the wheel opens. Push toward a number to tilt the horizon, open your hand to keep it. An open palm raises a plume.',
           lightbeam: 'Raise your index finger and draw with light. Fist wipes it; pinch flashes.',
           thundercloud: 'Raise your hand to move the cloud. Fist heats it, open palm swells it, pinch for lightning.',
           symbiote: 'Raise your hands: the ink grows from them and lashes when you move.'

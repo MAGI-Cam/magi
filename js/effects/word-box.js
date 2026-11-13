@@ -18,8 +18,9 @@
 // stay whole). Empty Text uses a set (Set): 0 Hiragana, 1 Kanji, 2 Latin, 3 Hangul, 4 Digits,
 // 5 Emoji. Characters are drawn on the HUD so they stay sharp.
 // Gestures: spread thumb and index (other fingers down) to zoom in between them (up to 1×–5×, Zoom); open
-// palm loosens the figure, points drifting from their places; a fist pulls it tight; turn your hand
-// to turn it; swipe to change the set.
+// palm loosens the figure, points drifting from their places, and spreads it apart: the more open
+// your hand, the further the characters move from the figure's center (Spread); a fist pulls it
+// tight; turn your hand to turn it; swipe to change the set. Change: characters swap over time.
 (function () {
   var SETS = [
     'あいうえおかきくけこさしすせそたちつてとなにぬねのはひふへほまみむめもやゆよらりるれろわをん',
@@ -35,7 +36,7 @@
   }
 
   function createWordBox() {
-    var pts = [], chars = [], charKey = '', zoom = 1, zc = null, yaw = 0, loose = 0, seen = 0, lastT = null;
+    var pts = [], chars = [], charKey = '', zoom = 1, zc = null, yaw = 0, loose = 0, openK = 0, seen = 0, lastT = null;
     var smooth = null, mw = 0, mh = 0, lastSeg = null, bbox = null, rows = null;
 
     // Smoothed mask, its bounding box, and each row's body spans (for even sampling).
@@ -84,15 +85,23 @@
         // Characters for the points.
         var text = (params.text || '').trim(), ck = text + '|' + setIx;
         if (ck !== charKey) { charKey = ck; chars = graphemes(text || SETS[setIx]); if (!chars.length) chars = graphemes(SETS[0]); pts.forEach(function (p) { p.c = chars[Math.floor(Math.random() * chars.length)]; }); }
+        // Change: each character is swapped for another at random times, a Poisson process of rate
+        // 3·Change/100 per second (each frame with probability 1 − e^(−λ·dt)); 0 keeps them.
+        var swapP = 1 - Math.exp(-3 * (params.change || 0) / 100 * dt);
+        if (swapP > 0) pts.forEach(function (p) { if (Math.random() < swapP) p.c = chars[Math.floor(Math.random() * chars.length)]; });
 
         // Gestures.
-        var ix = Magi.interaction.read(frame), hands = ix.hands, hd = hands[0], wantZoom = 1, wantLoose = 0, wantYaw = Math.sin(t * 0.3) * 0.4;
+        var ix = Magi.interaction.read(frame), hands = ix.hands, hd = hands[0], wantZoom = 1, wantLoose = 0, wantOpen = 0, wantYaw = Math.sin(t * 0.3) * 0.4;
         ix.events.forEach(function (e) {
           if (e.n <= seen) return; seen = e.n;
           if (e.type === 'swipe' && !text && (e.dir === 'left' || e.dir === 'right')) frame.setParam('set', (setIx + (e.dir === 'left' ? SETS.length - 1 : 1)) % SETS.length);
         });
         if (hd) {
           wantYaw = hd.rotation * Math.PI / 180 * (params.rotation / 100 * 3);
+          // Openness: how straight the four fingers are, mean of (1 − curl), mapped so a fist is 0
+          // and a flat open hand 1. The figure spreads apart by up to 1.5 × Spread/100 of its size.
+          var op = ['index', 'middle', 'ring', 'pinky'].reduce(function (a, f) { return a + (1 - hd.fingers[f].curl) / 4; }, 0);
+          wantOpen = Math.max(0, Math.min(1, (op - 0.25) / 0.6));
           if (hd.count >= 5) wantLoose = 1;
           else if (hd.fist) wantLoose = -1;
           else if (!hd.pinched && hd.fingers.thumb.extended && hd.fingers.index.extended && !hd.fingers.middle.extended) {
@@ -105,6 +114,7 @@
         yaw += (wantYaw - yaw) * fast;
         zoom += (wantZoom - zoom) * (1 - Math.exp(-dt / 0.15));
         loose += (wantLoose - loose) * (1 - Math.exp(-dt / 0.2));
+        openK += (wantOpen - openK) * (1 - Math.exp(-dt / 0.15));
 
         // Body: anchors in the body's frame.
         var seg = Magi.tracking.body.detect(frame);
@@ -114,6 +124,7 @@
         if (pts.length > n) pts.length = n;
         var bw = bbox ? (bbox.x1 - bbox.x0) / mw * W : W * 0.4, cxB = bbox ? (bbox.x0 + bbox.x1) / 2 / mw * W : W / 2;
         var share = params.hands / 100, drift = Math.max(0, loose) * H * 0.06;
+        var spreadK = openK * (params.spread || 0) / 100 * 1.5, cyB = bbox ? (bbox.y0 + bbox.y1) / 2 / mh * H : H / 2;
         pts.forEach(function (p) {
           var gx, gy, gz = p.z * bw;
           var onHand = hands.length && C.length && p.hand < share;
@@ -123,6 +134,7 @@
           } else if (bbox && p.a) {
             if (!inBody(p.a.u, p.a.v)) { p.out += dt; if (p.out > 0.4) { p.a = anchor() || p.a; p.out = 0; } } else p.out = 0;
             gx = (bbox.x0 + p.a.u * (bbox.x1 - bbox.x0)) / mw * W; gy = (bbox.y0 + p.a.v * (bbox.y1 - bbox.y0)) / mh * H;
+            if (spreadK > 0) { gx = cxB + (gx - cxB) * (1 + spreadK); gy = cyB + (gy - cyB) * (1 + spreadK); }
           } else { if (!p.a) p.a = anchor(); gx = p.x; gy = p.y; }
           gx += Math.cos(t * 0.7 + p.ph) * drift; gy += Math.sin(t * 0.9 + p.ph) * drift;
           p.x += (gx - p.x) * fast; p.y += (gy - p.y) * fast; p.gz = gz;

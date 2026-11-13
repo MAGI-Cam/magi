@@ -1043,146 +1043,138 @@
     };
   };
 
-  // Horizon: a gesture selection wheel, like a game's weapon wheel (after a reference of a
-  // hand-tracking interface). Hands are drawn as green bones with red joints.
-  //   Make a fist: the wheel opens around it (it grows in over 0.15 s), Slots items in a ring, each
-  //     a wedge with a line-drawn icon, the spokes running out past the ring like rays.
+  // Wheel: a gesture selection wheel, a minimal take on a game's weapon wheel — a ring of numbered
+  // slots around a clear center that shows the choice. Shared by the Landmarks Wheel mode and
+  // Fibre's Horizon (Magi.gestureWheel), so both answer the same gesture:
+  //   Make a fist: the wheel opens where your fist is, always the same size (a ring 0.17 of the
+  //     frame's short side across its outer edge, the inner edge at 0.6 of that), kept inside the
+  //     frame. It grows in over 0.15 s.
   //   Choose: push your fist toward a slot, a marking menu (Kurtenbach & Buxton 1993): past a dead
   //     zone of 0.6 palm lengths, the direction of the fist from where it closed picks the slot,
   //     as a game pad's stick does. Inside the dead zone, roll your wrist: the slot under the
   //     direction your knuckles point, the roll amplified ×2.5 so a comfortable turn sweeps the
-  //     whole ring. The chosen wedge lights up and its name shows at the rim.
-  //   Open your hand: equips the chosen slot (a flash and a ring burst). Losing the hand cancels.
-  // The panel on the right is the loadout: the equipped item's icon, name and four stat bars, and
-  // a dial whose needle follows the selection while the wheel is open.
-  var WHEEL = [
-    { name: 'BLADE', stats: [0.9, 0.3, 0.6, 0.2] }, { name: 'BOW', stats: [0.6, 0.9, 0.4, 0.3] },
-    { name: 'ORB', stats: [0.5, 0.5, 0.9, 0.6] }, { name: 'SHIELD', stats: [0.1, 0.2, 0.3, 1.0] },
-    { name: 'BEAM', stats: [0.8, 1.0, 0.2, 0.1] }, { name: 'PULSE', stats: [0.4, 0.6, 0.8, 0.4] },
-    { name: 'TRAP', stats: [0.7, 0.1, 0.5, 0.5] }, { name: 'WARP', stats: [0.2, 0.8, 1.0, 0.3] },
-    { name: 'NOVA', stats: [1.0, 0.4, 0.3, 0.2] }, { name: 'HOOK', stats: [0.3, 0.7, 0.6, 0.4] },
-    { name: 'SWARM', stats: [0.6, 0.5, 0.7, 0.3] }, { name: 'MIRROR', stats: [0.2, 0.3, 0.5, 0.9] }
-  ];
-  var STATS = ['POWER', 'RANGE', 'SPEED', 'GUARD'];
-  // Icons in a unit box centered on (0, 0), radius 1.
-  function wheelIcon(ctx, k, x, y, r) {
-    ctx.save(); ctx.translate(x, y); ctx.scale(r, r); ctx.lineWidth = ctx.lineWidth / r; ctx.beginPath();
-    switch (k % 12) {
-      case 0: ctx.moveTo(-0.7, 0.7); ctx.lineTo(0.7, -0.7); ctx.moveTo(-0.6, 0.2); ctx.lineTo(-0.2, 0.6); break;
-      case 1: ctx.arc(-0.3, 0, 0.9, -1.1, 1.1); ctx.moveTo(0.11, -0.8); ctx.lineTo(0.11, 0.8); ctx.moveTo(-0.6, 0); ctx.lineTo(0.8, 0); break;
-      case 2: ctx.arc(0, 0, 0.75, 0, Math.PI * 2); ctx.moveTo(0.2, 0); ctx.arc(0, 0, 0.2, 0, Math.PI * 2); break;
-      case 3: ctx.moveTo(0, -0.8); ctx.lineTo(0.7, -0.5); ctx.lineTo(0.55, 0.3); ctx.lineTo(0, 0.85); ctx.lineTo(-0.55, 0.3); ctx.lineTo(-0.7, -0.5); ctx.closePath(); break;
-      case 4: ctx.moveTo(-0.8, 0.5); ctx.lineTo(-0.3, -0.2); ctx.lineTo(0.1, 0.3); ctx.lineTo(0.8, -0.6); break;
-      case 5: [0.25, 0.5, 0.8].forEach(function (q) { ctx.moveTo(q, 0); ctx.arc(0, 0, q, 0, Math.PI * 2); }); break;
-      case 6: ctx.moveTo(0, -0.8); ctx.lineTo(0.75, 0.6); ctx.lineTo(-0.75, 0.6); ctx.closePath(); ctx.moveTo(-0.25, 0); ctx.lineTo(0.25, 0.4); ctx.moveTo(0.25, 0); ctx.lineTo(-0.25, 0.4); break;
-      case 7: for (var a = 0; a < 12; a += 0.25) { var rr = a / 14; a ? ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr) : ctx.moveTo(0, 0); } break;
-      case 8: for (var s2 = 0; s2 < 8; s2++) { var an = s2 * Math.PI / 4; ctx.moveTo(Math.cos(an) * 0.25, Math.sin(an) * 0.25); ctx.lineTo(Math.cos(an) * 0.85, Math.sin(an) * 0.85); } break;
-      case 9: ctx.moveTo(0, -0.8); ctx.lineTo(0, 0.3); ctx.arc(-0.35, 0.3, 0.35, 0, Math.PI); break;
-      case 10: [[-0.4, -0.3], [0.35, -0.4], [0, 0.35], [0.5, 0.45], [-0.5, 0.5]].forEach(function (q) { ctx.moveTo(q[0] + 0.12, q[1]); ctx.arc(q[0], q[1], 0.12, 0, Math.PI * 2); }); break;
-      default: ctx.rect(-0.6, -0.8, 1.2, 1.6); ctx.moveTo(-0.6, 0.8); ctx.lineTo(0.6, -0.8);
-    }
-    ctx.stroke(); ctx.restore();
-  }
-  Magi.landmarkModes.horizon = function () {
-    var GREEN = '#34e06a', RED = '#ff3b30', C = null, wheel = null, equipped = 0, burst = -9, needle = 0;
+  //     whole ring. The chosen slot fills light.
+  //   Open your hand: chooses it (a thin arc marks the chosen slot's rim, and a ring bursts out).
+  //     Losing the hand cancels.
+  // Slot k sits at angle −90° + k·360°/n (clockwise from the top); numbers start at 1.
+  Magi.gestureWheel = function () {
+    var W8 = { wheel: null, equipped: 0, burst: -9 };
+    function knuckles(h) { return [5, 9, 13, 17].reduce(function (a, i) { return { x: a.x + h.points[i].x / 4, y: a.y + h.points[i].y / 4 }; }, { x: 0, y: 0 }); }
+    W8.slotAngle = function (k, n) { return -Math.PI / 2 + k * Math.PI * 2 / n; };
+    W8.update = function (ix, frame, n) {
+      var W = frame.width, H = frame.height, t = frame.time / 1000, R2 = Math.min(W, H) * 0.17;
+      var hands = ix.hands.slice(0, 2), fist = hands.filter(function (h) { return h.fist; })[0];
+      if (W8.equipped >= n) W8.equipped = 0;
+      if (fist) {
+        var kc = knuckles(fist), palm = fist.size || Math.hypot(fist.points[9].x - fist.points[0].x, fist.points[9].y - fist.points[0].y);
+        if (!W8.wheel || W8.wheel.id !== fist.id) {
+          var m = R2 * 1.15;
+          W8.wheel = { id: fist.id, at: t, sel: W8.equipped, palm: palm, hand: kc,
+            o: { x: Math.max(m, Math.min(W - m, kc.x)), y: Math.max(m, Math.min(H - m, kc.y)) } };
+        }
+        var wl = W8.wheel;
+        wl.palm += (palm - wl.palm) * 0.2;
+        var dx = kc.x - wl.hand.x, dy = kc.y - wl.hand.y, ang;
+        if (Math.hypot(dx, dy) > wl.palm * 0.6) ang = Math.atan2(dy, dx);
+        else ang = fist.rotation * 2.5 * Math.PI / 180 - Math.PI / 2;
+        var sl = Math.PI * 2 / n;
+        wl.sel = Math.round(((ang + Math.PI / 2) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) / sl) % n;
+        wl.seen = t;
+      } else if (W8.wheel) {
+        if (hands.length && t - W8.wheel.seen < 0.3) { W8.equipped = W8.wheel.sel; W8.burst = t; }
+        W8.wheel = null;
+      }
+      return W8;
+    };
+    W8.selected = function () { return W8.wheel ? W8.wheel.sel : W8.equipped; };
+    // Draws the open wheel (ring on ctx, numbers on the hud) and the burst after a choice.
+    W8.draw = function (ctx, frame, n, color) {
+      var W = frame.width, H = frame.height, u = frame.pxPerCss, t = frame.time / 1000, hud = frame.hud, wl = W8.wheel;
+      var ink = color || '255,255,255';
+      if (wl) {
+        var grow = Math.min(1, (t - wl.at) / 0.15), R2 = Math.min(W, H) * 0.17 * grow, R1 = R2 * 0.6, o = wl.o, slice = Math.PI * 2 / n, gap = Math.max(1.5 * u, R2 * 0.025);
+        ctx.save();
+        ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+        // The clear center, like frosted glass.
+        ctx.fillStyle = 'rgba(255,255,255,0.12)';
+        ctx.beginPath(); ctx.arc(o.x, o.y, Math.max(0, R1 - gap * 2), 0, Math.PI * 2); ctx.fill();
+        for (var i = 0; i < n; i++) {
+          var a0 = W8.slotAngle(i, n) - slice / 2, a1 = a0 + slice, on = i === wl.sel;
+          // Each slot a wedge of the ring, inset by a gap that reads as the light separators.
+          var g2 = gap / R2, g1 = gap / Math.max(1, R1);
+          ctx.beginPath(); ctx.arc(o.x, o.y, R2, a0 + g2, a1 - g2); ctx.arc(o.x, o.y, R1, a1 - g1, a0 + g1, true); ctx.closePath();
+          ctx.fillStyle = on ? 'rgba(' + ink + ',0.88)' : 'rgba(30,30,30,0.55)'; ctx.fill();
+          if (i === W8.equipped) {
+            ctx.strokeStyle = 'rgba(' + ink + ',0.95)'; ctx.lineWidth = Math.max(1.5, 2 * u);
+            ctx.beginPath(); ctx.arc(o.x, o.y, R2 + gap * 1.6, a0 + g2 * 2, a1 - g2 * 2); ctx.stroke();
+          }
+        }
+        // The outer rim, a hairline.
+        ctx.strokeStyle = 'rgba(' + ink + ',0.35)'; ctx.lineWidth = Math.max(1, 0.75 * u);
+        ctx.beginPath(); ctx.arc(o.x, o.y, R2, 0, Math.PI * 2); ctx.stroke();
+        ctx.restore();
+        hud.save(); hud.textAlign = 'center'; hud.textBaseline = 'middle';
+        var fs = Math.max(9, (R2 - R1) * 0.34);
+        hud.font = '300 ' + Math.round(fs) + 'px Inter, sans-serif';
+        for (var k = 0; k < n; k++) {
+          var am = W8.slotAngle(k, n), rr = (R1 + R2) / 2;
+          hud.fillStyle = k === wl.sel ? '#111' : 'rgba(255,255,255,0.9)';
+          hud.fillText(String(k + 1), o.x + Math.cos(am) * rr, o.y + Math.sin(am) * rr);
+        }
+        // Center: the choice, large, and where it sits in the ring.
+        hud.fillStyle = '#fff';
+        hud.font = '300 ' + Math.round(R1 * 0.62) + 'px Inter, sans-serif';
+        hud.fillText(String(wl.sel + 1), o.x, o.y - R1 * 0.08);
+        hud.font = '300 ' + Math.round(Math.max(8, R1 * 0.16)) + 'px Inter, sans-serif';
+        hud.fillStyle = 'rgba(255,255,255,0.7)';
+        hud.fillText('‹  ' + (wl.sel + 1) + ' / ' + n + '  ›', o.x, o.y + R1 * 0.42);
+        hud.restore();
+      }
+      // Choice burst: a ring expanding from the wheel's center for 0.4 s.
+      var bk = (t - W8.burst) / 0.4;
+      if (bk >= 0 && bk < 1 && W8.lastO) {
+        ctx.save(); ctx.strokeStyle = 'rgba(' + ink + ',' + (1 - bk).toFixed(3) + ')'; ctx.lineWidth = Math.max(1, 2 * u * (1 - bk));
+        ctx.beginPath(); ctx.arc(W8.lastO.x, W8.lastO.y, Math.min(W, H) * 0.17 * (1 + 0.6 * bk), 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+      }
+      if (wl) W8.lastO = wl.o;
+    };
+    return W8;
+  };
+
+  // Landmarks › Wheel: the wheel above over your hands (green bones, red joints). Slots: how many
+  // numbers. Panel: the chosen number large on the right.
+  Magi.landmarkModes.wheel = function () {
+    var GREEN = '#34e06a', RED = '#ff3b30', C = null, wheel = Magi.gestureWheel();
     return function (ctx, frame, ix, params) {
-      var W = frame.width, H = frame.height, u = frame.pxPerCss, t = frame.time / 1000, hud = frame.hud;
+      var W = frame.width, H = frame.height, u = frame.pxPerCss, hud = frame.hud;
       ctx.fillStyle = 'rgba(0,0,0,' + (params.dim / 100).toFixed(3) + ')';
       ctx.fillRect(0, 0, W, H);
       if (!C) C = (Magi.tracking.connections && Magi.tracking.connections.hand) || [];
-      var hands = ix.hands.slice(0, 2), n = Math.max(4, Math.min(12, Math.round(params.hrays || 8))), panel = params.hpanel !== false;
-      var fist = hands.filter(function (h) { return h.fist; })[0];
-      var knuckles = function (h) { return [5, 9, 13, 17].reduce(function (a, i) { return { x: a.x + h.points[i].x / 4, y: a.y + h.points[i].y / 4 }; }, { x: 0, y: 0 }); };
-      // Open, follow, choose, equip.
-      if (fist) {
-        var kc = knuckles(fist), palm = fist.size || Math.hypot(fist.points[9].x - fist.points[0].x, fist.points[9].y - fist.points[0].y);
-        if (!wheel || wheel.id !== fist.id) wheel = { id: fist.id, o: kc, at: t, sel: equipped, palm: palm };
-        wheel.palm += (palm - wheel.palm) * 0.2;
-        var dx = kc.x - wheel.o.x, dy = kc.y - wheel.o.y, ang;
-        if (Math.hypot(dx, dy) > wheel.palm * 0.6) ang = Math.atan2(dy, dx);
-        else ang = fist.rotation * 2.5 * Math.PI / 180 - Math.PI / 2;
-        var sl = Math.PI * 2 / n, k = Math.round(((ang + Math.PI / 2) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) / sl) % n;
-        wheel.sel = k; wheel.seen = t; needle = ang;
-      } else if (wheel) {
-        // Released with a hand still up: equip. Hand lost: cancel.
-        if (hands.length && t - wheel.seen < 0.3) { equipped = wheel.sel; burst = t; }
-        wheel = null;
-      }
+      var hands = ix.hands.slice(0, 2), n = Math.max(4, Math.min(12, Math.round(params.hrays || 8)));
+      wheel.update(ix, frame, n);
       ctx.save();
       ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-      // The wheel.
-      if (wheel) {
-        var grow = Math.min(1, (t - wheel.at) / 0.15), R1 = wheel.palm * 0.7 * grow, R2 = wheel.palm * 2.8 * grow, o = wheel.o, slice = Math.PI * 2 / n;
-        for (var i = 0; i < n; i++) {
-          var a0 = -Math.PI / 2 + (i - 0.5) * slice, a1 = a0 + slice, on = i === wheel.sel;
-          ctx.beginPath(); ctx.arc(o.x, o.y, R2, a0 + 0.02, a1 - 0.02); ctx.arc(o.x, o.y, R1, a1 - 0.02, a0 + 0.02, true); ctx.closePath();
-          ctx.fillStyle = on ? 'rgba(255,255,255,0.32)' : 'rgba(0,0,0,0.35)'; ctx.fill();
-          ctx.strokeStyle = on ? '#fff' : 'rgba(255,255,255,0.45)'; ctx.lineWidth = Math.max(1, (on ? 1.6 : 1) * u); ctx.stroke();
-          var am = a0 + slice / 2, ir = (R1 + R2) / 2;
-          ctx.strokeStyle = on ? GREEN : 'rgba(255,255,255,0.8)'; ctx.lineWidth = Math.max(1, 1.4 * u);
-          wheelIcon(ctx, i, o.x + Math.cos(am) * ir, o.y + Math.sin(am) * ir, (R2 - R1) * 0.22 * (on ? 1.2 : 1));
-        }
-        // Spokes run past the rim like rays; the chosen one is green.
-        ctx.lineWidth = Math.max(1, u);
-        for (var r = 0; r < n; r++) {
-          var ra = -Math.PI / 2 + (r - 0.5) * slice;
-          ctx.strokeStyle = 'rgba(255,255,255,0.25)';
-          ctx.beginPath(); ctx.moveTo(o.x + Math.cos(ra) * R2, o.y + Math.sin(ra) * R2); ctx.lineTo(o.x + Math.cos(ra) * R2 * 1.5, o.y + Math.sin(ra) * R2 * 1.5); ctx.stroke();
-        }
-        ctx.strokeStyle = GREEN; ctx.lineWidth = Math.max(1, 1.6 * u);
-        ctx.beginPath(); ctx.moveTo(o.x, o.y); ctx.lineTo(o.x + Math.cos(needle) * R1 * 0.95, o.y + Math.sin(needle) * R1 * 0.95); ctx.stroke();
-        var sa = -Math.PI / 2 + wheel.sel * slice;
-        hud.save(); hud.fillStyle = '#fff'; hud.font = '500 ' + Math.round(11 * u) + 'px ' + Magi.fx.MONO; hud.textAlign = 'center'; hud.textBaseline = 'middle';
-        hud.fillText(WHEEL[wheel.sel].name, o.x + Math.cos(sa) * (R2 + 16 * u), o.y + Math.sin(sa) * (R2 + 16 * u));
-        hud.restore();
-      }
-      // Skeletons: green bones, red joints.
       hands.forEach(function (h) {
         var p = h.points;
         ctx.strokeStyle = GREEN; ctx.lineWidth = Math.max(1, 1.6 * u);
         ctx.beginPath(); C.forEach(function (c) { ctx.moveTo(p[c.start].x, p[c.start].y); ctx.lineTo(p[c.end].x, p[c.end].y); }); ctx.stroke();
         ctx.fillStyle = RED; ctx.beginPath(); p.forEach(function (q) { ctx.moveTo(q.x + 3 * u, q.y); ctx.arc(q.x, q.y, 3 * u, 0, Math.PI * 2); }); ctx.fill();
       });
-      // Equip burst: a ring expanding from the hand for 0.4 s.
-      var bk = (t - burst) / 0.4;
-      if (bk >= 0 && bk < 1 && hands[0]) {
-        var bc = hands[0].center; ctx.strokeStyle = 'rgba(52,224,106,' + (1 - bk).toFixed(3) + ')'; ctx.lineWidth = Math.max(1, 3 * u * (1 - bk));
-        ctx.beginPath(); ctx.arc(bc.x, bc.y, (hands[0].size || 60) * (0.5 + 3 * bk), 0, Math.PI * 2); ctx.stroke();
-      }
       ctx.restore();
-
-      if (panel) {
-        // The loadout: equipped item, its stats, and a dial that follows the selection.
-        var PW = Math.round(W * 0.22), px0 = W - PW, cx = px0 + PW / 2, item = WHEEL[wheel ? wheel.sel : equipped];
-        ctx.save();
-        ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fillRect(px0, 0, PW, H);
-        ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = Math.max(1, 0.8 * u);
-        var dy0 = H * 0.2, DR = Math.min(PW * 0.38, H * 0.14);
-        ctx.setLineDash([1.5 * u, 4 * u]); ctx.beginPath(); ctx.arc(cx, dy0, DR, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
-        ctx.beginPath();
-        for (var tk = 0; tk < n; tk++) { var ta = -Math.PI / 2 + tk * Math.PI * 2 / n; ctx.moveTo(cx + Math.cos(ta) * DR * 0.85, dy0 + Math.sin(ta) * DR * 0.85); ctx.lineTo(cx + Math.cos(ta) * DR * 1.1, dy0 + Math.sin(ta) * DR * 1.1); }
-        ctx.stroke();
-        var na = wheel ? needle : -Math.PI / 2 + equipped * Math.PI * 2 / n;
-        ctx.strokeStyle = GREEN; ctx.lineWidth = Math.max(1, 1.6 * u);
-        ctx.beginPath(); ctx.moveTo(cx, dy0); ctx.lineTo(cx + Math.cos(na) * DR, dy0 + Math.sin(na) * DR); ctx.stroke();
-        ctx.strokeStyle = wheel ? '#fff' : GREEN;
-        wheelIcon(ctx, WHEEL.indexOf(item), cx, H * 0.45, Math.min(PW * 0.18, H * 0.07));
-        ctx.restore();
-        hud.save(); hud.fillStyle = '#fff'; hud.textAlign = 'center';
-        hud.font = '500 ' + Math.round(12 * u) + 'px ' + Magi.fx.MONO; hud.fillText(item.name, cx, H * 0.56);
-        hud.font = '400 ' + Math.round(7 * u) + 'px ' + Magi.fx.MONO; hud.fillText(wheel ? 'SELECTING' : 'EQUIPPED', cx, H * 0.6);
-        hud.textAlign = 'left';
-        STATS.forEach(function (st, si) {
-          var y = H * (0.68 + si * 0.06), bw = PW * 0.6;
-          hud.fillStyle = 'rgba(255,255,255,0.8)'; hud.fillText(st, px0 + PW * 0.08, y);
-          hud.fillStyle = 'rgba(255,255,255,0.2)'; hud.fillRect(px0 + PW * 0.32, y - 5 * u, bw, 4 * u);
-          hud.fillStyle = GREEN; hud.fillRect(px0 + PW * 0.32, y - 5 * u, bw * item.stats[si], 4 * u);
-        });
+      wheel.draw(ctx, frame, n);
+      if (params.hpanel !== false) {
+        var cx = W - W * 0.09, sel = wheel.selected();
+        hud.save(); hud.textAlign = 'center'; hud.fillStyle = '#fff';
+        hud.font = '300 ' + Math.round(Math.min(W, H) * 0.12) + 'px Inter, sans-serif'; hud.textBaseline = 'alphabetic';
+        hud.fillText(String(sel + 1), cx, H * 0.5);
+        hud.font = '400 ' + Math.round(8 * u) + 'px ' + Magi.fx.MONO; hud.fillStyle = 'rgba(255,255,255,0.7)';
+        hud.fillText(wheel.wheel ? 'SELECTING' : 'CHOSEN', cx, H * 0.5 + 16 * u);
         hud.restore();
       }
-      if (!hands.length) frame.say('Make a fist to open the wheel, push it (or roll it) toward a slot, open your hand to equip.');
+      if (!hands.length) frame.say('Make a fist to open the wheel, push it (or roll it) toward a number, open your hand to choose.');
     };
   };
+
   // Cube: your uploaded images (Magi.media; camera snapshots until you add some) as image cubes
   // (Magi.mediaCubes, media-fx.js) held between your hands. Two hands frame it: their distance opens
   // the n × n × n block into a lattice (gap 1.08 → 3.5 cube edges), the line between them sets its

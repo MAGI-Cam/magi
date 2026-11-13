@@ -37,6 +37,10 @@
         var WS = Magi.wordSets, setIx = Math.max(0, Math.min(WS.SETS.length - 1, Math.round(params.set)));
         var text = (params.text || '').trim(), ck = text + '|' + setIx;
         if (ck !== charKey) { charKey = ck; chars = WS.graphemes(text || WS.SETS[setIx]); if (!chars.length) chars = WS.graphemes(WS.SETS[0]); P.forEach(function (p) { p.c = chars[Math.floor(Math.random() * chars.length)]; }); }
+        // Change: each character is swapped at random times, a Poisson process of rate 3·Change/100
+        // per second; 0 keeps them.
+        var swapP = 1 - Math.exp(-3 * (params.change || 0) / 100 * dt);
+        if (swapP > 0) P.forEach(function (p) { if (Math.random() < swapP) p.c = chars[Math.floor(Math.random() * chars.length)]; });
 
         var n = Math.round(params.points);
         while (P.length < n) P.push({ x: Math.random() * W, y: Math.random() * H, z: Math.random() * 2 - 1, vx: 0, vy: 0, c: chars[Math.floor(Math.random() * chars.length)], ph: Math.random() * 6.28 });

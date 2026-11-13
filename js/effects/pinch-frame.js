@@ -35,7 +35,10 @@
 //             hands open the box and its code hold still; a fist frees that hand's corner to
 //             follow it until the next pinch. Lock off: corners follow the pinches live. Outside
 //             codes everything but the box. An open hand's finger spread sets Cells; Color tints
-//             the set bits; Solid fills the area with that color instead of code.
+//             the set bits (and the box, guides and readouts); Solid fills the area with that color
+//             instead of code.
+//   Border  — a square frame between open palms, scaled by how far apart they are; a pinch sets
+//             it in place, a fist frees it (createBorder). Grain and Saturation act on the video.
 //   Blur    — the L-hand window shows the camera blurred (24-sample golden-angle disc); Frosted
 //             adds frosted glass's random micro-facet offsets, haze and grain.
 //             Mosaic samples each pixel's blur around the center of its cell (up to 8% of the
@@ -344,7 +347,8 @@
       var x0 = Math.max(0, Math.min(corners[0].x, corners[1].x)), x1 = Math.min(W, Math.max(corners[0].x, corners[1].x));
       var y0 = Math.max(0, Math.min(corners[0].y, corners[1].y)), y1 = Math.min(H, Math.max(corners[0].y, corners[1].y));
       var bw = x1 - x0, bh = y1 - y0, line = Math.max(1, u);
-      var ink = Magi.fx.inkColor(params.color).map(function (c) { return Math.round(c * 255); });
+      // Color tints the code's set bits, and the box, guides, markers and readouts with them.
+      var ink = Magi.fx.inkColor(params.color).map(function (c) { return Math.round(c * 255); }), inkCss = 'rgb(' + ink.join(',') + ')';
 
       ctx.save();
       if (bw >= 2 && bh >= 2) {
@@ -366,13 +370,13 @@
           frame.draw(ctx, W, H);
           ctx.restore();
         }
-        ctx.strokeStyle = '#fff';
+        ctx.strokeStyle = inkCss;
         ctx.lineWidth = line;
         ctx.strokeRect(x0 + line / 2, y0 + line / 2, bw - line, bh - line);
       }
 
       // Guides across the whole frame through both corners.
-      ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+      ctx.strokeStyle = 'rgba(' + ink.join(',') + ',0.7)';
       ctx.lineWidth = line;
       ctx.beginPath();
       corners.forEach(function (c) {
@@ -383,9 +387,10 @@
 
       // Corner markers (hollow when free) and their normalized coordinates, full precision.
       var fs = Math.round(8 * u), sq = 5 * u, hud = frame.hud;
-      ctx.fillStyle = '#fff';
-      ctx.strokeStyle = '#fff';
-      hud.fillStyle = '#fff';
+      ctx.fillStyle = inkCss;
+      ctx.strokeStyle = inkCss;
+      hud.save();
+      hud.fillStyle = inkCss;
       hud.font = fs + 'px ' + Magi.fx.MONO;
       hud.textBaseline = 'top';
       corners.forEach(function (c) {
@@ -398,6 +403,76 @@
         hud.fillText(String(c.y / H), tx, ty + fs * 1.2);
       });
       if (frozen) { hud.textAlign = 'left'; hud.fillText('locked', x0, Math.max(0, y0 - fs * 1.4)); }
+      hud.restore();
+      ctx.restore();
+      return true;
+    };
+  }
+
+  // Border: a square frame held between open palms. Two open hands: its center is the midpoint of
+  // your palms and its side the distance between them, so it scales with where your hands are and
+  // stays square. One open hand: centered on your palm, side 3 palm lengths. Center and side follow
+  // with a first-order lag (time constant 1/12 s). A pinch sets it in place; a fist frees it.
+  // The live video under it gets film grain and a saturation control (BORDER_FRAG).
+  var BORDER_FRAG = [
+    'precision highp float;',
+    'uniform sampler2D cam;',
+    'uniform vec2 size;',
+    'uniform float grain, sat, seed;',
+    'varying vec2 uv;',
+    'float hash(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }',
+    'void main() {',
+    '  vec3 c = texture2D(cam, uv).rgb;',
+    // Saturation: mix with Rec. 709 luma; 1 is the original, 0 gray.
+    '  float y = dot(c, vec3(0.2126, 0.7152, 0.0722));',
+    '  c = mix(vec3(y), c, sat);',
+    // Grain: monochrome noise, new every frame, strongest in the midtones (as on film, where
+    // highlights and deep shadows show less of it): amplitude × 4Y(1 − Y).
+    '  float n = hash(floor(uv * size) + seed) - 0.5;',
+    '  c += n * grain * (0.25 + 3.0 * y * (1.0 - y));',
+    '  gl_FragColor = vec4(clamp(c, 0.0, 1.0), 1.0);',
+    '}'
+  ].join('\n');
+
+  function createBorder() {
+    var sq = null, locked = false, lastT = null, pass;
+    return function (frame, ctx, ix, params, out) {
+      var W = frame.width, H = frame.height, u = frame.pxPerCss, t = frame.time / 1000;
+      var dt = lastT === null ? 1 / 60 : Math.max(0, Math.min(0.1, t - lastT)); lastT = t;
+      if (params.bgrain > 0 || params.bsat !== 100) {
+        if (pass === undefined) pass = Magi.fx.shaderPass(BORDER_FRAG, ['cam']);
+        if (pass) {
+          pass.texture('cam', out);
+          pass.run(W, H, { size: [W, H], grain: params.bgrain / 100 * 0.35, sat: params.bsat / 100, seed: (t * 60) % 997 });
+          ctx.drawImage(pass.canvas, 0, 0);
+        }
+      }
+      var hands = ix.hands, open = hands.filter(function (h) { return !h.fist && !h.pinched && h.count >= 4; });
+      if (locked && hands.some(function (h) { return h.fist; })) locked = false;
+      if (!locked) {
+        var T = null;
+        if (open.length >= 2) {
+          var a = open[0].center, b = open[1].center;
+          T = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, s: Math.hypot(b.x - a.x, b.y - a.y) };
+        } else if (open.length === 1) {
+          var h = open[0];
+          T = { x: h.center.x, y: h.center.y, s: 3 * (h.size || Math.min(W, H) * 0.12) };
+        }
+        if (T) {
+          if (!sq) sq = T;
+          var k = 1 - Math.exp(-12 * dt);
+          sq.x += (T.x - sq.x) * k; sq.y += (T.y - sq.y) * k; sq.s += (T.s - sq.s) * k;
+        }
+        if (sq && hands.some(function (h) { return h.pinched; })) locked = true;
+      }
+      if (!sq) return false;
+      var lw = Math.max(1, params.bwidth / 100 * Math.min(W, H) * 0.12), s = Math.max(lw * 2, sq.s);
+      var col = Magi.fx.inkColor(params.bcolor).map(function (c) { return Math.round(c * 255); });
+      ctx.save();
+      ctx.strokeStyle = 'rgb(' + col.join(',') + ')';
+      ctx.lineWidth = lw;
+      ctx.lineJoin = 'miter';
+      ctx.strokeRect(sq.x - s / 2 + lw / 2, sq.y - s / 2 + lw / 2, s - lw, s - lw);
       ctx.restore();
       return true;
     };
@@ -432,7 +507,7 @@
   ].join('\n');
 
   function createPinchFrame() {
-    var drawPrint = null, drawCode = null, drawLayers = null, blurPass;
+    var drawPrint = null, drawCode = null, drawLayers = null, drawBorder = null, blurPass;
     var work = document.createElement('canvas'), wctx = work.getContext('2d', { willReadFrequently: true });
     var tint = document.createElement('canvas'), tctx = tint.getContext('2d');
     var lut = new Uint8ClampedArray(256 * 3);
@@ -468,6 +543,8 @@
           drewCode = (drawLayers || (drawLayers = createLayers()))(frame, ctx, Magi.interaction.read(frame), params, outline) !== false;
         } else if (params.mode === 'code') {
           drewCode = (drawCode || (drawCode = createCode()))(frame, ctx, Magi.interaction.read(frame), params) !== false;
+        } else if (params.mode === 'border') {
+          drewCode = (drawBorder || (drawBorder = createBorder()))(frame, ctx, Magi.interaction.read(frame), params, out) !== false;
         } else if (hands.length >= 2 && params.mode === 'print') {
           (drawPrint || (drawPrint = createPrint()))(frame, ctx, hands, params, outline);
         } else if (hands.length >= 2) {
@@ -551,11 +628,12 @@
         }
 
         if (tracker.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, tracker, 'hand');
-        else if (params.mode === 'code' || (params.mode === 'print' && params.sheets >= 2) ? !drewCode : hands.length < 2) {
+        else if (params.mode === 'code' || params.mode === 'border' || (params.mode === 'print' && params.sheets >= 2) ? !drewCode : hands.length < 2) {
           Magi.tracking.hint(ctx, frame, params.mode === 'print' && params.sheets >= 2
             ? 'Both hands: thumbs at the bottom; index, middle, ring and pinky each hold a sheet.'
             : params.mode === 'print' ? 'Hold a sheet: index fingers at its top corners, thumbs at the bottom.'
             : params.mode === 'code' ? 'Pinch with both hands to draw a box.'
+            : params.mode === 'border' ? 'Open your palms: the square follows them. Pinch to set it in place.'
             : 'Make an L with thumb and index finger on both hands.');
         }
       },

@@ -131,7 +131,7 @@ Magi.effectConfig = [
       { id: 'cohesion', name: 'Cohesion' },
       { id: 'pollinate', name: 'Pollinate' },
       { id: 'zero', name: 'Zero' },
-      { id: 'horizon', name: 'Horizon' },
+      { id: 'wheel', name: 'Wheel' },
       { id: 'cube', name: 'Cube' }
     ],
     params: [
@@ -153,7 +153,7 @@ Magi.effectConfig = [
       { id: 'tempo', label: 'Tempo', min: 60, max: 180, step: 1, default: 110, modes: ['sequencer'] },
       { id: 'sound', label: 'Sound', type: 'toggle', default: false, modes: ['sequencer'], hint: 'Play the rings (kick, snare, hi-hat); recorded into videos.' },
       { id: 'fdim', label: 'Dim', min: 0, max: 100, step: 1, default: 0, modes: ['filaments'] },
-      { id: 'dim', label: 'Dim', min: 0, max: 100, step: 1, default: 45, modes: ['sequencer', 'rabinovich', 'cohesion', 'pollinate', 'zero', 'horizon', 'cube'] },
+      { id: 'dim', label: 'Dim', min: 0, max: 100, step: 1, default: 45, modes: ['sequencer', 'rabinovich', 'cohesion', 'pollinate', 'zero', 'wheel', 'cube'] },
       { id: 'speed', label: 'Speed', min: 0, max: 100, step: 1, default: 50, modes: ['rabinovich'] },
       { id: 'trail', label: 'Trail', min: 0, max: 100, step: 1, default: 70, modes: ['rabinovich'] },
       { id: 'size', label: 'Size', min: 0, max: 100, step: 1, default: 50, modes: ['rabinovich'] },
@@ -167,8 +167,8 @@ Magi.effectConfig = [
       { id: 'zglow', label: 'Glow', min: 0, max: 100, step: 1, default: 40, modes: ['zero'] },
       { id: 'zcube', label: 'Cube', type: 'toggle', default: true, modes: ['zero'], hint: 'The wireframe cube and the lines inside the sphere.' },
       { id: 'zcolor', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue', modes: ['zero'] },
-      { id: 'hrays', label: 'Slots', min: 4, max: 12, step: 1, default: 8, modes: ['horizon'] },
-      { id: 'hpanel', label: 'Panel', type: 'toggle', default: true, modes: ['horizon'], hint: 'The loadout panel on the right: the equipped item, its stats and a dial.' },
+      { id: 'hrays', label: 'Slots', min: 4, max: 12, step: 1, default: 8, modes: ['wheel'] },
+      { id: 'hpanel', label: 'Panel', type: 'toggle', default: true, modes: ['wheel'], hint: 'The chosen number, large, on the right.' },
       { id: 'cn', label: 'Grid', min: 2, max: 5, step: 1, default: 3, modes: ['cube'] },
       { id: 'csize', label: 'Size', min: 0, max: 100, step: 1, default: 50, modes: ['cube'] },
       { id: 'cspin', label: 'Spin', min: 0, max: 100, step: 1, default: 20, modes: ['cube'] },
@@ -415,7 +415,8 @@ Magi.effectConfig = [
       { id: 'invert', name: 'Invert' },
       { id: 'blur', name: 'Blur' },
       { id: 'print', name: 'Print' },
-      { id: 'code', name: 'Code' }
+      { id: 'code', name: 'Code' },
+      { id: 'border', name: 'Border' }
     ],
     // `modes` on a parameter shows it only in those modes.
     params: [
@@ -435,6 +436,10 @@ Magi.effectConfig = [
       { id: 'lock', label: 'Lock', type: 'toggle', default: true, modes: ['code'], hint: 'On: corners stay where you let go of them; a fist frees that hand’s corner. Off: the box follows your pinches.' },
       { id: 'outside', label: 'Outside', type: 'toggle', default: false, modes: ['code'], hint: 'Code everything outside the box; the box stays live.' },
       { id: 'solid', label: 'Solid', type: 'toggle', default: false, modes: ['code'], hint: 'Fill the area with one flat color (Color) instead of code.' },
+      { id: 'bcolor', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue', modes: ['border'] },
+      { id: 'bwidth', label: 'Width', min: 1, max: 100, step: 1, default: 15, modes: ['border'] },
+      { id: 'bgrain', label: 'Grain', min: 0, max: 100, step: 1, default: 30, modes: ['border'] },
+      { id: 'bsat', label: 'Saturation', min: 0, max: 100, step: 1, default: 100, modes: ['border'] },
       toggle('skeleton', 'Skeleton', false, 'Draw the hand skeleton.')
     ]
   },
@@ -624,6 +629,11 @@ Magi.effectConfig = [
     photoType: 'image/jpeg',
     params: [
       toggle('mesh', 'Mesh', true, 'Draw all 478 points as a triangle mesh.'),
+      toggle('square', 'Square', true, 'The box around your face.'),
+      toggle('eyes', 'Eyes', true, 'Eye and iris outlines (right red, left green).'),
+      toggle('lips', 'Lips', true, 'The outline of your lips.'),
+      toggle('brows', 'Eyebrows', true, 'The outline of your eyebrows.'),
+      toggle('structure', 'Structure', true, 'The outline of your face.'),
       toggle('readouts', 'Readouts', true, 'Show head pose and the strongest expressions.')
     ]
   },
@@ -678,6 +688,8 @@ Magi.effectConfig = [
       range('hands', 'Hands', 0, 100, 30),
       range('zoom', 'Zoom', 0, 100, 50),
       range('rotation', 'Rotation', 0, 100, 50),
+      range('spread', 'Spread', 0, 100, 50),
+      range('change', 'Change', 0, 100, 0),
       range('glow', 'Glow', 0, 100, 60),
       toggle('box', 'Box', false, 'The turning wireframe box under the figure.'),
       range('dim', 'Dim', 0, 100, 100)
@@ -698,6 +710,7 @@ Magi.effectConfig = [
       range('flow', 'Flow', 0, 100, 40),
       range('depth', 'Depth', 0, 100, 60),
       range('rotation', 'Rotation', 0, 100, 50),
+      range('change', 'Change', 0, 100, 0),
       range('glow', 'Glow', 0, 100, 60),
       range('dim', 'Dim', 0, 100, 20)
     ]
@@ -860,7 +873,7 @@ Magi.effectGuides = {
     'Pollinate: point with your index finger: a small pad appears there, and only your index finger moves it (by pushing past an edge). Your fingertip’s place on it picks two concepts (across, down). Hold still on a cell for half a second: the cell is marked in red and they pollinate into “A + B = ?” and an idea that decodes on the right. Fist: clears the marks. The two concepts under the crosshair are named beside the pad.',
     'Zero: a sphere of digits (each latitude band counts 0–9) with a wireframe cube inside, bent by real shape operators (twist, bend, and a collapse onto its equator), with the formulas and live values in the top-left corner. Pinch and drag: turns it. Spread thumb and index: twists it (roll left to reverse). Fist: collapses it into a flat ring, a zero; open palm: blooms back. Two hands: closer curls it tighter. Swipe left/right: shuffles the digits; up/down: new lines in the cube. Count, Size, Text, Twist, Curl, Spin, Glow, Cube, Color, Dim.',
     'Cube: your Media images as cubes (an image on every face) held between your hands. Two hands: their distance opens the block into a lattice, the line between them tilts it, and moving them turns it. One hand: it follows your palm. Pinch: snaps shut into a tight cube. Fist: bursts it apart; open your hand to call it back. No hands: it turns slowly. Without uploaded images it uses camera snapshots (add images in any Media effect). Grid: cubes per side. Size, Spin, Grayscale, Dim.',
-    'Horizon: a gesture selection wheel, like a game’s weapon wheel. Make a fist and the wheel opens around it. Push your fist toward a slot (like a game stick), or roll your wrist to sweep around the ring; the chosen slot lights up. Open your hand to equip it. The panel shows what you have equipped and its stats. Slots: how many. Panel: show the loadout. Dim.',
+    'Wheel: a gesture selection wheel, like a game’s weapon wheel, pared down: a ring of numbers. Make a fist and the wheel opens where it is, always the same size. Push your fist toward a number (like a game stick), or roll your wrist to sweep around the ring; the chosen number fills light and shows large in the center. Open your hand to choose it. The same wheel turns Fibre’s Horizon. Slots: how many numbers. Panel: the chosen number on the right. Dim.',
   ],
   'line-art': [
     'How it works: points gather on the outlines of your hands and arms (where the picture’s edges are strongest) and one continuous line runs through them, always to the nearest point, redrawn as you move.',
@@ -894,13 +907,13 @@ Magi.effectGuides = {
     'How it works: characters strung together by red threads, like Word Box, but free in the room: they drift through the whole picture and through depth on a swirling flow (curl noise, so they eddy without bunching up).',
     'Open hand: a magnet; words are drawn to it and gather around your palm. Fist: scatters them. Pinch: grabs the words within reach; move to carry them, let go to throw them.',
     'Turn your hand: turns the space (Rotation sets how far). Swipe: changes the set (with no Text).',
-    'Text: type anything, in any keyboard. Set: 0 Hiragana, 1 Kanji, 2 Latin, 3 Hangul, 4 Digits, 5 Emoji. Points, Links: how many characters and threads. Size, Flow, Depth: character size, drift speed, how deep the space is. Glow, Dim: thread glow, darkens the camera.'
+    'Text: type anything, in any keyboard. Set: 0 Hiragana, 1 Kanji, 2 Latin, 3 Hangul, 4 Digits, 5 Emoji. Points, Links: how many characters and threads. Size, Flow, Depth: character size, drift speed, how deep the space is. Change: how often characters swap for others over time (0: never). Glow, Dim: thread glow, darkens the camera.'
   ],
   'word-box': [
     'How it works: your body (from the segmenter) filled with characters strung together by red threads, above a wireframe box. The characters keep their places on your body, head to toe, and move with you; a share of them ride your hands.',
     'Text: type anything, with any keyboard — Japanese, Chinese, Korean, Arabic, emoji. Empty: Set picks 0 Hiragana, 1 Kanji, 2 Latin, 3 Hangul, 4 Digits, 5 Emoji; swipe to change it.',
-    'Turn your hand: turns the whole structure in depth. Spread thumb and index (other fingers down): zooms in between them. Open palm: loosens the figure. Fist: pulls it tight.',
-    'Zoom: how far spreading thumb and index zooms in (up to 5×). Rotation: how much turning your hand turns the structure. Points, Links: how many characters and threads each. Size: character size. Hands: share of characters on your hands. Glow: thread glow. Box: show the box. Dim: darkens the camera.'
+    'Turn your hand: turns the whole structure in depth. Spread thumb and index (other fingers down): zooms in between them. Open palm: loosens the figure and spreads it apart, further the more open your hand is (Spread sets how far). Fist: pulls it tight.',
+    'Zoom: how far spreading thumb and index zooms in (up to 5×). Rotation: how much turning your hand turns the structure. Points, Links: how many characters and threads each. Size: character size. Hands: share of characters on your hands. Spread: how far an open hand pushes the characters apart. Change: how often characters swap for others over time (0: never). Glow: thread glow. Box: show the box. Dim: darkens the camera.'
   ],
   font: [
     'How it works: a letter traced from a typeface (marching squares), drawn as a dotted outline inside an A–Z dial, with an envelope around it.',
@@ -920,9 +933,10 @@ Magi.effectGuides = {
     'Print: hold a sheet by its corners, index fingers on top, thumbs below. Twist to fold it; a side that turns over shows its back.',
     'Sheets: 1 is the folding print. 2–4 give each finger its own sheet (index, middle, ring, pinky), in overprinting riso inks.',
     'Dots, Grain, Shift: halftone size, riso grain, ink misregistration. Border: the white paper margin (off: full bleed).',
-    'Code: pinch with both hands to span a box, read out as 1-bit code. Cells: block size. Color: ink.',
+    'Code: pinch with both hands to span a box, read out as 1-bit code. Cells: block size. Color: the ink of the code, the box, the guides and the readouts.',
     'Lock: on, corners stay where you let go; a fist frees that hand’s corner until your next pinch. Off: the box follows your pinches.',
     'Outside: codes everything outside the box instead. Solid: fills the area with one flat color.',
+    'Border: a square frame. Open your palms: it sits between them and grows as they move apart, always square (one hand: around your palm). Pinch: it stays where it is. Fist: it follows your palms again. Color, Width: the frame. Grain, Saturation: the video’s film grain and color.',
     'Skeleton: draws the tracked hands.'
   ],
   wisp: [
@@ -977,7 +991,7 @@ Magi.effectGuides = {
   ],
   'face-landmarks': [
     'How it works: the 478-point face mesh, contours, head pose and strongest expressions.',
-    'Mesh: the full triangle mesh. Readouts: yaw, pitch, roll and expressions.'
+    'Mesh: the full triangle mesh. Square: the box around your face. Eyes, Lips, Eyebrows, Structure: each feature’s outline (Structure is the face’s outer edge). Readouts: yaw, pitch, roll and expressions.'
   ],
   'token-cry': [
     'Face the camera: your text falls from your eyes as tears, following your head.',
@@ -1020,7 +1034,7 @@ Magi.effectGuides = {
     'How it works: hundreds of thousands of particles on the graphics card, stirred by synthetic turbulence (waves with the energy spectrum of real turbulence); their paths fade slowly, so each draws a strand. Six modes (tap the tile).',
     'Fibre: a sphere held by a spring. One hand moves it, two hands hold it between them. Open palm: fibres fly loose. Fist: it pulls tight. Pinch and drag: turns it. A fast sweep blows the fibres away.',
     'Tidal: your hand is a moon. Its tidal pull (stronger the closer it is, by the inverse cube of the distance) raises two opposite bulges that stream toward and away from it. Open palm: a heavier moon; fist: lighter.',
-    'Horizon: particles pour along a line, lifted off it like smoke. Close a fist to set the line through it and turn the fist to tilt it. Open palm: raises a plume.',
+    'Horizon: particles pour along a line, lifted off it like smoke. It uses the Landmarks Wheel: make a fist and the wheel opens (the line moves to your fist’s height); push or roll toward a number to tilt it, 1 level and each number 22.5° more; open your hand to keep it. Open palm: raises a plume.',
     'Lightbeam: a blade of light follows your index finger, fluid like a sword trail in a slicing game: widest at your fingertip, tapering away behind, thinner and brighter the faster you slash; sparks fly off fast strokes. Trails: how long the light lingers (short slashes to long-exposure loops). Size: blade width. Leak: strokes take turns in gold, red and ice blue, with warm light leaks at the edges. Flash: a pinch flashes the background. Fist: wipes it.',
     'Thundercloud: a dense, heavy cloud, grey outside and glowing at its heart; the nearer a particle is to the center, the more it takes the Core color (far left: ember orange). It follows your hand slowly, like a heavy mass. Fist heats and compresses it, open palm swells it. Pinch: lightning that lights up the cloud from inside, a searing flash and a ripple of light through the particles, flickering like real lightning.',
     'Symbiote: ink thrown off your hands in fine feathery strokes that keep their momentum and curl back toward your palms; move fast and it lashes out.',

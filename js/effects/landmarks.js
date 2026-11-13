@@ -420,22 +420,25 @@
             }
             ctx.lineWidth = Math.max(1, 1.6 * u);
             ctx.strokeStyle = 'rgba(255,255,255,0.95)';
-            connect(ctx, p, C.faceOval);
-            connect(ctx, p, C.lips);
-            connect(ctx, p, C.leftEyebrow);
-            connect(ctx, p, C.rightEyebrow);
-            ctx.strokeStyle = 'rgb(255,48,48)';
-            connect(ctx, p, C.rightEye);
-            connect(ctx, p, C.rightIris);
-            ctx.strokeStyle = 'rgb(48,255,48)';
-            connect(ctx, p, C.leftEye);
-            connect(ctx, p, C.leftIris);
+            if (params.structure !== false) connect(ctx, p, C.faceOval);
+            if (params.lips !== false) connect(ctx, p, C.lips);
+            if (params.brows !== false) { connect(ctx, p, C.leftEyebrow); connect(ctx, p, C.rightEyebrow); }
+            if (params.eyes !== false) {
+              ctx.strokeStyle = 'rgb(255,48,48)';
+              connect(ctx, p, C.rightEye);
+              connect(ctx, p, C.rightIris);
+              ctx.strokeStyle = 'rgb(48,255,48)';
+              connect(ctx, p, C.leftEye);
+              connect(ctx, p, C.leftIris);
+            }
           }
           var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
           p.forEach(function (q) { x0 = Math.min(x0, q.x); y0 = Math.min(y0, q.y); x1 = Math.max(x1, q.x); y1 = Math.max(y1, q.y); });
-          ctx.strokeStyle = '#fff';
-          ctx.lineWidth = Math.max(1, u);
-          ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
+          if (params.square !== false) {
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = Math.max(1, u);
+            ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
+          }
           if (!params.readouts) return;
           var d = info[i] || {};
           var lines = ['Face  ' + p.length + ' points'];
