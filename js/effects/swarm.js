@@ -11,8 +11,9 @@
 //     plus its own offset in a loose cloud, 0.6–3 cursor sizes away.
 //   Fist: the offsets shrink to zero and the swarm merges into a single cursor at your fingertip
 //     (cursors that have arrived fade out, leaving one).
-//   Open palm: unleash. The cursors leave your hand for the objects MediaPipe's Object Detector
-//     finds (Magi.tracking.objects). Each points at a spot on an object (a handle, an edge, the
+//   Open palm: unleash. The cursors leave your hand for what can be named for certain: people
+//     (MediaPipe's Object Detector, Magi.tracking.objects), faces (the face tracker), hands (the
+//     hand tracker), and other clear detections as OBJECT 1, 2, 3…. Each points at a spot on an object (a handle, an edge, the
 //     center or somewhere inside), dwells 0.5–1.8 s ÷ Speed, then hops to another spot, often on
 //     another object, like people pointing things out. Each found object, including a smaller one
 //     inside a bigger one, is drawn as a selection: a blue box with handles, guides out to the
@@ -36,8 +37,14 @@
     ctx.strokeStyle = fill === '#ffffff' ? '#000' : 'rgba(0,0,0,0.65)'; ctx.stroke();
   }
 
+  function bounds(pts) {
+    var x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    pts.forEach(function (q) { x0 = Math.min(x0, q.x); y0 = Math.min(y0, q.y); x1 = Math.max(x1, q.x); y1 = Math.max(y1, q.y); });
+    return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  }
+
   Magi.renderers.swarm = function () {
-    var C = [], lastT = null, mode = 'idle', unleash = 0;
+    var C = [], lastT = null, mode = 'idle', unleash = 0, objNum = {}, objCount = 0;
     function cursor(i, W, H) {
       var a = Math.random() * Math.PI * 2, r = 0.6 + Math.random() * 2.4;
       return { x: Math.random() * W, y: Math.random() * H, vx: 0, vy: 0, k: 0.6 + Math.random() * 0.8, ox: Math.cos(a) * r, oy: Math.sin(a) * r, col: COLORS[i % COLORS.length], ph: Math.random() * 6.28, wx: Math.random(), wy: Math.random(), a: 1 };
@@ -60,8 +67,23 @@
         mode = !hd ? 'idle' : hd.fist ? 'merge' : (hd.count >= 5 && !hd.pinched) ? 'unleash' : 'follow';
         unleash += ((mode === 'unleash' ? 1 : 0) - unleash) * (1 - Math.exp(-dt / 0.25));
         // Objects: only looked for once you have opened your palm, so the detector loads on demand.
-        // Biggest first, so a smaller object inside a bigger one is drawn over it.
-        var objs = (mode === 'unleash' || unleash > 0.05) ? Magi.tracking.objects.detect(frame).sort(function (a, b) { return b.w * b.h - a.w * a.h; }) : [];
+        // Only what can be named for certain: a PERSON (the detector's person class at 50% or more),
+        // a FACE (the face tracker), a HAND (the hand tracker), and anything else the detector is
+        // at least 55% sure of as OBJECT 1, 2, 3… (numbered in the order found), not its guessed
+        // class. Biggest first, so a smaller object inside a bigger one is drawn over it.
+        var objs = [];
+        if (mode === 'unleash' || unleash > 0.05) {
+          Magi.tracking.objects.detect(frame).forEach(function (o) {
+            if (o.label === 'person') { if (o.score >= 0.5) objs.push({ id: 'p' + o.id, x: o.x, y: o.y, w: o.w, h: o.h, label: 'PERSON', score: o.score }); }
+            else if (o.score >= 0.55) {
+              if (!(o.id in objNum)) objNum[o.id] = ++objCount;
+              objs.push({ id: 'o' + o.id, x: o.x, y: o.y, w: o.w, h: o.h, label: 'OBJECT ' + objNum[o.id], score: o.score });
+            }
+          });
+          Magi.tracking.face.detect(frame).forEach(function (pts, k) { var b = bounds(pts); objs.push({ id: 'f' + k, x: b.x, y: b.y, w: b.w, h: b.h, label: 'FACE', score: null }); });
+          ix.hands.forEach(function (h) { var b = bounds(h.points), m = b.w * 0.15; objs.push({ id: 'h' + h.id, x: b.x - m, y: b.y - m, w: b.w + 2 * m, h: b.h + 2 * m, label: 'HAND', score: null }); });
+          objs.sort(function (a, b) { return b.w * b.h - a.w * a.h; });
+        }
         var hold = tip ? { x: tip.x, y: tip.y } : null;
 
         C.forEach(function (c, i) {
@@ -138,7 +160,7 @@
             hud.save(); hud.globalAlpha = unleash;
             hud.font = '500 ' + Math.round(9 * u) + 'px ' + Magi.fx.MONO; hud.textBaseline = 'middle';
             objs.forEach(function (ob) {
-              var txt = ob.label.toUpperCase() + '  ' + Math.round(ob.score * 100) + '%', tw = hud.measureText(txt).width + 10 * u, th = 14 * u;
+              var txt = ob.label + (ob.score ? '  ' + Math.round(ob.score * 100) + '%' : ''), tw = hud.measureText(txt).width + 10 * u, th = 14 * u;
               var ty0 = ob.y - th - 4 * u < 0 ? ob.y + 4 * u : ob.y - th - 4 * u;
               hud.fillStyle = BLUE; hud.fillRect(ob.x, ty0, tw, th);
               hud.fillStyle = '#fff'; hud.fillText(txt, ob.x + 5 * u, ty0 + th / 2);
@@ -156,10 +178,10 @@
         var tracker = Magi.tracking.hands, ot = Magi.tracking.objects;
         if (tracker.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, tracker, 'hand');
         else if (mode === 'unleash' && ot.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, ot, 'object');
-        else if (mode === 'unleash' && !objs.length) frame.say('Searching… nothing recognized yet (people, cups, phones, chairs, plants: 80 kinds of everyday thing).');
+        else if (mode === 'unleash' && !objs.length) frame.say('Searching… nothing found yet (people, faces, hands and clear objects).');
         else if (!hd) frame.say('Point: the cursors follow your finger. Fist: they merge into one. Open palm: they go and find things.');
       },
-      reset: function () { C = []; lastT = null; unleash = 0; }
+      reset: function () { C = []; lastT = null; unleash = 0; objNum = {}; objCount = 0; }
     };
   };
 })();

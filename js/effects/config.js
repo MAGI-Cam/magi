@@ -170,6 +170,7 @@ Magi.effectConfig = [
       { id: 'hrays', label: 'Slots', min: 4, max: 12, step: 1, default: 8, modes: ['wheel'] },
       { id: 'hpanel', label: 'Panel', type: 'toggle', default: true, modes: ['wheel'], hint: 'The chosen number, large, on the right.' },
       { id: 'wdim', label: 'Dim', min: 0, max: 100, step: 1, default: 0, modes: ['wheel'] },
+      { id: 'psize', label: 'Pad', min: 0, max: 100, step: 1, default: 29, modes: ['pollinate'] },
       { id: 'cn', label: 'Grid', min: 2, max: 5, step: 1, default: 3, modes: ['cube'] },
       { id: 'csize', label: 'Size', min: 0, max: 100, step: 1, default: 50, modes: ['cube'] },
       { id: 'cspin', label: 'Spin', min: 0, max: 100, step: 1, default: 20, modes: ['cube'] },
@@ -260,6 +261,7 @@ Magi.effectConfig = [
       range('glow', 'Glow', 0, 100, 35),
       toggle('camera', 'Camera', false, 'Each particle takes the color of the video under it.'),
       { id: 'ink', label: 'Ink', type: 'toggle', default: false, modes: ['fibre', 'tidal', 'horizon', 'thundercloud', 'hurricane'], hint: 'Dark strands on white paper instead of light on dark.' },
+      { id: 'cspeed', label: 'Color speed', min: 0, max: 100, step: 1, default: 0, modes: ['hurricane'] },
       { id: 'wheel', label: 'Wheel', type: 'toggle', default: true, modes: ['horizon'], hint: 'Show the wheel while you choose an angle (off: the gesture still works, unseen).' },
       { id: 'leak', label: 'Leak', type: 'toggle', default: true, modes: ['lightbeam'], hint: 'Warm light leaks at the edges and some red-orange strokes.' },
       { id: 'flash', label: 'Flash', type: 'toggle', default: true, modes: ['lightbeam'], hint: 'A pinch fires a white flash over the background.' },
@@ -459,7 +461,7 @@ Magi.effectConfig = [
       { id: 'outside', label: 'Outside', type: 'toggle', default: false, modes: ['code'], hint: 'Code everything outside the box; the box stays live.' },
       { id: 'solid', label: 'Solid', type: 'toggle', default: false, modes: ['code'], hint: 'Fill the area with one flat color (Color) instead of code.' },
       { id: 'bcolor', label: 'Color', min: 0, max: 100, step: 1, default: 13, track: 'hue', modes: ['border'] },
-      { id: 'bwidth', label: 'Width', min: 1, max: 100, step: 1, default: 15, modes: ['border'] },
+      { id: 'bwidth', label: 'Width', min: 1, max: 100, step: 1, default: 5, modes: ['border'] },
       { id: 'bgrain', label: 'Grain', min: 0, max: 100, step: 1, default: 50, modes: ['border'] },
       { id: 'bsat', label: 'Saturation', min: 0, max: 100, step: 1, default: 0, modes: ['border'] },
       toggle('skeleton', 'Skeleton', false, 'Draw the hand skeleton.')
@@ -686,8 +688,6 @@ Magi.effectConfig = [
       { id: 'beam', name: 'Beam' },
       { id: 'curtain', name: 'Curtain' },
       { id: 'corona', name: 'Corona' },
-      { id: 'swirl', name: 'Swirl' },
-      { id: 'rays', name: 'Rays' },
       { id: 'oval', name: 'Oval' }
     ],
     params: [
@@ -793,7 +793,7 @@ Magi.effectConfig = [
       range('rotation', 'Rotation', 0, 100, 50),
       range('change', 'Change', 0, 100, 0),
       range('glow', 'Glow', 0, 100, 60),
-      range('dim', 'Dim', 0, 100, 20)
+      range('dim', 'Dim', 0, 100, 100)
     ]
   },
   {
@@ -862,7 +862,7 @@ Magi.effectConfig = [
     name: 'Interactive',
     group: 'facade',
     ready: true,
-    params: facadeParams(true, 13, 9).concat([range('opacity', 'Opacity', 0, 100, 90), range('saturation', 'Saturation', 0, 100, 100), Object.assign({}, COLOR, { default: 5 })])
+    params: facadeParams(true, 13, 4).concat([range('opacity', 'Opacity', 0, 100, 90), range('saturation', 'Saturation', 0, 100, 100), Object.assign({}, COLOR, { default: 5 })])
   },
   {
     id: 'facade-electrokinetic',
@@ -951,7 +951,7 @@ Magi.effectGuides = {
     'Sequencer: three rings of Euclidean rhythms (events spread as evenly as possible over the steps). Grip and turn like a knob to change a ring’s number of events: thumb and index out for red, add the middle finger for yellow, all five for blue. Close your hand to randomize where the events sit. Tempo: speed. Sound: kick, snare and hi-hat, recorded into videos. Dim: darkens the camera.',
     'Rabinovich: thousands of points ride the Rabinovich–Fabrikant equations. Open thumb and index to raise α (0.1 → 1.3) and reshape the attractor; turn and raise your hand to turn the view. Two hands: two attractors, one per hand. Speed, Trail, Size, Dim. Strength: how bright and thick the trails are.',
     'Cohesion: a chord diagram of your hand’s 21 landmarks. Pairs close together are joined, so a fist fills the circle and spread fingers thin it; the level reads at the top with its recent history. Two hands: all 42 landmarks, chords across the hands in white as they come together, and each hand’s level plus the hands’ cohesion.',
-    'Pollinate: point with your index finger: a small pad appears there, and only your index finger moves it (by pushing past an edge). Your fingertip’s place on it picks two concepts (across, down). Hold still on a cell for half a second: the cell is marked in red and they pollinate into “A + B = ?” and an idea that decodes on the right. Fist: clears the marks. The two concepts under the crosshair are named beside the pad.',
+    'Pollinate: point with your index finger: a small pad appears there, and only your index finger moves it (by pushing past an edge). Your fingertip’s place on it picks two concepts (across, down). Hold still on a cell for half a second: the cell is marked in red and they pollinate into “A + B = ?” and an idea that decodes on the right. Fist: clears the marks. The two concepts under the crosshair are named beside the pad. Pad: the pad’s size.',
     'Zero: a sphere of digits (each latitude band counts 0–9) with a wireframe cube inside, bent by real shape operators (twist, bend, and a collapse onto its equator), with the formulas and live values in the top-left corner. Pinch and drag: turns it. Spread thumb and index: twists it (roll left to reverse). Fist: collapses it into a flat ring, a zero; open palm: blooms back. Two hands: closer curls it tighter. Swipe left/right: shuffles the digits; up/down: new lines in the cube. Count, Size, Text, Twist, Curl, Spin, Glow, Cube, Color, Dim.',
     'Cube: your Media images as cubes (an image on every face) held between your hands. Two hands: their distance opens the block into a lattice, the line between them tilts it, and moving them turns it. One hand: it follows your palm. Pinch: snaps shut into a tight cube. Fist: bursts it apart; open your hand to call it back. No hands: it turns slowly. Without uploaded images it uses camera snapshots (add images in any Media effect). Grid: cubes per side. Size, Spin, Grayscale, Dim.',
     'Wheel: a gesture selection wheel, like a game’s weapon wheel, pared down: a ring of numbers. Make a fist and the wheel opens where it is, always the same size. Push your fist toward a number (like a game stick), or roll your wrist to sweep around the ring; the chosen number fills light and shows large in the center. Open your hand to choose it. The same wheel turns Fibre’s Horizon. Slots: how many numbers. Panel: the chosen number on the right. Dim.',
@@ -986,7 +986,7 @@ Magi.effectGuides = {
   ],
   'word-space': [
     'How it works: characters strung together by red threads, like Word Box, but free in the room: they drift through the whole picture and through depth on a swirling flow (curl noise, so they eddy without bunching up).',
-    'Open hand: a magnet; words are drawn to it and gather around your palm. Fist: scatters them and breaks their threads (they rejoin a moment after your fist leaves). Pinch: grabs the words within reach; move to carry them, let go to throw them.',
+    'Open hand: a magnet; words are drawn to it and gather around your palm. Fist: scatters them and breaks the joined threads, snapping one by one (they rejoin when you open your hand). Pinch: grabs the words within reach; move to carry them, let go to throw them.',
     'Turn your hand: turns the space (Rotation sets how far). Swipe: changes the set (with no Text).',
     'Text: type anything, in any keyboard. Set: 0 Hiragana, 1 Kanji, 2 Latin, 3 Hangul, 4 Digits, 5 Emoji. Points, Links: how many characters and threads. Size, Flow, Depth: character size, drift speed, how deep the space is. Change: how often characters swap for others over time (0: never). Glow, Dim: thread glow, darkens the camera.'
   ],
@@ -1071,21 +1071,21 @@ Magi.effectGuides = {
     'Labels, Text: how many names and how big. Spin: turning with no hand. Dim, Squares, Axes: background, color squares, axes.'
   ],
   siri: [
-    'How it works: a voice assistant’s listening wave, played by your hand instead of your voice. Open your hand to wake it. Make a fist, or take your hand away, and it rests as a calm thin wave at the bottom.',
-    'Each finger is one color: thumb rose, index amber, middle green, ring blue, pinky violet. The straighter a finger, the taller its wave, so you can play them one by one. Bring your hand closer to the camera for more intensity; move it and the waves speed up.',
-    'Modes: tap the tile. Wave: the five colored waves, mixing where they cross. Pill: a dark glass pill whose lower edge glows with a moving spectrum, shrinking to a bar when resting.',
-    'Height: how tall the waves (or the glow) get. Size: how wide. Speed: their base speed. Glow: the halo. Dim: darkens the camera while it is awake.'
+    'How it works: a voice assistant’s listening wave, driven by your hand instead of your voice. Open your hand to wake it; how open it is sets how loud it is, so the waves swell and shrink like a voice. Make a fist, or take your hand away, and it rests as a calm thin wave at the bottom.',
+    'It follows your hand around the picture. Pinch and spread thumb and index to shrink and grow it.',
+    'Modes: tap the tile. Wave: three soft colored waves (pink, light blue, violet) that brighten where they cross. Pill: a dark glass pill whose lower edge glows with a moving spectrum, shrinking to a bar when resting.',
+    'Height: how tall the waves (or the glow) get. Size: how wide. Speed: how fast they move. Glow: the halo. Dim: darkens the camera while it is awake.'
   ],
   swarm: [
     'How it works: a flock of mouse cursors. Each is steered to its own target by a critically damped spring and kept apart from its neighbors (a boid rule), so a moving target pulls them into a stream.',
-    'Point: the cursors follow your index finger in a loose cloud. Fist: they merge into a single cursor. Open palm: unleash them; they leave your hand for the objects in the picture (MediaPipe’s Object Detector, 80 kinds of everyday thing such as people, cups, phones, chairs and plants) and hop between spots on them (handles, edges, the middle), pausing at each as if pointing it out. Each object, including a smaller one inside a bigger one, is marked like a design tool’s selection: a box with handles, guides to the edges and a tag.',
+    'Point: the cursors follow your index finger in a loose cloud. Fist: they merge into a single cursor. Open palm: unleash them; they leave your hand for what can be named for certain: people, faces, hands, and any other clear object, numbered OBJECT 1, 2, 3 and hop between spots on them (handles, edges, the middle), pausing at each as if pointing it out. Each object, including a smaller one inside a bigger one, is marked like a design tool’s selection: a box with handles, guides to the edges and a tag.',
     'Count: how many cursors. Size: how big. Speed: how fast they move and circle. Labels: the tags. Guides: the lines to the edges. Dim: darkens the camera.'
   ],
   aurora: [
-    'How it works: ribbons of light in your hand, each split into its colors by dispersion (each color bends by its own refractive index, so violet fans out most and red least), in six shapes.',
-    'Shapes: tap the tile, or swipe up or down. Beam: light pinched to a waist at your palm, fanning out on both sides. Curtain: folded auroral curtains, a sharp lower edge and rays fading upward. Corona: rays streaming from your palm, as an aurora looks overhead. Swirl: the Parker spiral, the solar wind’s field winding out as the Sun turns. Rays: a fan of beams. Oval: rings round your palm as the pole, like the auroral oval.',
-    'Your hand holds the light: the shape follows your palm, and turning your hand turns it. Open your hand for more ribbons, close it for fewer (a fist: one). Pinch and drag up or down to make them wave; let go and they slowly calm. Swipe left or right: the next palette.',
-    'Ribbons: the most an open hand gives (up to 20). Palette: 0 Spectrum, 1 Aurora, 2 Ice, 3 Ember, 4 Gold, 5 White. Spread: how far the colors split. Wave: how much the ribbons wave on their own. Width: each ribbon’s width. Exposure, Speed. Paper: colored ribbons on cream paper. Dim.'
+    'How it works: ribbons of light in your hands, each split into its colors by dispersion (each color bends by its own refractive index, so violet fans out most and red least), in four shapes.',
+    'Shapes: tap the tile, or swipe up or down. Beam: light pinched to a waist at your palm, fanning out on both sides. Curtain: folded auroral curtains, a sharp lower edge and rays fading upward. Corona: rays streaming from your palm, as an aurora looks overhead. Oval: rings round your palm as the pole, like the auroral oval.',
+    'Each hand holds its own light; turning a hand turns its shape. Keep a hand open and ribbons keep coming, fading in one by one; close it and they fade away, down to one; half-open holds them. Pinch and drag up or down to make them wave. Swipe left or right: the next palette.',
+    'Ribbons: how many with no hand up. Palette: 0 Spectrum, 1 Aurora, 2 Ice, 3 Ember, 4 Gold, 5 White. Spread: how far the colors split. Wave: how much the ribbons wave on their own. Width: each ribbon’s width. Exposure, Speed. Paper: colored ribbons on cream paper. Dim.'
   ],
   polar: [
     'How it works: a ball of fur, tens of thousands of short fine strands combed into locks, seen through a fisheye lens. Each strand grows from a root inside a ball whose outline ripples (its radius is noise in polar coordinates) and points along a smooth 3D noise field, so neighbors point alike; Twist wraps them round the pole.',
@@ -1136,8 +1136,8 @@ Magi.effectGuides = {
   fibre: [
     'How it works: hundreds of thousands of particles on the graphics card, stirred by synthetic turbulence (waves with the energy spectrum of real turbulence); their paths fade slowly, so each draws a strand. Six modes (tap the tile).',
     'Fibre: a sphere held by a spring. One hand moves it, two hands hold it between them. Open palm: fibres fly loose. Fist: it pulls tight. Pinch and drag: turns it. A fast sweep blows the fibres away.',
-    'Tidal: your hand is a moon. Its tidal pull (stronger the closer it is, by the inverse cube of the distance) raises two opposite bulges that stream toward and away from it. Open palm: a heavier moon; fist: lighter.',
-    'Hurricane: a storm seen from above, its eye at your palm. Particles are drawn inward and swept round the eye (a vortex that turns like a solid body near the middle and slows farther out), so they wind into spiral rainbands. Roll your wrist to spin it harder, or the other way to slow and reverse it. Fist: tightens it and spins it faster. Open palm: widens it.',
+    'Tidal: your hand is a moon. Its tidal pull (stronger the closer it is, by the inverse cube of the distance) raises two opposite bulges that stream toward and away from it. Open palm: a heavier moon. Fist: the two bulges orbit each other round the middle, faster the longer you hold it; open your hand and they slow down.',
+    'Hurricane: a storm seen from above, its eye at your palm. Particles are drawn inward and swept round the eye (a vortex that turns like a solid body near the middle and slows farther out), so they wind into spiral rainbands. Pinch and spread thumb and index: the eye closes and opens with them, and the faster you do it the harder the storm spins. Roll your wrist to spin it harder, or the other way to slow and reverse it. Fist: tightens it. Open palm: widens it. Color speed: the color turns round the hue wheel.',
     'Horizon: particles pour along a line, lifted off it like smoke. The line runs through the middle of the picture. It uses the Landmarks Wheel: make a fist and the wheel opens; push or roll toward a number to tilt the line, 1 level and each number 22.5° more; open your hand and it keeps that angle. Wheel: shows or hides the wheel. Open palm: raises a plume.',
     'Lightbeam: a blade of light follows your index finger, fluid like a sword trail in a slicing game: widest at your fingertip, tapering away behind, thinner and brighter the faster you slash; sparks fly off fast strokes. Trails: how long the light lingers (short slashes to long-exposure loops). Size: blade width. Leak: strokes take turns in gold, red and ice blue, with warm light leaks at the edges. Flash: a pinch flashes the background. Fist: wipes it.',
     'Thundercloud: a dense, heavy cloud, grey outside and glowing at its heart; the nearer a particle is to the center, the more it takes the Core color (far left: ember orange). It follows your hand slowly, like a heavy mass. Fist heats and compresses it, open palm swells it. Pinch: lightning that lights up the cloud from inside, a searing flash and a ripple of light through the particles, flickering like real lightning.',

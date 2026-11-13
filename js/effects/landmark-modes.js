@@ -776,7 +776,8 @@
       lastT = t;
       ctx.fillStyle = 'rgba(0,0,0,' + (params.dim / 100).toFixed(3) + ')';
       ctx.fillRect(0, 0, W, H);
-      var hd = ix.hands[0], K = POLLEN.length, ps = H * 0.16;
+      // Pad size: Pad, 6%–40% of the frame height (16% at the default).
+      var hd = ix.hands[0], K = POLLEN.length, ps = H * (0.06 + (params.psize === undefined ? 29 : params.psize) / 100 * 0.34);
       // Only the index finger works the pad: pointing (index out, middle and ring in) for 0.15 s.
       // The pad stays where it is and the fingertip drags it only by pushing past an edge. The
       // crosshair is steadied (eased toward the fingertip, half-life 50 ms), and the cell under it

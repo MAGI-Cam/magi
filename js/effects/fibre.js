@@ -17,7 +17,8 @@
 //   Tidal — the same sphere held in the middle, and your hand is a moon. Its tidal acceleration on
 //     each particle, T·(3(r·n̂)n̂ − r) with T = GM/d³ (n̂ toward your palm, d its distance), raises two
 //     opposite bulges that stream out into fibre tails along the line to your hand; the closer your
-//     palm, the stronger (d⁻³). Open palm: a heavy moon (×2); fist: a light one (×0.4). No hand: the
+//     palm, the stronger (d⁻³). Open palm: a heavy moon (×2); fist: the bulges orbit each other,
+//     the tide's axis spinning up about the line of sight while the fist is held. No hand: the
 //     moon circles slowly and the tides sweep around.
 //   Horizon — particles pour along a line across the picture (a line emitter), held to it by a
 //     plane spring (Hold) and lifted off it by turbulence, so it reads as a horizon breathing smoke.
@@ -77,7 +78,7 @@
 
   function createFibre() {
     var sys = undefined, camCopy = document.createElement('canvas'), lastT = null, center = [0, 0, 0], radius = 0.5, view = { yaw: 0, pitch: 0.2 }, vel = { yaw: 0.15, pitch: 0 }, grab = null, seen = 0;
-    var tk = { amp: 1, hold: 1, rad: 1, tide: 1, heat: 1, spin: 1, inflow: 1 }, cvel = [0, 0, 0], strike = null, strokes = [], curStroke = null, strokeN = 0, tipS = null, lastMode = null, prevTip = null, lineAng = 0, lineY = 0, wheel = null, flash = 0, wasPinched = {}, wasFist = false;
+    var tk = { amp: 1, hold: 1, rad: 1, tide: 1, heat: 1, spin: 1, inflow: 1 }, cvel = [0, 0, 0], strike = null, strokes = [], curStroke = null, strokeN = 0, tipS = null, lastMode = null, prevTip = null, lineAng = 0, lineY = 0, orbA = 0, orbW = 0, eyeR = 0.1, whip = 0, hueT = 0, wheel = null, flash = 0, wasPinched = {}, wasFist = false;
     return {
       animated: true,
       render: function (frame, out, params) {
@@ -121,13 +122,20 @@
               var sp = h.speed / H * 2;
               if (sp > 0.4) attract.push(toW(h.center).concat([-0.02 * sp]));
             });
-          } else if (hd) want.tide = hd.fist ? 0.4 : hd.count >= 4 ? 2 : 1;
+          } else if (hd) want.tide = hd.fist ? 1.3 : hd.count >= 4 ? 2 : 1;
           step.amp = (0.05 + turb * 1.1) * tk.amp; step.shellK = hold * 45 * tk.hold; step.center = center; step.radius = radius * tk.rad;
           if (mode === 'tidal') {
             // The moon: your palm (or, with no hand, a point circling at 1.4 radii).
             var moon = hd ? toW(hd.center) : [Math.cos(t * 0.35) * radius * 1.4, Math.sin(t * 0.21) * radius * 0.3, Math.sin(t * 0.35) * radius * 1.4];
             var mx = moon[0] - center[0], my = moon[1] - center[1], mz = moon[2] - center[2], md = Math.max(radius * 0.9, Math.hypot(mx, my, mz));
             step.tideN = [mx / md, my / md, mz / md];
+            // Fist: the two bulges orbit each other round the center, spinning up while you hold it
+            // (angular acceleration 1.5 rad/s², up to 9 rad/s, about 1.4 turns a second) and spinning
+            // down after (time constant 1 s): the tide's axis turns about the line of sight.
+            if (hd && hd.fist) orbW = Math.min(9, orbW + 1.5 * dt); else orbW *= Math.exp(-dt / 1);
+            orbA += orbW * dt;
+            if (orbW > 0.02) { var ca = Math.cos(orbA), sa = Math.sin(orbA), n0 = step.tideN; step.tideN = [n0[0] * ca - n0[1] * sa, n0[0] * sa + n0[1] * ca, n0[2]]; }
+            else orbA *= Math.exp(-dt / 0.5);
             // Equilibrium along n̂: the shell spring K pulls back by K(r − R) while the tide pushes out by
             // 2T·r, so r = K·R/(K − 2T); across n̂, r = K·R/(K + T). T is capped at 0.15·K: bulges of
             // 1.43 R toward and away from the moon, 0.87 R across, the tidal ellipsoid; turbulence
@@ -200,7 +208,18 @@
           // rotation winds them into spiral rainbands; short lives keep the eye clear.
           if (hd) want.c = toW(hd.center);
           var roll = hd ? Math.max(-1.5, Math.min(1.5, (hd.rotation || 0) / 60)) : 0;
-          want.spin = 1 + roll * 1.2;
+          // Pinch and spread thumb and index: the eye closes and opens with them (radius 0.02 to 0.3
+          // of the frame's half-height); how fast you do it whips the storm up (up to 2.5× spin,
+          // settling back with a 0.6 s time constant).
+          if (hd) {
+            var pd = Math.max(0, Math.min(1, ((hd.pinchWith.index.distance || 0) - 0.15) / 1.0)), eyeT = 0.02 + 0.28 * pd;
+            var rate = Math.abs(eyeT - eyeR) / Math.max(dt, 1e-3);
+            eyeR += (eyeT - eyeR) * (1 - Math.exp(-dt / 0.1));
+            whip = Math.max(whip * Math.exp(-dt / 0.6), Math.min(1.5, rate * 4));
+          } else whip *= Math.exp(-dt / 0.6);
+          // The inflow rises with the whip too, so the faster swirl still winds inward instead of
+          // its lag flinging the particles out.
+          want.spin = (1 + roll * 1.2) * (1 + whip); want.inflow = 1 + whip;
           hands.forEach(function (h) {
             if (h.fist) { want.rad *= 0.7; want.spin *= 1.6; want.inflow *= 1.6; want.amp *= 0.6; }
             else if (h.count >= 4 && !h.pinched) { want.rad *= 1.3; want.spin *= 0.8; want.inflow *= 0.7; }
@@ -214,7 +233,7 @@
           // Swirl and inflow in the flow itself (a pull alone is damped away by the follow and the
           // swirl's lag flings particles outward): with τ ≈ 0.4, inflow 0.2, follow 6 they wind
           // from the ring to a fifth of its radius in about 4 s.
-          step.twist = (0.25 + turb * 0.3) * tk.spin; step.inflow = (0.12 + hold * 0.2) * tk.inflow; step.twistAxis = [0, 0, 1];
+          step.twist = (0.25 + turb * 0.3) * tk.spin; step.inflow = (0.12 + hold * 0.2) * tk.inflow; step.eyeR = eyeR; step.twistAxis = [0, 0, 1];
           step.amp = (0.02 + turb * 0.15) * tk.amp; step.follow = 6; step.kscale = kscale * 1.4; step.lifeMin = 2.5; step.lifeMax = 7; step.soft = 0.25;
           look.areaR = Rh * 0.7; look.pivot = center; look.spin = false; look.depthK = 0.15;
         } else if (mode === 'symbiote') {
@@ -286,6 +305,12 @@
         var areaPx = mode === 'horizon' ? (look.areaR * h) * w : Math.PI * Math.pow((mode === 'fibre' || mode === 'tidal' || mode === 'thundercloud' ? radius * tk.rad : look.areaR) * h / 2, 2);
         var nEff = sys.count() / (1 - decay);
         var col = params.color ? Magi.fx.inkColor(params.color) : mode === 'thundercloud' ? [0.62, 0.62, 0.66] : [1, 1, 1];
+        // Hurricane, Color speed: the color turns round the hue wheel, up to 0.3 turns a second,
+        // starting from Color (white starts at red).
+        if (mode === 'hurricane' && params.cspeed > 0 && !(params.color >= 100)) {
+          hueT = (hueT + dt * params.cspeed / 100 * 0.3) % 1;
+          col = Magi.fx.inkColor(1 + (((params.color > 0 ? (params.color - 1) / 98 : 0) + hueT) % 1) * 98);
+        }
         if (ink) col = col.map(function (v) { return params.color ? 1 - v : 1; });
         var brightK = mode === 'lightbeam' ? 0.5 : mode === 'thundercloud' ? 0.1 : mode === 'symbiote' ? 0.05 : 0.45;
         sys.draw({
@@ -348,7 +373,7 @@
           lightbeam: 'Raise your index finger and draw with light. Fist wipes it; pinch flashes.',
           thundercloud: 'Raise your hand to move the cloud. Fist heats it, open palm swells it, pinch for lightning.',
           symbiote: 'Raise your hands: the ink grows from them and lashes when you move.',
-          hurricane: 'Raise your hand: it is the eye of the storm. Roll your wrist to spin it harder or reverse it, fist tightens it, open palm widens it.'
+          hurricane: 'Raise your hand: it is the eye of the storm. Pinch and spread thumb and index to close and open the eye (faster spins it up); roll your wrist to spin it either way.'
         }[mode]);
       },
       reset: function () { lastT = null; grab = null; prevTip = null; strike = null; strokes = []; curStroke = null; tipS = null; if (sys) sys.reset(); }

@@ -22,7 +22,7 @@
 //   Swipe: changes the set (with no Text).
 (function () {
   function createWordSpace() {
-    var P = [], chars = [], charKey = '', seen = 0, lastT = null, yaw = 0, grabs = {};
+    var P = [], chars = [], charKey = '', seen = 0, lastT = null, yaw = 0, grabs = {}, linkK = 1;
     return {
       animated: true,
       render: function (frame, out, params) {
@@ -121,6 +121,11 @@
         });
 
         P.forEach(function (p) { if (p.cut > 0) p.cut -= dt; });
+        // A closed fist anywhere breaks the joined threads: the share still held, linkK, falls to 0
+        // (time constant 0.15 s) and each thread snaps when linkK drops below its own random
+        // threshold, so they break one by one; open the hand and they rejoin over about 1.5 s.
+        var fistNow = hands.some(function (h) { return h.fist; });
+        linkK += ((fistNow ? 0 : 1) - linkK) * (1 - Math.exp(-dt / (fistNow ? 0.15 : 0.5)));
         // Threads to the nearest neighbors on screen (none for a word whose threads a fist broke).
         var kL = Math.round(params.links), cell = H * 0.08, grid = {}, segs = [];
         P.forEach(function (p, i) { var key = Math.floor(p.sx / cell) + ',' + Math.floor(p.sy / cell); (grid[key] || (grid[key] = [])).push(i); });
@@ -128,7 +133,7 @@
           var gx = Math.floor(p.sx / cell), gy = Math.floor(p.sy / cell), near = [];
           if (p.cut > 0) return;
           for (var oy = -1; oy <= 1; oy++) for (var ox = -1; ox <= 1; ox++) (grid[(gx + ox) + ',' + (gy + oy)] || []).forEach(function (j) { if (j > i && !(P[j].cut > 0)) { var d = Math.hypot(P[j].sx - p.sx, P[j].sy - p.sy); if (d < cell * 1.5) near.push([d, j]); } });
-          near.sort(function (a, b) { return a[0] - b[0]; }).slice(0, kL).forEach(function (nb) { segs.push(i, nb[1]); });
+          near.sort(function (a, b) { return a[0] - b[0]; }).slice(0, kL).forEach(function (nb) { var hk = Math.sin(i * 12.9898 + nb[1] * 78.233) * 43758.5453; if (hk - Math.floor(hk) < linkK) segs.push(i, nb[1]); });
         });
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
