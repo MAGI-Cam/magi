@@ -14,6 +14,7 @@
 // perspective from the far hand's relative palm size up to full size at the near hand, turn to
 // face the camera, and are drawn far to near. Rolling your palms (their mean rotation) tilts the
 // panels by 0.6 × that angle. Pinch and hold to drift the color around the hue wheel (both hands: twice as fast).
+// Animate: light pulses travel through the panels (see below), like lit glass slats.
 (function () {
   var WRIST = 0, MIDDLE_TIP = 12;
   var DEPTH = [Math.cos(Math.PI / 6), -Math.sin(Math.PI / 6)];
@@ -114,6 +115,18 @@
             ctx.translate(-pn.x, -pn.y);
             var hue = (hue0 + pn.t * params.spread * 3.6) % 360;
             var light = black ? 6 + 14 * pn.t : sat ? 48 + 10 * Math.sin(pn.t * Math.PI * 3) : 92 - 30 * pn.t;
+            // Animate: light travels through the bellows like a sign of lit glass slats. Two pulses
+            // sweep along it (one from each end, 2.6 s and 3.7 s a pass), each a Gaussian band about
+            // a seventh of the span wide, and every panel flickers a little on its own; a lit panel
+            // glows brighter and more opaque, the rest dim to about half.
+            var glowK = 1;
+            if (params.animate) {
+              var tt = frame.time / 1000, ph1 = (tt / 2.6) % 1 * 1.4 - 0.2, ph2 = 1.2 - (tt / 3.7) % 1 * 1.4;
+              var pulse = Math.exp(-Math.pow(pn.t - ph1, 2) / 0.01) + 0.8 * Math.exp(-Math.pow(pn.t - ph2, 2) / 0.006);
+              var flick = 0.85 + 0.15 * Math.sin(tt * 9 + pn.t * 37);
+              glowK = Math.min(1.4, 0.5 + 0.9 * pulse) * flick;
+              light = Math.min(88, light * (0.6 + 0.6 * Math.min(1, pulse)));
+            }
             ctx.fillStyle = 'hsl(' + hue.toFixed(1) + ',' + sat + '%,' + light.toFixed(1) + '%)';
             ctx.beginPath();
             ctx.moveTo(pn.x - hx, pn.y - pn.h / 2 - hy);
@@ -121,7 +134,7 @@
             ctx.lineTo(pn.x + hx, pn.y + pn.h / 2 + hy);
             ctx.lineTo(pn.x - hx, pn.y + pn.h / 2 - hy);
             ctx.closePath();
-            ctx.globalAlpha = params.opacity / 100;
+            ctx.globalAlpha = Math.min(1, params.opacity / 100 * glowK);
             ctx.fill();
             ctx.globalAlpha = 1;
             if (params.outline) ctx.stroke();

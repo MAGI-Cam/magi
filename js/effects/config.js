@@ -56,6 +56,8 @@ Magi.effectGroups = [
   // Gesture: effects driven by tracking your body. Hand and face tracking nest inside it.
   { id: 'gesture', name: 'Gesture' },
   { id: 'hand', name: 'Hand Tracking', parent: 'gesture' },
+  // Datamosh: the codec-glitch effects, in Hand Tracking.
+  { id: 'datamosh-group', name: 'Datamosh', parent: 'hand' },
   { id: 'face', name: 'Face Tracking', parent: 'gesture' },
   { id: 'body', name: 'Body Tracking', parent: 'gesture' },
   // Particle: particle systems driven by your hands.
@@ -402,7 +404,7 @@ Magi.effectConfig = [
   {
     id: 'mosh',
     name: 'Mosh',
-    group: 'hand',
+    group: 'datamosh-group',
     ready: true,
     photoType: 'image/jpeg',
     params: [
@@ -415,7 +417,7 @@ Magi.effectConfig = [
   {
     id: 'datamosh',
     name: 'Mosh 2.0',
-    group: 'hand',
+    group: 'datamosh-group',
     ready: true,
     photoType: 'image/jpeg',
     params: [
@@ -579,6 +581,7 @@ Magi.effectConfig = [
       range('spread', 'Spread', 0, 100, 45),
       range('opacity', 'Opacity', 10, 100, 50),
       toggle('outline', 'Outline', false, 'Black edges on each panel.'),
+      toggle('animate', 'Animate', true, 'Light pulses travel through the panels, like lit glass slats.'),
       toggle('line', 'Line', false, 'Show the line and distance between your palms.')
     ]
   },
@@ -651,11 +654,15 @@ Magi.effectConfig = [
     group: 'hand',
     ready: true,
     photoType: 'image/jpeg',
+    modes: [
+      { id: 'ios10', name: 'iOS 10' },
+      { id: 'ios27', name: 'iOS 27' }
+    ],
     params: [
       range('height', 'Height', 0, 100, 60),
       range('size', 'Size', 0, 100, 60),
       range('speed', 'Speed', 0, 100, 40),
-      range('glow', 'Glow', 0, 100, 60),
+      { id: 'glow', label: 'Glow', min: 0, max: 100, step: 1, default: 60, modes: ['ios27'] },
       range('dim', 'Dim', 0, 100, 55)
     ]
   },
@@ -790,6 +797,7 @@ Magi.effectConfig = [
       range('rotation', 'Rotation', 0, 100, 50),
       range('change', 'Change', 0, 100, 0),
       range('glow', 'Glow', 0, 100, 60),
+      toggle('invert', 'Invert', false, 'Swap the palms: an open palm breaks the words apart and a fist draws them in.'),
       range('dim', 'Dim', 0, 100, 100)
     ]
   },
@@ -983,7 +991,7 @@ Magi.effectGuides = {
   ],
   'word-space': [
     'How it works: characters strung together by red threads, like Word Box, but free in the room: they drift through the whole picture and through depth on a swirling flow (curl noise, so they eddy without bunching up).',
-    'Open hand: a magnet; words are drawn to it and gather around your palm. Fist: breaks everything apart, even words you are pinching together: every word is kicked away from its neighbors and every thread snaps (they rejoin when you open your hand). Pinch: grabs the words within reach; move to carry them, let go to throw them.',
+    'Open hand: a magnet; words are drawn to it and gather around your palm. Fist: breaks everything apart, even words you are pinching together: every word is kicked away from its neighbors and every thread snaps (they rejoin when you open your hand). Invert: swaps the two, so an open palm breaks them apart and a fist draws them in. Pinch: grabs the words within reach; move to carry them, let go to throw them.',
     'Turn your hand: turns the space (Rotation sets how far). Swipe: changes the set (with no Text).',
     'Text: type anything, in any keyboard. Set: 0 Hiragana, 1 Kanji, 2 Latin, 3 Hangul, 4 Digits, 5 Emoji. Points, Links: how many characters and threads. Size, Flow, Depth: character size, drift speed, how deep the space is. Change: how often characters swap for others over time (0: never). Glow, Dim: thread glow, darkens the camera.'
   ],
@@ -1020,8 +1028,8 @@ Magi.effectGuides = {
   wisp: [
     'Move your fingers through the picture: the video itself swirls and drags like smoke where they pass, then settles. A still hand does nothing.',
     'Pinch (Smoke, Psychedelic): sucks the swirls back up, and the picture settles straight back to normal.',
-    'Fist (Smoke, Psychedelic): changes the color: the swirls turn through the hues while your hand is closed. Two fists: twice as fast.',
-    'Modes: tap the tile. Smoke: the picture swirls in its own colors until you make a fist. Psychedelic: the same, and every swirl is striped through the spectrum by how far it has been carried. Watercolor: painting with pigment (Watercolor: a fist vacuums the paint, a pinch changes the palette).',
+    'Fist (Psychedelic): changes the color: the swirls turn through the hues while your hand is closed. Two fists: twice as fast. Smoke always keeps the picture’s own colors.',
+    'Modes: tap the tile. Smoke: the picture swirls in its own colors. Psychedelic: the same, and every swirl is striped through the spectrum by how far it has been carried. Watercolor: painting with pigment (Watercolor: a fist vacuums the paint, a pinch changes the palette).',
     'Trail: how long the swirl lasts. Flow: how strongly your motion drags the picture.',
     'Swirl: extra curling where you’ve moved. Rise: how much the disturbance drifts upward, like smoke.',
     'Watercolor (tap the tile): your fingers paint pigment that the same flow carries and bleeds, on paper. Colors mix like glazes and pool darker at their edges.',
@@ -1050,7 +1058,7 @@ Magi.effectGuides = {
     'Hold up both hands: a bellows of panels spans them. Pull apart to open it, bring them together to fold it.',
     'Bring one hand closer to the camera: the bellows stretches in depth toward it. Roll your palms to tilt the panels.',
     'Pinch and hold: the color drifts around the wheel (the Color slider follows); pinch with both hands for twice the speed.',
-    'Panels, Waist, Size: count, middle narrowing, height. Spread: hue range. Opacity, Outline, Line: fill, edges, distance readout.'
+    'Panels, Waist, Size: count, middle narrowing, height. Spread: hue range. Opacity, Outline, Line: fill, edges, distance readout. Animate: light pulses run through the panels, lighting them up in turn.'
   ],
   tutting: [
     'Hold up both hands: a volume of image tiles fills the box between your palms; side by side a slab, stacked a column. It holds when your hands come together.',
@@ -1068,9 +1076,9 @@ Magi.effectGuides = {
     'Labels, Text: how many names and how big. Spin: turning with no hand. Dim, Squares, Axes: background, color squares, axes.'
   ],
   siri: [
-    'How it works: a voice assistant’s listening wave, driven by your hand instead of your voice. Open your hand to wake it; how open it is sets how loud it is, so the waves swell and shrink like a voice. Make a fist, or take your hand away, and it rests as a calm thin wave at the bottom.',
-    'It stays at mid-height and follows your hand from side to side. Pinch and spread thumb and index to shrink and grow it. Three soft colored waves (pink, light blue, violet) brighten where they cross.',
-    'Height: how tall the waves get. Size: how wide. Speed: how fast they move. Glow: the halo. Dim: darkens the camera while it is awake.'
+    'How it works: a voice assistant’s listening wave, driven by your hand instead of your voice. Raise an open hand to wake it; how open it is sets how loud it is, and a closed palm damps it to a murmur. It stays at mid-height and follows your hand from side to side; pinch and spread thumb and index to shrink and grow it. Lower your hand (or take it away) and it goes back down to rest at the bottom.',
+    'Modes: tap the tile. iOS 10: the classic wave, blue, green and red curves that make cyan, magenta and white where they cross, over a thin white line, endlessly reshaping. iOS 27: the newer glowing wave in blue, magenta, amber and cyan with a white-hot core, resting as a small glass orb.',
+    'Height: how tall the waves get. Size: how wide. Speed: how fast they move. Glow (iOS 27): the halo. Dim: darkens the camera while it is awake.'
   ],
   swarm: [
     'How it works: a flock of mouse cursors. Each is steered to its own target by a critically damped spring and kept apart from its neighbors (a boid rule), so a moving target pulls them into a stream.',

@@ -20,6 +20,7 @@
 //     direction, pushes words apart while it is held, and snaps all the threads.
 //   Pinch: grabs the words within reach; they follow the pinch, drawn in closer, and keep your
 //     hand's velocity when you let go (a throw).
+//   Invert: swaps the palms, so an open palm breaks things apart and a fist draws words in.
 //   Swipe: changes the set (with no Text).
 (function () {
   function createWordSpace() {
@@ -59,7 +60,9 @@
         // closed (any held cluster is let go), every word gets a kick in a random direction the
         // moment it closes (0.3–0.8 frame heights a second), and while it stays closed words
         // closer than 8% of the frame height push each other apart, so no clump survives.
-        var fistNow = hands.some(function (h) { return h.fist; });
+        // Invert swaps the two palms: an open palm breaks things apart and a fist draws them in.
+        var inv = !!params.invert, breaker = function (h) { return inv ? !h.fist && !h.pinched && h.count >= 4 : h.fist; };
+        var fistNow = hands.some(breaker);
         // Pinch grabs: on the pinch, the words within reach are captured with their offsets.
         var live = {};
         hands.forEach(function (h) {
@@ -110,8 +113,9 @@
           var ax = 0, ay = 0;
           hands.forEach(function (h) {
             if (h.pinched) return;
+            if (inv && !h.fist && !breaker(h)) return; // inverted: only a fist pulls
             var dx = p.x - h.center.x, dy = p.y - h.center.y, r = Math.hypot(dx, dy) || 1;
-            if (h.fist) {
+            if (breaker(h)) {
               // Fist: scatters them (a push falling to zero at 2.5 palm lengths) and breaks their
               // threads: a word within reach drops its links and rejoins 1.5 s after it leaves.
               var R1 = h.size * 2.5; if (r > R1) return;

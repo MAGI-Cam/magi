@@ -320,8 +320,8 @@
         // palette a second per pinching hand (real elapsed time, since the fluid's own step is
         // capped); the slider follows.
         // Smoke, Psychedelic — Pinch: the whole stirred picture is sucked back to normal (its offset
-        // relaxes with a 0.12 s half-life) and the flow is damped. Fist: turns the hue of the swirls,
-        // one turn every 2.6 s per closed hand.
+        // relaxes with a 0.12 s half-life) and the flow is damped. Psychedelic only — Fist: turns the
+        // hue of the swirls, one turn every 2.6 s per closed hand. Smoke keeps the picture's colors.
         var ixW = Magi.interaction.read(frame), wc = params.mode === 'watercolor';
         var fistN = ixW.hands.filter(function (h) { return h.fist; }).length, fists = wc ? ixW.hands.filter(function (h) { return h.fist; }).slice(0, 2) : [];
         var vacs = [0, 1].map(function (k) { var h = fists[k]; return h ? [h.center.x / W, 1 - h.center.y / H, 0.35] : [0, 0, 0]; });
@@ -331,7 +331,7 @@
         if (wc && pinching) {
           colorAcc += pinching * realDt * 100 / (PALETTES.length - 1);
           if (Math.abs(colorAcc) >= 1) { var stepC = Math.trunc(colorAcc); colorAcc -= stepC; var nc = params.colors + stepC; if (nc > 100) nc = 1 + (nc - 101); frame.setParam('colors', nc); params = Object.assign({}, params, { colors: nc }); }
-        } else if (!wc && fistN) colorShift += fistN * realDt;
+        } else if (params.mode === 'psychedelic' && fistN) colorShift += fistN * realDt;
         var vac = { vac0: vacs[0], vac1: vacs[1], aspect: W / H, vq: 0.25 };
         var vt = [1 / sw, 1 / sh], keep = Math.pow(2, -dt / (sucking ? 0.12 : 0.15 * Math.pow(2, params.trail / 20))), vkeep = Math.pow(2, -dt / 0.12);
         run('emit', { act: act.read, mask: maskTex }, act.write, vt); act.swap();
@@ -376,7 +376,7 @@
         } else {
           run('warp', { vel: vel.read, map: map.read, velTexel: vt, dt: dt, keep: keep, vk: vkeep, vq: vac.vq, vac0: vac.vac0, vac1: vac.vac1, aspect: vac.aspect }, map.write, [1 / map.read.w, 1 / map.read.h]);
           map.swap();
-          run('show', { cam: camTex, map: map.read, hue: (colorShift * 2.4) % (Math.PI * 2), band: params.mode === 'psychedelic' ? 60 : 0 }, null, [1 / W, 1 / H]);
+          run('show', { cam: camTex, map: map.read, hue: params.mode === 'psychedelic' ? (colorShift * 2.4) % (Math.PI * 2) : 0, band: params.mode === 'psychedelic' ? 60 : 0 }, null, [1 / W, 1 / H]);
         }
         ctx.drawImage(canvas, 0, 0);
 
