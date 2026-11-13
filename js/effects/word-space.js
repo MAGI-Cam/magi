@@ -90,8 +90,10 @@
             if (h.pinched) return;
             var dx = p.x - h.center.x, dy = p.y - h.center.y, r = Math.hypot(dx, dy) || 1;
             if (h.fist) {
-              // Fist: scatters them (a push falling to zero at 2.5 palm lengths).
+              // Fist: scatters them (a push falling to zero at 2.5 palm lengths) and breaks their
+              // threads: a word within reach drops its links and rejoins 1.5 s after it leaves.
               var R1 = h.size * 2.5; if (r > R1) return;
+              p.cut = 1.5;
               var f1 = (1 - r / R1) * H * 6; ax += dx / r * f1; ay += dy / r * f1;
             } else {
               // Open hand: a magnet. Words within 6 palm lengths are pulled in with a softened
@@ -118,12 +120,14 @@
           p.sx = W / 2 + rx * kp; p.sy = H / 2 + (p.y - H / 2) * kp; p.k = kp;
         });
 
-        // Threads to the nearest neighbors on screen.
+        P.forEach(function (p) { if (p.cut > 0) p.cut -= dt; });
+        // Threads to the nearest neighbors on screen (none for a word whose threads a fist broke).
         var kL = Math.round(params.links), cell = H * 0.08, grid = {}, segs = [];
         P.forEach(function (p, i) { var key = Math.floor(p.sx / cell) + ',' + Math.floor(p.sy / cell); (grid[key] || (grid[key] = [])).push(i); });
         P.forEach(function (p, i) {
           var gx = Math.floor(p.sx / cell), gy = Math.floor(p.sy / cell), near = [];
-          for (var oy = -1; oy <= 1; oy++) for (var ox = -1; ox <= 1; ox++) (grid[(gx + ox) + ',' + (gy + oy)] || []).forEach(function (j) { if (j > i) { var d = Math.hypot(P[j].sx - p.sx, P[j].sy - p.sy); if (d < cell * 1.5) near.push([d, j]); } });
+          if (p.cut > 0) return;
+          for (var oy = -1; oy <= 1; oy++) for (var ox = -1; ox <= 1; ox++) (grid[(gx + ox) + ',' + (gy + oy)] || []).forEach(function (j) { if (j > i && !(P[j].cut > 0)) { var d = Math.hypot(P[j].sx - p.sx, P[j].sy - p.sy); if (d < cell * 1.5) near.push([d, j]); } });
           near.sort(function (a, b) { return a[0] - b[0]; }).slice(0, kL).forEach(function (nb) { segs.push(i, nb[1]); });
         });
         ctx.save();

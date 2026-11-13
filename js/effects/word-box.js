@@ -118,7 +118,7 @@
 
         // Body: anchors in the body's frame.
         var seg = Magi.tracking.body.detect(frame);
-        if (seg && seg !== lastSeg) { lastSeg = seg; updateMask(seg); }
+        if (seg && seg.n !== lastSeg) { lastSeg = seg.n; updateMask(seg); }
         var n = Math.round(params.points), C = (Magi.tracking.connections && Magi.tracking.connections.hand) || [];
         while (pts.length < n) pts.push({ a: anchor(), z: (Math.random() * 2 - 1) * 0.35, x: W / 2, y: H / 2, out: 0, bone: Math.floor(Math.random() * Math.max(1, C.length)), bt: Math.random(), c: chars[Math.floor(Math.random() * chars.length)], ph: Math.random() * 6.28, hand: Math.random() });
         if (pts.length > n) pts.length = n;

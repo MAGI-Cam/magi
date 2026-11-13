@@ -46,7 +46,7 @@
           if (step >= 1) {
             hueAcc -= step;
             var c = params.color > 0 ? params.color : 0;
-            frame.setParam('color', c + step > 100 ? 1 + (c + step - 101) % 100 : c + step);
+            frame.setParam('color', c + step > 99 ? 1 + (c + step - 100) % 99 : c + step);
           }
         } else hueAcc = 0;
 
@@ -77,8 +77,8 @@
           var count = Math.max(2, Math.min(48, Math.round(2 + dn * density)));
           var waist = (params.waist / 100) * smoothstep(0.08, 0.5, dn);
           var hBase = state.size * (params.size / 50) * 1.15;
-          var hue0 = params.color > 0 ? ((params.color - 1) / 99) * 360 : 0;
-          var sat = params.color > 0 ? 72 : 0;
+          var hue0 = params.color > 0 ? ((params.color - 1) / 98) * 360 : 0;
+          var sat = params.color > 0 && params.color < 100 ? 72 : 0, black = params.color >= 100;
 
           // Two stacks, one at each hand, each covering STACK of the span and shrinking toward the
           // open middle.
@@ -113,7 +113,7 @@
             ctx.rotate(state.roll * 0.6);
             ctx.translate(-pn.x, -pn.y);
             var hue = (hue0 + pn.t * params.spread * 3.6) % 360;
-            var light = sat ? 48 + 10 * Math.sin(pn.t * Math.PI * 3) : 92 - 30 * pn.t;
+            var light = black ? 6 + 14 * pn.t : sat ? 48 + 10 * Math.sin(pn.t * Math.PI * 3) : 92 - 30 * pn.t;
             ctx.fillStyle = 'hsl(' + hue.toFixed(1) + ',' + sat + '%,' + light.toFixed(1) + '%)';
             ctx.beginPath();
             ctx.moveTo(pn.x - hx, pn.y - pn.h / 2 - hy);

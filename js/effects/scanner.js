@@ -7,14 +7,16 @@
 //     LSTM recognizer compiled to WebAssembly, running in the browser; nothing is uploaded),
 //     loaded from jsDelivr on first use with the English model (about 3 MB, then cached). A photo
 //     is read once; live video is read again about every 1.2 s, while the scan keeps going.
-//     Words below 55% confidence are dropped.
+//     Only word-like readings count (letters or digits, not stray marks). A photo takes words
+//     read with 55% confidence; on video a word must be read with 75% or turn up in two readings
+//     running, so a picture with no text in it scans nothing.
 //   No text found: the Text you type is set on the picture (Bodoni, centered lines fitted to
 //     the frame) and scanned instead. With nothing typed, it asks you to type.
 // Boxes: each word's bounding box plus a margin (Margin, as a share of the word's height), so a
 // warped or slanted word is covered entirely.
-// Reading order: words are grouped into lines (a word joins a line when its vertical center is
-// within 0.6 of the line's typical height of it), lines go top to bottom, words in a line left to
-// right.
+// Reading order: words are grouped into lines (a word joins the line it overlaps vertically by at
+// least half the smaller height), lines go top to bottom, words in a line left to right, and the
+// head visits every one in turn.
 // Motion: the head moves to the next word every hop (Speed: 600 ms down to 70 ms), gliding there
 // with an ease-out (cubic) over the first 60% of the hop; at the end it pauses 0.8 s and starts
 // again from the top.
@@ -43,25 +45,46 @@
     ocr.busy = true;
     return ocr.worker.recognize(canvas).then(function (r) {
       ocr.busy = false;
-      return (r.data.words || []).filter(function (wd) { return wd.confidence >= 55 && wd.text.trim(); }).map(function (wd) {
-        return { text: wd.text.trim(), x: wd.bbox.x0, y: wd.bbox.y0, w: wd.bbox.x1 - wd.bbox.x0, h: wd.bbox.y1 - wd.bbox.y0 };
+      return (r.data.words || []).filter(function (wd) { return wd.confidence >= 45 && plausible(wd.text.trim()); }).map(function (wd) {
+        return { text: wd.text.trim(), conf: wd.confidence, x: wd.bbox.x0, y: wd.bbox.y0, w: wd.bbox.x1 - wd.bbox.x0, h: wd.bbox.y1 - wd.bbox.y0 };
       });
     }, function () { ocr.busy = false; return null; });
   }
 
-  // Reading order: lines top to bottom, words left to right.
+  // Does it look like a word? At least one letter or digit, at least half of it letters or digits,
+  // and a lone character only if it is a letter or digit. Noise that OCR "reads" in a picture with
+  // no text (bars, dashes, stray marks) fails this.
+  function plausible(t) {
+    if (!t) return false;
+    var an = (t.match(/[\p{L}\p{N}]/gu) || []).length;
+    return an >= 1 && an / t.length >= 0.5 && (t.length > 1 || an === 1);
+  }
+  // Reading order: lines top to bottom, words left to right. A word joins a line when it overlaps
+  // the line vertically by at least half of the shorter of the two heights, so a short word or
+  // punctuation in the line stays in it instead of starting a line of its own (which made the
+  // head jump past words).
   function order(words) {
-    var byY = words.slice().sort(function (a, b) { return (a.y + a.h / 2) - (b.y + b.h / 2); }), lines = [];
+    var byY = words.slice().sort(function (a, b) { return a.y - b.y; }), lines = [];
     byY.forEach(function (wd) {
-      var cy = wd.y + wd.h / 2, line = lines[lines.length - 1];
-      if (line && Math.abs(cy - line.cy) < 0.6 * line.h) { line.words.push(wd); line.cy = (line.cy * (line.words.length - 1) + cy) / line.words.length; }
-      else lines.push({ cy: cy, h: wd.h, words: [wd] });
+      var best = null, bo = 0;
+      lines.forEach(function (l) {
+        var ov = Math.min(l.y1, wd.y + wd.h) - Math.max(l.y0, wd.y), need = 0.5 * Math.min(l.y1 - l.y0, wd.h);
+        if (ov >= need && ov > bo) { bo = ov; best = l; }
+      });
+      if (best) { best.words.push(wd); best.y0 = Math.min(best.y0, wd.y); best.y1 = Math.max(best.y1, wd.y + wd.h); }
+      else lines.push({ y0: wd.y, y1: wd.y + wd.h, words: [wd] });
     });
+    lines.sort(function (a, b) { return (a.y0 + a.y1) - (b.y0 + b.y1); });
     return [].concat.apply([], lines.map(function (l) { return l.words.sort(function (a, b) { return a.x - b.x; }); }));
+  }
+  function iou(a, b) {
+    var x0 = Math.max(a.x, b.x), y0 = Math.max(a.y, b.y), x1 = Math.min(a.x + a.w, b.x + b.w), y1 = Math.min(a.y + a.h, b.y + b.h);
+    var i = Math.max(0, x1 - x0) * Math.max(0, y1 - y0);
+    return i / Math.max(1e-6, a.w * a.h + b.w * b.h - i);
   }
 
   function createScanner() {
-    var words = [], src = 'none', i = 0, hopAt = 0, lastId = null, lastRead = -9, readCanvas = document.createElement('canvas'), from = null, typedKey = '', pausedTill = 0;
+    var words = [], bank = [], src = 'none', i = 0, hopAt = 0, lastId = null, lastRead = -9, readCanvas = document.createElement('canvas'), from = null, typedKey = '', pausedTill = 0;
     function ease(k) { k = Math.max(0, Math.min(1, k)); return 1 - Math.pow(1 - k, 3); }
     return {
       animated: true,
@@ -83,13 +106,29 @@
           readCanvas.getContext('2d').drawImage(out, 0, 0, readCanvas.width, readCanvas.height);
           read(readCanvas).then(function (found) {
             if (!found) return;
-            var next = order(found.map(function (wd) { return { text: wd.text, x: wd.x / k, y: wd.y / k, w: wd.w / k, h: wd.h / k }; }));
+            found = found.map(function (wd) { return { text: wd.text, conf: wd.conf, x: wd.x / k, y: wd.y / k, w: wd.w / k, h: wd.h / k }; });
+            // Words are followed from reading to reading (matched by overlap), so the list holds
+            // still while the camera does. On video a word counts once it is read with 75%
+            // confidence or seen in two readings running, and goes after two readings without it;
+            // a photo is read once and takes words at 55%.
+            bank.forEach(function (b) { b.hit = false; });
+            found.forEach(function (f) {
+              var m = null, mi = 0.3;
+              bank.forEach(function (b) { if (!b.hit) { var v = iou(b, f); if (v > mi) { mi = v; m = b; } } });
+              if (m) { m.text = f.text; m.x = f.x; m.y = f.y; m.w = f.w; m.h = f.h; m.conf = Math.max(m.conf, f.conf); m.seen++; m.miss = 0; m.hit = true; }
+              else bank.push({ text: f.text, conf: f.conf, x: f.x, y: f.y, w: f.w, h: f.h, seen: 1, miss: 0, hit: true });
+            });
+            bank = bank.filter(function (b) { if (!b.hit) b.miss++; return still ? b.hit : b.miss < 2; });
+            var next = order(bank.filter(function (b) { return still ? b.conf >= 55 : b.conf >= 75 || b.seen >= 2; }));
             if (next.length) {
-              // Keep the head on the nearest word when the new reading arrives.
+              // Keep the head on the word it was on (the same tracked word, else the nearest).
               var cur = words[i];
               words = next; src = 'read';
-              if (cur) { var best = 0, bd = 1e9; words.forEach(function (wd, j) { var d = Math.hypot(wd.x - cur.x, wd.y - cur.y); if (d < bd) { bd = d; best = j; } }); i = best; }
-              else { i = 0; hopAt = t; }
+              if (cur) {
+                var same = words.indexOf(cur);
+                if (same >= 0) i = same;
+                else { var best = 0, bd = 1e9; words.forEach(function (wd, j) { var d = Math.hypot(wd.x - cur.x, wd.y - cur.y); if (d < bd) { bd = d; best = j; } }); i = best; }
+              } else { i = 0; hopAt = t; }
             } else if (src === 'read') { words = []; src = 'none'; }
           });
         }

@@ -412,7 +412,9 @@
   // Border: a square frame held between open palms. Two open hands: its center is the midpoint of
   // your palms and its side the distance between them, so it scales with where your hands are and
   // stays square. One open hand: centered on your palm, side 3 palm lengths. Center and side follow
-  // with a first-order lag (time constant 1/12 s). A pinch sets it in place; a fist frees it.
+  // with a first-order lag (time constant 1/12 s). A pinch sets it in place; a fist frees it. Set
+  // in place, it can be pinched again, as Code's box can: one hand pinching near a corner resizes
+  // it about its center, anywhere else moves it; two hands pinching span it between them.
   // The live video under it gets film grain and a saturation control (BORDER_FRAG).
   var BORDER_FRAG = [
     'precision highp float;',
@@ -435,7 +437,7 @@
   ].join('\n');
 
   function createBorder() {
-    var sq = null, locked = false, lastT = null, pass;
+    var sq = null, locked = false, lastT = null, pass, grab = null;
     return function (frame, ctx, ix, params, out) {
       var W = frame.width, H = frame.height, u = frame.pxPerCss, t = frame.time / 1000;
       var dt = lastT === null ? 1 / 60 : Math.max(0, Math.min(0.1, t - lastT)); lastT = t;
@@ -448,7 +450,28 @@
         }
       }
       var hands = ix.hands, open = hands.filter(function (h) { return !h.fist && !h.pinched && h.count >= 4; });
-      if (locked && hands.some(function (h) { return h.fist; })) locked = false;
+      var pinched = hands.filter(function (h) { return h.pinched; });
+      function pp(h) { return { x: (h.points[4].x + h.points[8].x) / 2, y: (h.points[4].y + h.points[8].y) / 2 }; }
+      if (locked && hands.some(function (h) { return h.fist; })) { locked = false; grab = null; }
+      if (locked && sq) {
+        // Set in place: pinch again to move or resize it, like Code's box.
+        if (pinched.length >= 2) {
+          // Two pinches: they span the square (center between them, side the larger of the gaps).
+          var a2 = pp(pinched[0]), b2 = pp(pinched[1]);
+          sq.x = (a2.x + b2.x) / 2; sq.y = (a2.y + b2.y) / 2; sq.s = Math.max(Math.abs(b2.x - a2.x), Math.abs(b2.y - a2.y));
+          grab = null;
+        } else if (pinched.length === 1) {
+          var m = pp(pinched[0]);
+          if (!grab || grab.id !== pinched[0].id) {
+            // Near a corner (within a quarter of the side): resize about the center; else move.
+            var dxc = Math.abs(Math.abs(m.x - sq.x) - sq.s / 2), dyc = Math.abs(Math.abs(m.y - sq.y) - sq.s / 2);
+            grab = { id: pinched[0].id, resize: dxc < sq.s * 0.25 && dyc < sq.s * 0.25, ox: sq.x - m.x, oy: sq.y - m.y };
+          }
+          if (grab.hold) { /* the pinch that set it: holds until released */ }
+          else if (grab.resize) sq.s = Math.max(8, 2 * Math.max(Math.abs(m.x - sq.x), Math.abs(m.y - sq.y)));
+          else { sq.x = m.x + grab.ox; sq.y = m.y + grab.oy; }
+        } else grab = null;
+      }
       if (!locked) {
         var T = null;
         if (open.length >= 2) {
@@ -463,7 +486,8 @@
           var k = 1 - Math.exp(-12 * dt);
           sq.x += (T.x - sq.x) * k; sq.y += (T.y - sq.y) * k; sq.s += (T.s - sq.s) * k;
         }
-        if (sq && hands.some(function (h) { return h.pinched; })) locked = true;
+        // The first pinch sets it in place; the pinch must end before it can grab the square.
+        if (sq && pinched.length) { locked = true; grab = { id: pinched[0].id, hold: true, ox: 0, oy: 0 }; }
       }
       if (!sq) return false;
       var lw = Math.max(1, params.bwidth / 100 * Math.min(W, H) * 0.12), s = Math.max(lw * 2, sq.s);

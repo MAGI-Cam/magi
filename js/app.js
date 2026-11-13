@@ -580,7 +580,7 @@
     }
     var rgb = Magi.fx.inkColor(Number(input.value));
     out.style.setProperty('--swatch', 'rgb(' + rgb.map(function (c) { return Math.round(c * 255); }).join(',') + ')');
-    var text = Number(input.value) === 0 ? 'White' : 'Hue ' + Math.round((input.value - 1) / 99 * 360) + '°';
+    var v = Number(input.value), text = v === 0 ? 'White' : v >= 100 ? 'Black' : 'Hue ' + Math.round((v - 1) / 98 * 360) + '°';
     input.setAttribute('aria-valuetext', text);
   }
 

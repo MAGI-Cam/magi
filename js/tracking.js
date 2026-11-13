@@ -253,7 +253,7 @@
   // own input is 256×256), drawn mirrored like the preview, so the mask lines up with the frame.
   // Masks are eased over time (x ← x + 0.6·(new − x)) so the outline doesn't flicker.
   function createSegmenter() {
-    var status = 'idle', task = null, lastTs = 0;
+    var status = 'idle', task = null, lastTs = 0, lastKey = '';
     var small = document.createElement('canvas'), sctx = small.getContext('2d');
     var result = null;
 
@@ -280,11 +280,17 @@
 
     return {
       status: function () { return status; },
-      // Returns { mask: Float32Array (0…1, row by row), width, height }, or null before the
-      // first result. The mask covers the whole frame at reduced size.
+      // Returns { mask: Float32Array (0…1, row by row), width, height, n }, or null before the
+      // first result. The mask covers the whole frame at reduced size; it is updated in place and
+      // n counts the updates.
       detect: function (frame) {
         if (status === 'idle') load();
         if (!task) return result;
+        // Once per camera frame, like the landmarkers: segmenting the same picture again on every
+        // screen refresh (2–4 times per camera frame) only competed with hand tracking for the GPU.
+        var key = frameId(frame.source) + '|' + frame.width + 'x' + frame.height + (frame.mirror ? 'm' : '');
+        if (key === lastKey) return result;
+        lastKey = key;
         var s = Math.min(1, 256 / Math.max(frame.width, frame.height));
         var w = Math.max(1, Math.round(frame.width * s)), h = Math.max(1, Math.round(frame.height * s));
         if (small.width !== w || small.height !== h) { small.width = w; small.height = h; result = null; }
@@ -297,9 +303,10 @@
             if (!masks.length) return;
             // The person is the last category (the only one for this model).
             var m = masks[masks.length - 1].getAsFloat32Array();
-            if (!result || result.mask.length !== m.length) { result = { mask: new Float32Array(m), width: w, height: h }; return; }
+            if (!result || result.mask.length !== m.length) { result = { mask: new Float32Array(m), width: w, height: h, n: (result ? result.n : 0) + 1 }; return; }
             var r = result.mask;
             for (var i = 0; i < m.length; i++) r[i] += (m[i] - r[i]) * 0.6;
+            result.n++; // the mask is updated in place; n tells a reader it changed
           });
         } catch (e) {
           return result;

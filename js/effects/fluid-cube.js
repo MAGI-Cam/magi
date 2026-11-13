@@ -312,8 +312,8 @@
           return [cube.x + S * X * k, cube.y + S * Y * k, k];
         }
 
-        var hue = params.color > 0 ? (params.color - 1) / 99 : 0;
-        var col = params.color > 0 ? hsv(hue, 0.9, 1) : [1, 1, 1];
+        var hue = params.color > 0 ? (params.color - 1) / 98 : 0;
+        var col = params.color >= 100 ? [0, 0, 0] : params.color > 0 ? hsv(hue, 0.9, 1) : [1, 1, 1];
         var rgb = col.map(function (c) { return Math.round(c * 255); }).join(',');
 
         // Specks: each particle's cluster, projected, as additive points.

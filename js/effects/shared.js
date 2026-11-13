@@ -87,10 +87,12 @@
     };
   };
 
-  // Color slider value (0–100) → RGB in 0–1. 0 is white; 1–100 runs once around the hue wheel.
+  // Color slider value (0–100) → RGB in 0–1. 0 is white; 1–99 runs once around the hue wheel; 100
+  // is black.
   fx.inkColor = function (value) {
     if (!value || value <= 0) return [1, 1, 1];
-    var h = ((value - 1) / 99) * 6;
+    if (value >= 100) return [0, 0, 0];
+    var h = ((value - 1) / 98) * 6;
     var x = 1 - Math.abs((h % 2) - 1);
     return [[1, x, 0], [x, 1, 0], [0, 1, x], [0, x, 1], [x, 0, 1], [1, 0, x]][Math.floor(h) % 6];
   };

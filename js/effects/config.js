@@ -153,7 +153,7 @@ Magi.effectConfig = [
       { id: 'tempo', label: 'Tempo', min: 60, max: 180, step: 1, default: 110, modes: ['sequencer'] },
       { id: 'sound', label: 'Sound', type: 'toggle', default: false, modes: ['sequencer'], hint: 'Play the rings (kick, snare, hi-hat); recorded into videos.' },
       { id: 'fdim', label: 'Dim', min: 0, max: 100, step: 1, default: 0, modes: ['filaments'] },
-      { id: 'dim', label: 'Dim', min: 0, max: 100, step: 1, default: 45, modes: ['sequencer', 'rabinovich', 'cohesion', 'pollinate', 'zero', 'wheel', 'cube'] },
+      { id: 'dim', label: 'Dim', min: 0, max: 100, step: 1, default: 45, modes: ['sequencer', 'rabinovich', 'cohesion', 'pollinate', 'zero', 'cube'] },
       { id: 'speed', label: 'Speed', min: 0, max: 100, step: 1, default: 50, modes: ['rabinovich'] },
       { id: 'trail', label: 'Trail', min: 0, max: 100, step: 1, default: 70, modes: ['rabinovich'] },
       { id: 'size', label: 'Size', min: 0, max: 100, step: 1, default: 50, modes: ['rabinovich'] },
@@ -169,6 +169,7 @@ Magi.effectConfig = [
       { id: 'zcolor', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue', modes: ['zero'] },
       { id: 'hrays', label: 'Slots', min: 4, max: 12, step: 1, default: 8, modes: ['wheel'] },
       { id: 'hpanel', label: 'Panel', type: 'toggle', default: true, modes: ['wheel'], hint: 'The chosen number, large, on the right.' },
+      { id: 'wdim', label: 'Dim', min: 0, max: 100, step: 1, default: 0, modes: ['wheel'] },
       { id: 'cn', label: 'Grid', min: 2, max: 5, step: 1, default: 3, modes: ['cube'] },
       { id: 'csize', label: 'Size', min: 0, max: 100, step: 1, default: 50, modes: ['cube'] },
       { id: 'cspin', label: 'Spin', min: 0, max: 100, step: 1, default: 20, modes: ['cube'] },
@@ -230,7 +231,7 @@ Magi.effectConfig = [
       range('exposure', 'Exposure', 0, 100, 50),
       range('glow', 'Glow', 0, 100, 15),
       { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
-      range('dim', 'Dim', 0, 100, 90)
+      range('dim', 'Dim', 0, 100, 100)
     ]
   },
   {
@@ -258,11 +259,12 @@ Magi.effectConfig = [
       range('glow', 'Glow', 0, 100, 35),
       toggle('camera', 'Camera', false, 'Each particle takes the color of the video under it.'),
       { id: 'ink', label: 'Ink', type: 'toggle', default: false, modes: ['fibre', 'tidal', 'horizon', 'thundercloud'], hint: 'Dark strands on white paper instead of light on dark.' },
+      { id: 'wheel', label: 'Wheel', type: 'toggle', default: true, modes: ['horizon'], hint: 'Show the wheel while you choose an angle (off: the gesture still works, unseen).' },
       { id: 'leak', label: 'Leak', type: 'toggle', default: true, modes: ['lightbeam'], hint: 'Warm light leaks at the edges and some red-orange strokes.' },
       { id: 'flash', label: 'Flash', type: 'toggle', default: true, modes: ['lightbeam'], hint: 'A pinch fires a white flash over the background.' },
       { id: 'core', label: 'Core', min: 0, max: 100, step: 1, default: 0, track: 'hue', modes: ['thundercloud'] },
       { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
-      range('dim', 'Dim', 0, 100, 90)
+      range('dim', 'Dim', 0, 100, 100)
     ]
   },
   {
@@ -284,7 +286,7 @@ Magi.effectConfig = [
       range('exposure', 'Exposure', 0, 100, 50),
       range('glow', 'Glow', 0, 100, 40),
       { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
-      range('dim', 'Dim', 0, 100, 85)
+      range('dim', 'Dim', 0, 100, 100)
     ]
   },
   {
@@ -327,7 +329,7 @@ Magi.effectConfig = [
       range('flash', 'Flash', 0, 100, 50),
       toggle('dissipate', 'Dissipate', false, 'With no hand up, the particles drift away and fade; they gather back when a hand returns.'),
       { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
-      range('dim', 'Dim', 0, 100, 90)
+      range('dim', 'Dim', 0, 100, 80)
     ]
   },
   {
@@ -342,11 +344,11 @@ Magi.effectConfig = [
       range('damping', 'Damping', 0, 100, 30),
       range('push', 'Push', 0, 100, 50),
       range('reach', 'Reach', 0, 100, 40),
-      { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
-      range('glow', 'Glow', 0, 100, 40),
+      { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 42, track: 'hue' },
+      range('glow', 'Glow', 0, 100, 80),
       range('dim', 'Dim', 0, 100, 0),
       toggle('hide', 'Hide', true, 'Hide resting particles: only the ones your hand moves show.'),
-      toggle('pointer', 'Pointer', true, 'A red dot on your index fingertip.'),
+      toggle('pointer', 'Pointer', false, 'A red dot on your index fingertip.'),
       { id: 'text', label: 'Text', type: 'text', default: '', placeholder: 'Any characters (empty: whole screen)', maxLength: 40 }
     ]
   },
@@ -454,10 +456,10 @@ Magi.effectConfig = [
       { id: 'lock', label: 'Lock', type: 'toggle', default: true, modes: ['code'], hint: 'On: corners stay where you let go of them; a fist frees that hand’s corner. Off: the box follows your pinches.' },
       { id: 'outside', label: 'Outside', type: 'toggle', default: false, modes: ['code'], hint: 'Code everything outside the box; the box stays live.' },
       { id: 'solid', label: 'Solid', type: 'toggle', default: false, modes: ['code'], hint: 'Fill the area with one flat color (Color) instead of code.' },
-      { id: 'bcolor', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue', modes: ['border'] },
+      { id: 'bcolor', label: 'Color', min: 0, max: 100, step: 1, default: 13, track: 'hue', modes: ['border'] },
       { id: 'bwidth', label: 'Width', min: 1, max: 100, step: 1, default: 15, modes: ['border'] },
-      { id: 'bgrain', label: 'Grain', min: 0, max: 100, step: 1, default: 30, modes: ['border'] },
-      { id: 'bsat', label: 'Saturation', min: 0, max: 100, step: 1, default: 100, modes: ['border'] },
+      { id: 'bgrain', label: 'Grain', min: 0, max: 100, step: 1, default: 50, modes: ['border'] },
+      { id: 'bsat', label: 'Saturation', min: 0, max: 100, step: 1, default: 0, modes: ['border'] },
       toggle('skeleton', 'Skeleton', false, 'Draw the hand skeleton.')
     ]
   },
@@ -852,7 +854,7 @@ Magi.effectConfig = [
     name: 'Interactive',
     group: 'facade',
     ready: true,
-    params: facadeParams(true, 13, 9).concat([range('opacity', 'Opacity', 0, 100, 75)], tintParams(100))
+    params: facadeParams(true, 13, 9).concat([range('opacity', 'Opacity', 0, 100, 90), range('saturation', 'Saturation', 0, 100, 100), Object.assign({}, COLOR, { default: 5 })])
   },
   {
     id: 'facade-electrokinetic',
@@ -976,7 +978,7 @@ Magi.effectGuides = {
   ],
   'word-space': [
     'How it works: characters strung together by red threads, like Word Box, but free in the room: they drift through the whole picture and through depth on a swirling flow (curl noise, so they eddy without bunching up).',
-    'Open hand: a magnet; words are drawn to it and gather around your palm. Fist: scatters them. Pinch: grabs the words within reach; move to carry them, let go to throw them.',
+    'Open hand: a magnet; words are drawn to it and gather around your palm. Fist: scatters them and breaks their threads (they rejoin a moment after your fist leaves). Pinch: grabs the words within reach; move to carry them, let go to throw them.',
     'Turn your hand: turns the space (Rotation sets how far). Swipe: changes the set (with no Text).',
     'Text: type anything, in any keyboard. Set: 0 Hiragana, 1 Kanji, 2 Latin, 3 Hangul, 4 Digits, 5 Emoji. Points, Links: how many characters and threads. Size, Flow, Depth: character size, drift speed, how deep the space is. Change: how often characters swap for others over time (0: never). Glow, Dim: thread glow, darkens the camera.'
   ],
@@ -1007,7 +1009,7 @@ Magi.effectGuides = {
     'Code: pinch with both hands to span a box, read out as 1-bit code. Cells: block size. Color: the ink of the code, the box, the guides and the readouts.',
     'Lock: on, corners stay where you let go; a fist frees that hand’s corner until your next pinch. Off: the box follows your pinches.',
     'Outside: codes everything outside the box instead. Solid: fills the area with one flat color.',
-    'Border: a square frame. Open your palms: it sits between them and grows as they move apart, always square (one hand: around your palm). Pinch: it stays where it is. Fist: it follows your palms again. Color, Width: the frame. Grain, Saturation: the video’s film grain and color.',
+    'Border: a square frame. Open your palms: it sits between them and grows as they move apart, always square (one hand: around your palm). Pinch: it stays where it is. Pinch again to adjust it, like Code’s box: pinch near a corner and drag to resize, anywhere else to move it, or pinch with both hands to span it between them. Fist: it follows your palms again. Color, Width: the frame. Grain, Saturation: the video’s film grain and color.',
     'Skeleton: draws the tracked hands.'
   ],
   wisp: [
@@ -1125,7 +1127,7 @@ Magi.effectGuides = {
     'How it works: hundreds of thousands of particles on the graphics card, stirred by synthetic turbulence (waves with the energy spectrum of real turbulence); their paths fade slowly, so each draws a strand. Six modes (tap the tile).',
     'Fibre: a sphere held by a spring. One hand moves it, two hands hold it between them. Open palm: fibres fly loose. Fist: it pulls tight. Pinch and drag: turns it. A fast sweep blows the fibres away.',
     'Tidal: your hand is a moon. Its tidal pull (stronger the closer it is, by the inverse cube of the distance) raises two opposite bulges that stream toward and away from it. Open palm: a heavier moon; fist: lighter.',
-    'Horizon: particles pour along a line, lifted off it like smoke. It uses the Landmarks Wheel: make a fist and the wheel opens (the line moves to your fist’s height); push or roll toward a number to tilt it, 1 level and each number 22.5° more; open your hand to keep it. Open palm: raises a plume.',
+    'Horizon: particles pour along a line, lifted off it like smoke. The line runs through the middle of the picture. It uses the Landmarks Wheel: make a fist and the wheel opens; push or roll toward a number to tilt the line, 1 level and each number 22.5° more; open your hand and it keeps that angle. Wheel: shows or hides the wheel. Open palm: raises a plume.',
     'Lightbeam: a blade of light follows your index finger, fluid like a sword trail in a slicing game: widest at your fingertip, tapering away behind, thinner and brighter the faster you slash; sparks fly off fast strokes. Trails: how long the light lingers (short slashes to long-exposure loops). Size: blade width. Leak: strokes take turns in gold, red and ice blue, with warm light leaks at the edges. Flash: a pinch flashes the background. Fist: wipes it.',
     'Thundercloud: a dense, heavy cloud, grey outside and glowing at its heart; the nearer a particle is to the center, the more it takes the Core color (far left: ember orange). It follows your hand slowly, like a heavy mass. Fist heats and compresses it, open palm swells it. Pinch: lightning that lights up the cloud from inside, a searing flash and a ripple of light through the particles, flickering like real lightning.',
     'Symbiote: ink thrown off your hands in fine feathery strokes that keep their momentum and curl back toward your palms; move fast and it lashes out.',

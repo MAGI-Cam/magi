@@ -28,7 +28,7 @@
     if (d > 0) {
       h = max === c[0] ? ((c[1] - c[2]) / d) % 6 : max === c[1] ? (c[2] - c[0]) / d + 2 : (c[0] - c[1]) / d + 4;
     }
-    var shift = params.color > 0 ? ((params.color - 1) / 99) * 6 : 0;
+    var shift = params.color > 0 && params.color < 100 ? ((params.color - 1) / 98) * 6 : 0;
     h = (((h + shift) % 6) + 6) % 6;
     var s = (max ? d / max : 0) * (params.saturation / 100), v = max;
     var x = v * s * (1 - Math.abs((h % 2) - 1)), m = v - v * s, cc = v * s;

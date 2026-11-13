@@ -11,7 +11,7 @@ The tray opens on **Normal** (the plain camera) and four parent tiles: Halftone,
 - **Binary**: only `0`, `1` and space, in VT323 or Silkscreen.
 - **XO**: x, o, X, O in Bodoni or Silkscreen.
 
-Halftone controls: Scale, Intensity, Saturation (how much of the media's own color shows) and Color (ink: white at the far left, then the hue wheel). Glyphs are written straight into one pixel buffer per frame, so the smallest scales keep up with live video.
+Halftone controls: Scale, Intensity, Saturation (how much of the media's own color shows) and Color (ink: white at the far left, then the hue wheel, black at the far right; every color slider in the app works this way). Glyphs are written straight into one pixel buffer per frame, so the smallest scales keep up with live video.
 
 **Gesture**: effects driven by your body, in three groups.
 
@@ -68,7 +68,7 @@ All landmarks are smoothed with a One Euro filter, which holds points steady at 
 
 **Text**
 
-- **Scanner**: a kinetic text scanner. Every word in the picture gets a box (its bounding box plus a margin, so warped words are covered) and a tag with what was read; a dark scan head glides from word to word in reading order (lines top to bottom, words left to right), leaving visited boxes tinted and a path through their centers, then starts over. Words are read in the browser by Tesseract.js (LSTM OCR in WebAssembly, English model about 3 MB on first use, nothing uploaded): once for a photo, about every 1.2 s for video. With no text found, the Text you type is set on the picture in Bodoni and scanned. Point with your index finger to jump the head to the word nearest your fingertip. Controls: Text, Speed, Margin, Labels, Path, Color, Dim.
+- **Scanner**: a kinetic text scanner. Every word in the picture gets a box (its bounding box plus a margin, so warped words are covered) and a tag with what was read; a dark scan head glides from word to word in reading order (lines top to bottom, words left to right), leaving visited boxes tinted and a path through their centers, then starts over. Words are read in the browser by Tesseract.js (LSTM OCR in WebAssembly, English model about 3 MB on first use, nothing uploaded): once for a photo, about every 1.2 s for video. Only word-like readings count; on video a word must be read with 75% confidence or appear in two readings running, so a scene with no text scans nothing; words are followed between readings and grouped into lines by vertical overlap, so the head visits every one in order. With no text found, the Text you type is set on the picture in Bodoni and scanned. Point with your index finger to jump the head to the word nearest your fingertip. Controls: Text, Speed, Margin, Labels, Path, Color, Dim.
 
 **Media**: your own images composed into moving posts. In a Media effect the upload button adds images (choose many at once); they are kept in memory for this session only and never uploaded, and a new upload replaces the set. Until you add some, snapshots of the camera stand in. Format sizes the picture for posts (0 the source's shape, 1 4:5, 2 9:16, 3 1:1); save with the shutter as usual. Shared controls: Format, Density (copies of each image), Size, Speed, Dark, Grayscale.
 

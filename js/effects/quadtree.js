@@ -77,8 +77,8 @@
         var seg = Magi.tracking.body.detect(frame), ix = Magi.interaction.read(frame);
         // The person mask, smoothed in time (each new mask moves it 40% of the way, so its edge
         // doesn't flicker) and in space (a 3×3 box blur feathers the edge); read bilinearly.
-        if (seg && seg !== lastSeg) {
-          lastSeg = seg;
+        if (seg && seg.n !== lastSeg) {
+          lastSeg = seg.n;
           var nm = seg.width * seg.height, fresh = !smooth || mw !== seg.width || mh !== seg.height;
           if (fresh) { smooth = new Float32Array(nm); mw = seg.width; mh = seg.height; }
           var tmp = new Float32Array(nm);

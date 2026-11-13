@@ -278,8 +278,8 @@
         // Contour, Filaments, Attention: modes with their own look (js/effects/landmark-modes.js);
         // no skeleton.
         if (Magi.landmarkModes && Magi.landmarkModes[params.mode]) {
-          // Filaments has its own Dim (it starts undimmed); the other modes share one.
-          var mp = params.mode === 'filaments' ? Object.assign({}, params, { dim: params.fdim }) : params;
+          // Filaments and Wheel have their own Dim (they start undimmed); the other modes share one.
+          var mp = params.mode === 'filaments' ? Object.assign({}, params, { dim: params.fdim }) : params.mode === 'wheel' ? Object.assign({}, params, { dim: params.wdim }) : params;
           (extra[params.mode] || (extra[params.mode] = Magi.landmarkModes[params.mode]()))(ctx, frame, ix, mp);
           if (tracker.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, tracker, 'hand');
           else if (!hands.length && params.mode !== 'attention' && params.mode !== 'rabinovich' && params.mode !== 'pollinate' && params.mode !== 'cube') Magi.tracking.hint(ctx, frame, 'Raise your hands.');

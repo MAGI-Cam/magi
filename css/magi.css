@@ -657,7 +657,7 @@ svg {
 
 .control input.is-hue {
   --hue-track: linear-gradient(to right,
-    #fff 0 2%, #f00 2%, #ff0 18.3%, #0f0 34.7%, #0ff 51%, #00f 67.3%, #f0f 83.7%, #f00 100%);
+    #fff 0 2%, #f00 2%, #ff0 18%, #0f0 34%, #0ff 50%, #00f 66%, #f0f 82%, #f00 98%, #000 98% 100%);
 }
 
 .control output.swatch {
