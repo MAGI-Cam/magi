@@ -22,6 +22,8 @@
 //                                         (r = p − c): the differential pull that raises two
 //                                         opposite bulges, the ocean's tides (T = GM/d³)
 //     − P·((p − q)·m)·m                    a spring to a plane through q with normal m (Horizon)
+//   plus, in the velocity the particle follows, a twist about an axis â through c: speed
+//   τ·r/(0.15 + r²) around it (r the distance from the axis), a vortex in polar coordinates (Polar).
 // Life: age counts up; past its lifespan (random between two bounds) a particle is reborn on the
 // emitter: a sphere's surface, a line segment, points (landmarks) or a solid ball (uniform in
 // volume: radius ∝ ∛u), with a birth velocity (a shared vector plus a random one up to
@@ -33,6 +35,8 @@
 // (9 taps, two passes), added back. Tone mapping: light = 1 − e^(−E·x) (never clips, keeps the
 // density gradient); ink = e^(−E·x), Beer–Lambert absorption, so dense particles go dark on paper.
 // Lookup (Lookup Texture POP): a particle can take its color from the camera at its place on screen.
+// Fisheye: instead of perspective, an equidistant fisheye lens (image radius = θ/(fov/2), θ the
+// angle off the lens axis), so a field wider than a hemisphere fits in the frame.
 // Flash: particles near a point light up (a Gaussian glow) and a thin shell of light at radius
 // waveR passes through them, so a strike lights the particles themselves and ripples outward.
 // Emitters can be up to 42 points (two hands' landmarks); with emitByIndex each particle is always
@@ -52,8 +56,8 @@
     'precision highp float;',
     'in vec2 uv;',
     'uniform sampler2D posTex, velTex;',
-    'uniform float dt, time, seed, amp, kscale, follow, shellK, radius, lifeMin, lifeMax, reset, soft, jitter, tideK, planeK, emitOn, birthSpread;',
-    'uniform vec3 center, gravity, lineA, lineB, tideN, planeP, planeN, birthVel;',
+    'uniform float dt, time, seed, amp, kscale, follow, shellK, radius, lifeMin, lifeMax, reset, soft, jitter, tideK, planeK, emitOn, birthSpread, twist;',
+    'uniform vec3 center, gravity, lineA, lineB, tideN, planeP, planeN, birthVel, twistAxis;',
     'uniform int emitShape, nAttract, nEmit, side;',
     'uniform float emitByIndex;',
     'uniform vec4 attract[8];',
@@ -88,7 +92,11 @@
     '    return;',
     '  }',
     '  vec3 p = P.xyz, v = V.xyz;',
-    '  vec3 a = (flow(p, time) * amp - v) * follow + gravity;',
+    // Twist: a swirl about the axis through center, azimuthal speed twist·r/(0.15 + r²) (r the
+    // distance from the axis), so it peaks near r ≈ 0.39 and slows toward the pole and outward.
+    '  vec3 tgt = flow(p, time) * amp;',
+    '  if (twist != 0.0) { vec3 d = p - center; d -= dot(d, twistAxis) * twistAxis; tgt += twist * cross(twistAxis, d) / (0.15 + dot(d, d)); }',
+    '  vec3 a = (tgt - v) * follow + gravity;',
     '  if (shellK > 0.0) { vec3 d = p - center; float r = length(d) + 1e-5; a -= shellK * (r - radius) * d / r; }',
     '  if (tideK > 0.0) { vec3 r = p - center; a += tideK * (3.0 * dot(r, tideN) * tideN - r); }',
     '  if (planeK > 0.0) a -= planeK * dot(p - planeP, planeN) * planeN;',
@@ -107,7 +115,7 @@
     'uniform int side;',
     'uniform mat3 view;',
     'uniform vec3 pivot, color;',
-    'uniform float aspect, focal, psize, useCam, bright, depthK, accentShare, coreK, coreR, flashI, waveR;',
+    'uniform float aspect, focal, psize, useCam, bright, depthK, accentShare, coreK, coreR, flashI, waveR, fish, fov;',
     'uniform vec3 accent, coreColor, coreC, flashC, flashCol;',
     'out vec3 vC;',
     'float h1(float n) { return fract(sin(n * 12.9898) * 43758.5453); }',
@@ -117,6 +125,11 @@
     '  vec3 q = view * (P.xyz - pivot) + pivot;',
     '  float k = focal / max(0.05, focal + q.z);',
     '  vec2 s = vec2(q.x * k / aspect, q.y * k);',
+    // Fisheye (equidistant, the usual lens model): the camera sits at z = −focal; a point at angle θ
+    // off the lens axis lands at radius θ / (fov/2) from the center, so a whole hemisphere (or
+    // more) fits in the frame and straight lines bow outward. Beyond the field of view: not drawn.
+    '  if (fish > 0.5) { vec3 r = vec3(q.xy, q.z + focal); float th = atan(length(r.xy), r.z); vec2 dir = length(r.xy) > 1e-6 ? normalize(r.xy) : vec2(0.0);',
+    '    s = vec2(dir.x / aspect, dir.y) * th / (fov * 0.5); if (th > fov * 0.5) s = vec2(9.0); }',
     '  gl_Position = vec4(s, 0.0, 1.0);',
     '  gl_PointSize = psize;',
     '  float f = P.w / max(1e-3, V.w), fade = smoothstep(0.0, 0.12, f) * (1.0 - smoothstep(0.7, 1.0, f));',
@@ -308,7 +321,7 @@
           posTex: src.pos, velTex: src.vel, dt: o.dt, time: o.time, seed: Math.random() * 100, amp: o.amp, kscale: o.kscale || 1, follow: o.follow || 2,
           shellK: o.shellK || 0, radius: o.radius || 0.5, lifeMin: o.lifeMin || 2, lifeMax: o.lifeMax || 6, reset: needReset ? 1 : 0, soft: o.soft || 0.08, jitter: o.jitter || 0,
           center: o.center || [0, 0, 0], gravity: o.gravity || [0, 0, 0], lineA: o.lineA || [0, 0, 0], lineB: o.lineB || [0, 0, 0],
-          tideK: o.tideK || 0, tideN: o.tideN || [1, 0, 0], planeK: o.planeK || 0, planeP: o.planeP || [0, 0, 0], planeN: o.planeN || [0, 1, 0], emitOn: o.emitOn === false ? 0 : 1, birthVel: o.birthVel || [0, 0, 0], birthSpread: o.birthSpread || 0,
+          tideK: o.tideK || 0, tideN: o.tideN || [1, 0, 0], twist: o.twist || 0, twistAxis: o.twistAxis || [0, 1, 0], planeK: o.planeK || 0, planeP: o.planeP || [0, 0, 0], planeN: o.planeN || [0, 1, 0], emitOn: o.emitOn === false ? 0 : 1, birthVel: o.birthVel || [0, 0, 0], birthSpread: o.birthSpread || 0,
           emitShape: { int: o.emitShape || 0 }, nAttract: { int: at.length }, nEmit: { int: em.length }, side: { int: side }, emitByIndex: o.emitByIndex ? 1 : 0,
           attract: { v4: av4 }, emitPts: { v3: ep },
           kv: { v3: modes.kv }, av: { v3: modes.av }, bv: { v3: modes.bv }, wv: { f1: modes.wv }
@@ -342,7 +355,7 @@
           posTex: state[cur].pos, velTex: state[cur].vel, camTex: camTex || state[cur].pos, side: { int: side }, view: { mat3: o.view }, pivot: o.pivot,
           color: o.color, aspect: w / h, focal: o.focal || 3, psize: o.psize || 1, useCam: o.useCam && o.cam ? 1 : 0, bright: o.bright, depthK: o.depthK === undefined ? 0.5 : o.depthK,
           accent: o.accent || [1, 1, 1], accentShare: o.accentShare || 0, coreColor: o.coreColor || [1, 1, 1], coreK: o.coreK || 0, coreR: o.coreR || 0.5, coreC: o.coreC || [0, 0, 0],
-          flashI: o.flashI || 0, waveR: o.waveR || 0, flashC: o.flashC || [0, 0, 0], flashCol: o.flashCol || [0.8, 0.88, 1]
+          flashI: o.flashI || 0, waveR: o.waveR || 0, flashC: o.flashC || [0, 0, 0], flashCol: o.flashCol || [0.8, 0.88, 1], fish: o.fisheye ? 1 : 0, fov: o.fov || Math.PI
         });
         gl.bindVertexArray(emptyVao);
         gl.bindFramebuffer(gl.FRAMEBUFFER, accum.fbo);

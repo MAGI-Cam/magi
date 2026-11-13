@@ -375,6 +375,24 @@ Magi.effectConfig = [
     ]
   },
   {
+    id: 'polar',
+    name: 'Polar',
+    group: 'particle',
+    ready: true,
+    params: [
+      range('count', 'Count', 20, 300, 90),
+      range('size', 'Size', 0, 100, 50),
+      range('strands', 'Strands', 0, 100, 75),
+      range('turbulence', 'Turbulence', 0, 100, 55),
+      range('twist', 'Twist', 0, 100, 45),
+      range('fisheye', 'Fisheye', 0, 100, 50),
+      range('exposure', 'Exposure', 0, 100, 45),
+      range('glow', 'Glow', 0, 100, 40),
+      { id: 'color', label: 'Color', min: 0, max: 100, step: 1, default: 0, track: 'hue' },
+      range('dim', 'Dim', 0, 100, 85)
+    ]
+  },
+  {
     id: 'mosh',
     name: 'Mosh',
     group: 'hand',
@@ -652,6 +670,26 @@ Magi.effectConfig = [
       toggle('labels', 'Labels', true, 'A tag on each found object: what it is and how sure.'),
       toggle('guides', 'Guides', true, 'Lines from each object’s box out to the edges of the frame.'),
       range('dim', 'Dim', 0, 100, 25)
+    ]
+  },
+  {
+    id: 'aurora',
+    name: 'Aurora',
+    group: 'hand',
+    ready: true,
+    photoType: 'image/jpeg',
+    modes: [
+      { id: 'dark', name: 'Dark' },
+      { id: 'paper', name: 'Paper' }
+    ],
+    params: [
+      range('spread', 'Spread', 0, 100, 60),
+      range('wave', 'Wave', 0, 100, 35),
+      range('ribbons', 'Ribbons', 1, 5, 3),
+      range('width', 'Width', 0, 100, 40),
+      range('exposure', 'Exposure', 0, 100, 50),
+      range('speed', 'Speed', 0, 100, 40),
+      range('dim', 'Dim', 0, 100, 70)
     ]
   },
   {
@@ -1031,6 +1069,16 @@ Magi.effectGuides = {
     'How it works: a flock of mouse cursors. Each is steered to its own target by a critically damped spring and kept apart from its neighbors (a boid rule), so a moving target pulls them into a stream.',
     'Point: the cursors follow your index finger in a loose cloud. Fist: they merge into a single cursor. Open palm: unleash them; they leave your hand for the objects in the picture (MediaPipe’s Object Detector, 80 kinds of everyday thing such as people, cups, phones, chairs and plants) and run round each one, which is marked like a design tool’s selection: a box with handles, guides to the edges and a tag.',
     'Count: how many cursors. Size: how big. Speed: how fast they move and circle. Labels: the tags. Guides: the lines to the edges. Dim: darkens the camera.'
+  ],
+  aurora: [
+    'How it works: light through a prism in your hand. A beam pinches to a narrow waist at your palm and fans out on both sides into rainbow ribbons: a Gaussian beam that widens away from its waist, split by dispersion (each color bends by its own refractive index, so violet fans out most and red least).',
+    'Your hand is the prism: the waist follows your palm, turning your hand aims the beam, and opening your hand fans out the colors (fist: one tight white beam). Pinch and drag up or down to make the ribbons wave; let go and they slowly calm.',
+    'Modes: tap the tile. Dark: light over the camera. Paper: colored ribbons on cream paper. Spread: how far the colors fan out. Wave: how much the ribbons wave on their own. Ribbons: how many sheets. Width: the beam’s width at the waist. Exposure, Speed, Dim.'
+  ],
+  polar: [
+    'How it works: a ball of hair-like strands swirling round a pole, seen through a fisheye lens. Particles follow fine turbulence and a twist round the pole (in polar coordinates about its axis), and their trails draw the strands; the fisheye bows the ball toward you.',
+    'Your hand is the pole: the ball sits at your palm. Close your hand for a small dense ball; open it and the strands fly out. Roll your wrist to twist them. Pinch and drag to spin the sphere. Two hands: the ball sits between them and their distance sets the fisheye’s field of view.',
+    'Count: particles, in thousands. Size: the ball. Strands: how long the strands are. Turbulence: how much they kink. Twist: how strongly rolling your wrist twists them. Fisheye: the lens’s field of view. Exposure, Glow. Color: 0 drifts through lilac, teal and white. Dim.'
   ],
   'face-landmarks': [
     'How it works: the 478-point face mesh, contours, head pose and strongest expressions.',
