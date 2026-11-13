@@ -490,14 +490,18 @@
         if (sq && pinched.length) { locked = true; grab = { id: pinched[0].id, hold: true, ox: 0, oy: 0 }; }
       }
       if (!sq) return false;
-      var lw = Math.max(1, params.bwidth / 100 * Math.min(W, H) * 0.12), s = Math.max(lw * 2, sq.s);
+      // The frame line is drawn on the HUD, at the screen's own resolution, so it stays crisp
+      // however much the picture is scaled down to fit (the app copies the HUD into photos and
+      // videos). Width is in screen pixels, 1–25 CSS px, so it looks the same on a phone and a
+      // desktop; the line is inset by half its width so its outer edge is the square.
+      var hud = frame.hud, lw = (1 + params.bwidth / 100 * 24) * u, s = Math.max(lw * 2, sq.s);
       var col = Magi.fx.inkColor(params.bcolor).map(function (c) { return Math.round(c * 255); });
-      ctx.save();
-      ctx.strokeStyle = 'rgb(' + col.join(',') + ')';
-      ctx.lineWidth = lw;
-      ctx.lineJoin = 'miter';
-      ctx.strokeRect(sq.x - s / 2 + lw / 2, sq.y - s / 2 + lw / 2, s - lw, s - lw);
-      ctx.restore();
+      hud.save();
+      hud.strokeStyle = 'rgb(' + col.join(',') + ')';
+      hud.lineWidth = lw;
+      hud.lineJoin = 'miter';
+      hud.strokeRect(sq.x - s / 2 + lw / 2, sq.y - s / 2 + lw / 2, s - lw, s - lw);
+      hud.restore();
       return true;
     };
   }

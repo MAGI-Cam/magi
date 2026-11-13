@@ -56,8 +56,6 @@ Magi.effectGroups = [
   // Gesture: effects driven by tracking your body. Hand and face tracking nest inside it.
   { id: 'gesture', name: 'Gesture' },
   { id: 'hand', name: 'Hand Tracking', parent: 'gesture' },
-  // Datamosh: the codec-glitch effects, in Hand Tracking.
-  { id: 'datamosh-group', name: 'Datamosh', parent: 'hand' },
   { id: 'face', name: 'Face Tracking', parent: 'gesture' },
   { id: 'body', name: 'Body Tracking', parent: 'gesture' },
   // Particle: particle systems driven by your hands.
@@ -402,31 +400,26 @@ Magi.effectConfig = [
     ]
   },
   {
-    id: 'mosh',
-    name: 'Mosh',
-    group: 'datamosh-group',
+    id: 'datamosh-all',
+    name: 'Datamosh',
+    group: 'hand',
     ready: true,
     photoType: 'image/jpeg',
+    modes: [
+      { id: 'mosh', name: 'Mosh' },
+      { id: 'mosh2', name: 'Mosh 2.0' }
+    ],
     params: [
-      range('scale', 'Scale', 0, 100, 50),
-      range('block', 'Block', 1, 9, 5),
-      range('hold', 'Hold', 0, 100, 40),
-      range('reach', 'Reach', 0, 100, 50)
-    ]
-  },
-  {
-    id: 'datamosh',
-    name: 'Mosh 2.0',
-    group: 'datamosh-group',
-    ready: true,
-    photoType: 'image/jpeg',
-    params: [
-      range('block', 'Block', 1, 9, 4),
-      range('scale', 'Scale', 0, 100, 50),
-      range('bloom', 'Bloom', 0, 100, 50),
-      range('residual', 'Residual', 0, 100, 0),
-      range('keyframes', 'Keyframes', 0, 100, 0),
-      toggle('hand', 'Hand', true, 'Pinch starts the mosh, an open hand releases it. Off: it always moshes.')
+      { id: 'scale', label: 'Scale', min: 0, max: 100, step: 1, default: 50, modes: ['mosh'] },
+      { id: 'block', label: 'Block', min: 1, max: 9, step: 1, default: 5, modes: ['mosh'] },
+      { id: 'hold', label: 'Hold', min: 0, max: 100, step: 1, default: 40, modes: ['mosh'] },
+      { id: 'reach', label: 'Reach', min: 0, max: 100, step: 1, default: 50, modes: ['mosh'] },
+      { id: 'block2', label: 'Block', min: 1, max: 9, step: 1, default: 4, modes: ['mosh2'] },
+      { id: 'scale2', label: 'Scale', min: 0, max: 100, step: 1, default: 50, modes: ['mosh2'] },
+      { id: 'bloom', label: 'Bloom', min: 0, max: 100, step: 1, default: 50, modes: ['mosh2'] },
+      { id: 'residual', label: 'Residual', min: 0, max: 100, step: 1, default: 0, modes: ['mosh2'] },
+      { id: 'keyframes', label: 'Keyframes', min: 0, max: 100, step: 1, default: 0, modes: ['mosh2'] },
+      { id: 'hand', label: 'Hand', type: 'toggle', default: true, modes: ['mosh2'], hint: 'Pinch starts the mosh, an open hand releases it. Off: it always moshes.' }
     ]
   },
 
@@ -797,7 +790,6 @@ Magi.effectConfig = [
       range('rotation', 'Rotation', 0, 100, 50),
       range('change', 'Change', 0, 100, 0),
       range('glow', 'Glow', 0, 100, 60),
-      toggle('invert', 'Invert', false, 'Swap the palms: an open palm breaks the words apart and a fist draws them in.'),
       range('dim', 'Dim', 0, 100, 100)
     ]
   },
@@ -991,7 +983,7 @@ Magi.effectGuides = {
   ],
   'word-space': [
     'How it works: characters strung together by red threads, like Word Box, but free in the room: they drift through the whole picture and through depth on a swirling flow (curl noise, so they eddy without bunching up).',
-    'Open hand: a magnet; words are drawn to it and gather around your palm. Fist: breaks everything apart, even words you are pinching together: every word is kicked away from its neighbors and every thread snaps (they rejoin when you open your hand). Invert: swaps the two, so an open palm breaks them apart and a fist draws them in. Pinch: grabs the words within reach; move to carry them, let go to throw them.',
+    'Open hand: a magnet; words are drawn to it and gather around your palm. Fist: breaks everything apart, even words you are pinching together: every word is kicked away from its neighbors and every thread snaps (they rejoin when you open your hand). Pinch: grabs the words within reach; move to carry them, let go to throw them.',
     'Turn your hand: turns the space (Rotation sets how far). Swipe: changes the set (with no Text).',
     'Text: type anything, in any keyboard. Set: 0 Hiragana, 1 Kanji, 2 Latin, 3 Hangul, 4 Digits, 5 Emoji. Points, Links: how many characters and threads. Size, Flow, Depth: character size, drift speed, how deep the space is. Change: how often characters swap for others over time (0: never). Glow, Dim: thread glow, darkens the camera.'
   ],
@@ -1007,11 +999,6 @@ Magi.effectGuides = {
     'Face: 0 Literata, 1 Bodoni, 2 Inter, 3 Silkscreen, 4 VT323. Dim: darkens the camera behind the letter.',
     'Guide: shows the three grips on screen.'
   ],
-  mosh: [
-    'Spread thumb and index: the zone between them moshes; spreading wider makes it bigger.',
-    'Pinch (thumb and index touching): snaps the picture clean, like a fresh keyframe.',
-    'Scale: how far motion vectors push. Block: macroblock size. Hold: how long the smear lasts before it unwinds. Reach: zone size.'
-  ],
   'pinch-frame': [
     'Acid, Thermal, Invert, Blur: make an L with thumb and index on both hands; the window between them changes. Bands and Speed shape Acid and Thermal.',
     'Blur: how soft the window is. Frosted: frosted glass, scattered, hazy and grainy. Mosaic: cuts the window into glass blocks, each blurred on its own.',
@@ -1022,7 +1009,7 @@ Magi.effectGuides = {
     'Code: pinch with both hands to span a box, read out as 1-bit code. Cells: block size. Color: the ink of the code, the box, the guides and the readouts.',
     'Lock: on, corners stay where you let go; a fist frees that hand’s corner until your next pinch. Off: the box follows your pinches.',
     'Outside: codes everything outside the box instead. Solid: fills the area with one flat color.',
-    'Border: a square frame. Open your palms: it sits between them and grows as they move apart, always square (one hand: around your palm). Pinch: it stays where it is. Pinch again to adjust it, like Code’s box: pinch near a corner and drag to resize, anywhere else to move it, or pinch with both hands to span it between them. Fist: it follows your palms again. Color, Width: the frame. Grain, Saturation: the video’s film grain and color.',
+    'Border: a square frame. Open your palms: it sits between them and grows as they move apart, always square (one hand: around your palm). Pinch: it stays where it is. Pinch again to adjust it, like Code’s box: pinch near a corner and drag to resize, anywhere else to move it, or pinch with both hands to span it between them. Fist: it follows your palms again. Color, Width: the frame (Width in screen pixels, so it looks the same on every screen). Grain, Saturation: the video’s film grain and color.',
     'Skeleton: draws the tracked hands.'
   ],
   wisp: [
@@ -1199,10 +1186,10 @@ Magi.effectGuides = {
     'Pinch: pulls the tendrils toward the pinch. Make a fist, then open it: a ring bursts from your palm.',
     'Count: how many come off a moving finger. Curl: flow strength. Length: how long threads are. Glow, Color: light and color.'
   ],
-  datamosh: [
-    'How it works: real datamoshing. The keyframes (full pictures) are dropped, so each new frame’s motion vectors keep moving the pixels of a picture that is gone, and it melts along the motion.',
-    'Pinch: the keyframes stop and everything that moves smears. Open your hand: a fresh keyframe releases the picture.',
-    'Swipe: Bloom, a repeated P-frame; the same vectors push again and again and the picture balloons in the swipe’s direction.',
-    'Block: macroblock size. Scale: how far vectors push. Bloom: how long a swipe keeps pushing. Residual: how much real correction gets through (0 is pure mosh). Keyframes: a clean picture every 1–10 s (far left: never). Hand: off to mosh all the time.'
+  'datamosh-all': [
+    'Modes: tap the tile to switch between Mosh and Mosh 2.0.',
+    'Mosh: spread thumb and index and the zone between them moshes; spreading wider makes it bigger. Pinch (thumb and index touching): snaps the picture clean, like a fresh keyframe. Scale: how far motion vectors push. Block: macroblock size. Hold: how long the smear lasts before it unwinds. Reach: zone size.',
+    'Mosh 2.0: real datamoshing. The keyframes (full pictures) are dropped, so each new frame’s motion vectors keep moving the pixels of a picture that is gone, and it melts along the motion. Pinch: the keyframes stop and everything that moves smears. Open your hand: a fresh keyframe releases the picture. Swipe: Bloom, a repeated P-frame; the same vectors push again and again and the picture balloons in the swipe’s direction.',
+    'Mosh 2.0 settings: Block: macroblock size. Scale: how far vectors push. Bloom: how long a swipe keeps pushing. Residual: how much real correction gets through (0 is pure mosh). Keyframes: a clean picture every 1–10 s (far left: never). Hand: off to mosh all the time.'
   ]
 };

@@ -129,4 +129,24 @@
   }
 
   Magi.renderers.datamosh = createDatamosh;
+
+  // The Datamosh tile: one tile that switches between Mosh (mosh.js) and Mosh 2.0 (above) as its
+  // two modes (tap the tile). Each keeps its own state; Mosh 2.0's Block and Scale are stored as
+  // block2 and scale2 so the two modes keep separate settings.
+  Magi.renderers['datamosh-all'] = function () {
+    var a = null, b = null;
+    return {
+      animated: true,
+      render: function (frame, out, params) {
+        if (params.mode === 'mosh2') {
+          b = b || Magi.renderers.datamosh();
+          b.render(frame, out, { block: params.block2, scale: params.scale2, bloom: params.bloom, residual: params.residual, keyframes: params.keyframes, hand: params.hand });
+        } else {
+          a = a || Magi.renderers.mosh();
+          a.render(frame, out, { scale: params.scale, block: params.block, hold: params.hold, reach: params.reach });
+        }
+      },
+      reset: function () { if (a) a.reset(); if (b) b.reset(); }
+    };
+  };
 })();
