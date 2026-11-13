@@ -16,13 +16,14 @@
 // empty Text uses a set (Set).
 // Hands (forces in the picture's plane, falling off linearly to zero at 2.5 palm lengths):
 //   Open hand: a magnet, drawing words in from up to 6 palm lengths into a loose shell around it.
-//   Fist: scatters them.
+//   Fist: breaks everything apart: lets go of any pinched cluster, kicks every word in a random
+//     direction, pushes words apart while it is held, and snaps all the threads.
 //   Pinch: grabs the words within reach; they follow the pinch, drawn in closer, and keep your
 //     hand's velocity when you let go (a throw).
 //   Swipe: changes the set (with no Text).
 (function () {
   function createWordSpace() {
-    var P = [], chars = [], charKey = '', seen = 0, lastT = null, yaw = 0, grabs = {}, linkK = 1;
+    var P = [], chars = [], charKey = '', seen = 0, lastT = null, yaw = 0, grabs = {}, linkK = 1, wasFist = false;
     return {
       animated: true,
       render: function (frame, out, params) {
@@ -54,11 +55,17 @@
         var wantYaw = hands[0] ? hands[0].rotation * Math.PI / 180 * (params.rotation / 100 * 2) : Math.sin(t * 0.2) * 0.35;
         yaw += (wantYaw - yaw) * (1 - Math.exp(-dt / 0.15));
 
+        // A closed fist (either hand) breaks everything apart: no pinch can hold words while it is
+        // closed (any held cluster is let go), every word gets a kick in a random direction the
+        // moment it closes (0.3–0.8 frame heights a second), and while it stays closed words
+        // closer than 8% of the frame height push each other apart, so no clump survives.
+        var fistNow = hands.some(function (h) { return h.fist; });
         // Pinch grabs: on the pinch, the words within reach are captured with their offsets.
         var live = {};
         hands.forEach(function (h) {
           live[h.id] = true;
           var pm = { x: (h.points[4].x + h.points[8].x) / 2, y: (h.points[4].y + h.points[8].y) / 2 };
+          if (fistNow) { delete grabs[h.id]; return; }
           if (h.pinched && !grabs[h.id]) {
             var reach = h.size * 2.5, ids = [];
             P.forEach(function (p, i) { if (Math.hypot(p.sx - pm.x, p.sy - pm.y) < reach) ids.push(i); });
@@ -70,8 +77,23 @@
           if (grabs[h.id]) grabs[h.id].pm = pm;
         });
         Object.keys(grabs).forEach(function (id) { if (!live[id]) delete grabs[id]; });
+        if (fistNow) grabs = {};
         var held = {};
         Object.keys(grabs).forEach(function (id) { grabs[id].ids.forEach(function (i) { held[i] = grabs[id].pm; }); });
+        if (fistNow && !wasFist) P.forEach(function (p) { var a = Math.random() * Math.PI * 2, v = H * (0.3 + 0.5 * Math.random()); p.vx += Math.cos(a) * v; p.vy += Math.sin(a) * v; p.cut = 1.5; });
+        if (fistNow) {
+          var Rr = H * 0.08, rg = {};
+          P.forEach(function (p, i) { var key = Math.floor(p.x / Rr) + ',' + Math.floor(p.y / Rr); (rg[key] || (rg[key] = [])).push(i); });
+          P.forEach(function (p, i) {
+            var gx0 = Math.floor(p.x / Rr), gy0 = Math.floor(p.y / Rr);
+            for (var oy = -1; oy <= 1; oy++) for (var ox = -1; ox <= 1; ox++) (rg[(gx0 + ox) + ',' + (gy0 + oy)] || []).forEach(function (j) {
+              if (j === i) return;
+              var dx = p.x - P[j].x, dy = p.y - P[j].y, d = Math.hypot(dx, dy) || 1e-3;
+              if (d < Rr) { var f = (Rr - d) / Rr * H * 6 * dt; p.vx += dx / d * f; p.vy += dy / d * f; }
+            });
+          });
+        }
+        wasFist = fistNow;
 
         // Flow, hands and motion.
         var k1 = 2 * Math.PI / (W * 0.7), k2 = 2 * Math.PI / (H * 0.8), k3 = 2 * Math.PI / ((W + H) * 0.45), speed = params.flow / 100 * H * 0.25;
@@ -124,7 +146,6 @@
         // A closed fist anywhere breaks the joined threads: the share still held, linkK, falls to 0
         // (time constant 0.15 s) and each thread snaps when linkK drops below its own random
         // threshold, so they break one by one; open the hand and they rejoin over about 1.5 s.
-        var fistNow = hands.some(function (h) { return h.fist; });
         linkK += ((fistNow ? 0 : 1) - linkK) * (1 - Math.exp(-dt / (fistNow ? 0.15 : 0.5)));
         // Threads to the nearest neighbors on screen (none for a word whose threads a fist broke).
         var kL = Math.round(params.links), cell = H * 0.08, grid = {}, segs = [];

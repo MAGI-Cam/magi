@@ -986,7 +986,7 @@ Magi.effectGuides = {
   ],
   'word-space': [
     'How it works: characters strung together by red threads, like Word Box, but free in the room: they drift through the whole picture and through depth on a swirling flow (curl noise, so they eddy without bunching up).',
-    'Open hand: a magnet; words are drawn to it and gather around your palm. Fist: scatters them and breaks the joined threads, snapping one by one (they rejoin when you open your hand). Pinch: grabs the words within reach; move to carry them, let go to throw them.',
+    'Open hand: a magnet; words are drawn to it and gather around your palm. Fist: breaks everything apart, even words you are pinching together: every word is kicked away from its neighbors and every thread snaps (they rejoin when you open your hand). Pinch: grabs the words within reach; move to carry them, let go to throw them.',
     'Turn your hand: turns the space (Rotation sets how far). Swipe: changes the set (with no Text).',
     'Text: type anything, in any keyboard. Set: 0 Hiragana, 1 Kanji, 2 Latin, 3 Hangul, 4 Digits, 5 Emoji. Points, Links: how many characters and threads. Size, Flow, Depth: character size, drift speed, how deep the space is. Change: how often characters swap for others over time (0: never). Glow, Dim: thread glow, darkens the camera.'
   ],
