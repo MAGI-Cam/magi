@@ -1063,13 +1063,14 @@ Magi.effectGuides = {
     'Labels, Text: how many names and how big. Spin: turning with no hand. Dim, Squares, Axes: background, color squares, axes.'
   ],
   siri: [
-    'How it works: a voice assistant’s listening wave, driven by your hand instead of your voice. Open your hand to wake it; how open your hand is sets how loud it is, so the waves swell and shrink like a voice. Close your hand, or take it out of the picture, and it shrinks away to the bottom.',
-    'Modes: tap the tile. Wave: three colored waves that mix toward white where they cross, curling into a small glass orb when asleep. Pill: a dark glass pill whose lower edge glows with a moving spectrum, shrinking to a bar when asleep.',
-    'Height: how tall the waves (or the glow) get. Size: how wide. Speed: how fast they move. Glow: the halo. Dim: darkens the camera while it is awake.'
+    'How it works: a voice assistant’s listening wave, played by your hand instead of your voice. Open your hand to wake it. Make a fist, or take your hand away, and it rests as a calm thin wave at the bottom.',
+    'Each finger is one color: thumb rose, index amber, middle green, ring blue, pinky violet. The straighter a finger, the taller its wave, so you can play them one by one. Bring your hand closer to the camera for more intensity; move it and the waves speed up.',
+    'Modes: tap the tile. Wave: the five colored waves, mixing where they cross. Pill: a dark glass pill whose lower edge glows with a moving spectrum, shrinking to a bar when resting.',
+    'Height: how tall the waves (or the glow) get. Size: how wide. Speed: their base speed. Glow: the halo. Dim: darkens the camera while it is awake.'
   ],
   swarm: [
     'How it works: a flock of mouse cursors. Each is steered to its own target by a critically damped spring and kept apart from its neighbors (a boid rule), so a moving target pulls them into a stream.',
-    'Point: the cursors follow your index finger in a loose cloud. Fist: they merge into a single cursor. Open palm: unleash them; they leave your hand for the objects in the picture (MediaPipe’s Object Detector, 80 kinds of everyday thing such as people, cups, phones, chairs and plants) and run round each one, which is marked like a design tool’s selection: a box with handles, guides to the edges and a tag.',
+    'Point: the cursors follow your index finger in a loose cloud. Fist: they merge into a single cursor. Open palm: unleash them; they leave your hand for the objects in the picture (MediaPipe’s Object Detector, 80 kinds of everyday thing such as people, cups, phones, chairs and plants) and hop between spots on them (handles, edges, the middle), pausing at each as if pointing it out. Each object, including a smaller one inside a bigger one, is marked like a design tool’s selection: a box with handles, guides to the edges and a tag.',
     'Count: how many cursors. Size: how big. Speed: how fast they move and circle. Labels: the tags. Guides: the lines to the edges. Dim: darkens the camera.'
   ],
   aurora: [

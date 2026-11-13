@@ -1,58 +1,60 @@
 // Siri: a voice assistant's listening wave, driven by your hand instead of your voice (after
 // references of the classic Siri wave and the newer glass pill).
 //
-// Gesture: open your hand to wake it. How open your hand is (mean straightness of the four
-// fingers, 1 − curl, mapped so a fist is 0 and a flat hand 1) is the loudness: the waves swell and
-// shrink with it the way they follow a voice. Close your hand, or take it out of the picture, and
-// it shrinks away to the bottom of the screen. Waking eases in with a 0.25 s time constant;
-// loudness follows with 0.06 s attack and 0.18 s release, like an audio level meter.
+// Gesture: open your hand to wake it. Each finger is tied to one color (thumb rose, index amber,
+// middle green, ring blue, pinky violet): how straight that finger is (1 − curl) is how tall its
+// wave stands, so you can play the colors one by one. How close your hand is to the camera (the
+// palm's size in the picture, from 6% to 25% of the frame's short side) is the intensity: reach
+// toward the camera and every wave grows. How fast your hand moves is the speed: the waves run
+// faster while you move (up to 3×). Make a fist, or take your hand away, and it settles into a
+// calm thin wave idling at the bottom. Waking eases in with a 0.25 s time constant; each finger's
+// level follows with 0.06 s attack and 0.18 s release, like an audio level meter.
 //
-// Wave (the classic look): three colored curves, each the sum of two sines under SiriWave's
-// envelope att(x) = (K / (K + x⁴))^K, K = 2, over x ∈ [−2, 2], so they swell in the middle and
-// pinch to points at the ends. Each curve is filled between y and −y (lens-shaped lobes) and added
-// as light ('lighter'), so where the colors overlap they mix toward white; a soft halo is the same
-// drawing at a quarter size, scaled up. Asleep, the wave curls up inside a small glass orb at the
-// bottom.
+// Wave (the classic look): one curve per finger, y = A·att(x)·sin(f·x − φ) under SiriWave's
+// envelope att(x) = (K / (K + x⁴))^K, K = 2, over x ∈ [−2, 2], so each swells in the middle and
+// pinches to points at the ends. Each is filled between y and −y (a lens-shaped lobe) and blended
+// with 'screen', 1 − (1 − a)(1 − b), which brightens where colors cross without blowing out to a
+// flat white the way plain addition does; a thin bright edge traces each lobe, and a soft halo is
+// the same drawing at a quarter size, scaled up.
 // Pill (the newer look): a dark glass pill whose lower rim glows with a moving spectrum; the glow's
-// height along the rim is a sum of sines scaled by loudness, so it ripples like a level meter.
+// height along the rim is a sum of sines scaled by the level, so it ripples like a level meter.
 // Asleep, it shrinks to a short bar at the bottom, like a home indicator.
 (function () {
-  var COLORS = [[173, 57, 76], [48, 220, 155], [15, 82, 169], [140, 60, 230]];
+  // Thumb, index, middle, ring, pinky.
+  var FINGERS = ['thumb', 'index', 'middle', 'ring', 'pinky'];
+  var COLORS = [[255, 72, 120], [255, 168, 52], [52, 222, 150], [44, 140, 255], [168, 92, 255]];
   function att(x) { var K = 2; return Math.pow(K / (K + Math.pow(x, 4)), K); }
   function smooth(x) { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); }
 
   Magi.renderers.siri = function () {
-    var wake = 0, level = 0, lastT = null, phase = 0, halo = document.createElement('canvas'), hctx = halo.getContext('2d');
-    // A curve's two partials: frequency, phase speed and loudness share, fixed per curve.
-    var PARTS = COLORS.map(function (c, i) { return [[1.6 + i * 0.35, 1.1 + i * 0.4, 0.65], [3.1 - i * 0.3, -1.7 - i * 0.25, 0.35]]; });
+    var wake = 0, near = 1, move = 0, lastT = null, phase = 0, halo = document.createElement('canvas'), hctx = halo.getContext('2d');
+    // Each finger's curve: its own frequency and phase speed, so the five never move in step.
+    var FREQ = [1.7, 2.3, 1.4, 2.0, 2.7], RATE = [1.1, -1.5, 1.3, -1.2, 1.7];
+    var lv = [0, 0, 0, 0, 0];
 
-    function wave(g, cx, cy, half, amp, alpha, ph) {
+    function wave(g, cx, cy, half, amps, alpha, ph, edge) {
       g.save();
-      g.globalCompositeOperation = 'lighter';
-      PARTS.forEach(function (parts, ci) {
-        // Each curve breathes on its own: loudness × (0.55 + 0.45·sin(slow)).
-        var a = amp * (0.55 + 0.45 * Math.sin(ph * (0.6 + ci * 0.23) + ci * 2.1));
-        var N = 90, top = [];
+      g.globalCompositeOperation = 'screen';
+      COLORS.forEach(function (col, ci) {
+        var a = amps[ci];
+        if (a < 0.3) return;
+        var N = 96, top = [];
         for (var k = 0; k <= N; k++) {
-          var x = -2 + 4 * k / N, y = 0;
-          parts.forEach(function (p) { y += p[2] * Math.sin(p[0] * x * 1.6 - ph * p[1] + ci); });
-          top.push([cx + x / 2 * half, y * att(x) * a]);
+          var x = -2 + 4 * k / N;
+          top.push([cx + x / 2 * half, a * att(x) * Math.sin(FREQ[ci] * x * 1.6 - ph * RATE[ci] + ci * 1.3)]);
         }
-        // Each lobe glows from its axis outward: full color at the center line, a third at the rim.
-        var ext = Math.max(1, a), vg = g.createLinearGradient(0, cy - ext, 0, cy + ext), cc = COLORS[ci].join(',');
-        vg.addColorStop(0, 'rgba(' + cc + ',' + (alpha * 0.35).toFixed(3) + ')');
-        vg.addColorStop(0.5, 'rgba(' + cc + ',' + alpha + ')');
-        vg.addColorStop(1, 'rgba(' + cc + ',' + (alpha * 0.35).toFixed(3) + ')');
-        g.fillStyle = vg;
+        var cc = col.join(',');
+        g.fillStyle = 'rgba(' + cc + ',' + alpha + ')';
         g.beginPath();
         top.forEach(function (q, k) { k ? g.lineTo(q[0], cy - q[1]) : g.moveTo(q[0], cy - q[1]); });
         for (var j = top.length - 1; j >= 0; j--) g.lineTo(top[j][0], cy + top[j][1]);
         g.closePath(); g.fill();
+        if (edge) {
+          // A thin bright edge along each lobe, for a crisp outline.
+          g.strokeStyle = 'rgba(' + col.map(function (v) { return Math.round(v + (255 - v) * 0.55); }).join(',') + ',' + Math.min(1, alpha + 0.25) + ')';
+          g.lineWidth = edge; g.stroke();
+        }
       });
-      // The bright core: a thin white line, fading to nothing at the ends.
-      var gr = g.createLinearGradient(cx - half, 0, cx + half, 0);
-      gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.5, 'rgba(255,255,255,' + (0.5 * alpha + 0.2).toFixed(3) + ')'); gr.addColorStop(1, 'rgba(255,255,255,0)');
-      g.fillStyle = gr; g.fillRect(cx - half, cy - Math.max(0.6, amp * 0.03), half * 2, Math.max(1.2, amp * 0.06));
       g.restore();
     }
 
@@ -86,18 +88,21 @@
         frame.draw(ctx, W, H);
         var dt = lastT === null ? 1 / 60 : Math.max(0, Math.min(0.1, t - lastT)); lastT = t;
 
-        // Hand → awake and loudness.
-        var hands = Magi.interaction.read(frame).hands, open = 0;
-        hands.forEach(function (h) {
-          if (h.fist) return;
-          var o = ['index', 'middle', 'ring', 'pinky'].reduce(function (a, f) { return a + (1 - h.fingers[f].curl) / 4; }, 0);
-          open = Math.max(open, Math.max(0, Math.min(1, (o - 0.25) / 0.6)));
-        });
-        var awake = open > 0.35 ? 1 : 0;
+        // Hand → awake, each finger's level, intensity (closeness) and speed (motion).
+        var hands = Magi.interaction.read(frame).hands, hd = hands.filter(function (h) { return !h.fist; })[0], open = 0;
+        if (hd) open = Math.max(0, Math.min(1, (['index', 'middle', 'ring', 'pinky'].reduce(function (a, f) { return a + (1 - hd.fingers[f].curl) / 4; }, 0) - 0.25) / 0.6));
+        var awake = hd && open > 0.35 ? 1 : 0;
         wake += (awake - wake) * (1 - Math.exp(-dt / 0.25));
-        var target = awake ? open : 0;
-        level += (target - level) * (1 - Math.exp(-dt / (target > level ? 0.06 : 0.18)));
-        phase += dt * (1.5 + params.speed / 100 * 5) * (0.5 + level);
+        FINGERS.forEach(function (f, k) {
+          var tgt = awake ? Math.max(0, Math.min(1, (1 - hd.fingers[f].curl - 0.15) / 0.7)) : 0;
+          lv[k] += (tgt - lv[k]) * (1 - Math.exp(-dt / (tgt > lv[k] ? 0.06 : 0.18)));
+        });
+        var level = lv.reduce(function (a, v) { return a + v; }, 0) / 5;
+        var nearT = hd ? 0.35 + 1.3 * Math.max(0, Math.min(1, ((hd.size || M * 0.12) / M - 0.06) / 0.19)) : 1;
+        near += (nearT - near) * (1 - Math.exp(-dt / 0.2));
+        var moveT = hd ? Math.min(2, (hd.speed || 0) / H * 1.5) : 0;
+        move += (moveT - move) * (1 - Math.exp(-dt / (moveT > move ? 0.1 : 0.5)));
+        phase += dt * (1.5 + params.speed / 100 * 5) * (0.6 + 0.6 * level) * (1 + move);
 
         // Dim the camera as it wakes.
         var dim = params.dim / 100 * (0.35 + 0.65 * wake);
@@ -109,7 +114,7 @@
           var bx = W / 2, by = H - M * 0.05, bw = W * 0.28, bh = Math.max(4, 5 * u);
           var aw = W * 0.85 * size, ah = M * 0.16 * size, py = H / 2;
           var x = bx, y = by + (py - by) * s, w = bw + (aw - bw) * s, h = bh + (ah - bh) * s;
-          var lv = 0.15 + 0.85 * level, glowH = h * (0.35 + 1.4 * lv * params.height / 100) * (0.25 + 0.75 * s);
+          var lvl = (0.15 + 0.85 * level) * near, glowH = h * (0.35 + 1.4 * lvl * params.height / 100) * (0.25 + 0.75 * s);
           var rim = function (g) {
             // The spectrum along the lower rim, moving; its height ripples with the level.
             var N = 60, x0 = x - w / 2, gr = g.createLinearGradient(x0, 0, x0 + w, 0);
@@ -129,7 +134,7 @@
             ctx.save();
             var sg = ctx.createLinearGradient(x - w / 2, 0, x + w / 2, 0);
             for (var k2 = 0; k2 <= 6; k2++) sg.addColorStop(k2 / 6, 'hsla(' + ((k2 / 6 * 360 + phase * 40) % 360).toFixed(0) + ',95%,70%,' + (0.9 * s).toFixed(3) + ')');
-            ctx.strokeStyle = sg; ctx.lineWidth = Math.max(1.5, 2 * u * (0.5 + lv));
+            ctx.strokeStyle = sg; ctx.lineWidth = Math.max(1.5, 2 * u * (0.5 + lvl));
             ctx.beginPath(); ctx.arc(x + w / 2 - h / 2, y, h / 2, 0, Math.PI / 2); ctx.lineTo(x - w / 2 + h / 2, y + h / 2); ctx.arc(x - w / 2 + h / 2, y, h / 2, Math.PI / 2, Math.PI); ctx.stroke();
             ctx.restore();
           }
@@ -139,33 +144,21 @@
           ctx.strokeStyle = 'rgba(255,255,255,' + (0.25 * s).toFixed(3) + ')'; ctx.lineWidth = Math.max(1, u); ctx.stroke();
           ctx.restore();
         } else {
-          // Asleep: a glass orb at the bottom with the wave curled inside. Awake: the wave across the middle.
-          var ox = W / 2, oy = H - M * 0.1, orR = M * 0.05;
-          var cx = ox, cy = oy + (H / 2 - oy) * s, half = orR * 0.9 + (W * 0.42 * size - orR * 0.9) * s;
-          var amp = (orR * 0.35 + (M * 0.2 * params.height / 100 * size) * (0.12 + 0.88 * level)) * (0.6 + 0.4 * s) * (s < 0.5 ? 1 : 1);
-          var drawWave = function (g) { wave(g, cx, cy, half, amp, 0.5, phase); };
-          haloOf(ctx, W, H, drawWave, 0.3 + 0.7 * params.glow / 100);
-          ctx.save();
-          if (s < 0.98) {
-            // The orb: clipped while it shrinks in, its glass rim fading as the wave leaves it.
-            var R = orR + (Math.max(W, H) - orR) * s;
-            ctx.beginPath(); ctx.arc(ox, oy + (H / 2 - oy) * s, R, 0, Math.PI * 2); ctx.clip();
-          }
-          wave(ctx, cx, cy, half, amp, 0.42, phase);
-          ctx.restore();
-          if (s < 0.9) {
-            var a = 1 - s / 0.9, rg = ctx.createRadialGradient(ox, oy - orR * 0.3, orR * 0.2, ox, oy, orR);
-            rg.addColorStop(0, 'rgba(255,255,255,0)'); rg.addColorStop(0.8, 'rgba(255,255,255,' + (0.05 * a).toFixed(3) + ')'); rg.addColorStop(1, 'rgba(255,255,255,' + (0.5 * a).toFixed(3) + ')');
-            ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(ox, oy, orR, 0, Math.PI * 2); ctx.fill();
-            ctx.strokeStyle = 'rgba(255,255,255,' + (0.6 * a).toFixed(3) + ')'; ctx.lineWidth = Math.max(1, 0.8 * u); ctx.stroke();
-          }
+          // Asleep: a calm, thin wave idling at the bottom. Awake: the wave across the middle,
+          // each finger's curve as tall as that finger is straight, all scaled by closeness.
+          var cy = H - M * 0.08 + (H / 2 - (H - M * 0.08)) * s, half = W * (0.16 + (0.42 * size - 0.16) * s);
+          var big = M * 0.3 * params.height / 100 * size * near, idle = M * 0.012 * (1 + 0.3 * Math.sin(t * 1.3));
+          var amps = lv.map(function (v, k) { return idle * (1 - s) + big * (0.08 + 0.92 * v) * s + idle * 0.5 * (0.6 + 0.4 * Math.sin(t * 0.9 + k)); });
+          var drawWave = function (g) { wave(g, W / 2, cy, half, amps, 0.75, phase, 0); };
+          haloOf(ctx, W, H, drawWave, 0.15 + 0.45 * params.glow / 100);
+          wave(ctx, W / 2, cy, half, amps, 0.62, phase, Math.max(1, 1.1 * u));
         }
 
         var tracker = Magi.tracking.hands;
         if (tracker.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, tracker, 'hand');
-        else if (!hands.length) frame.say('Open your hand to wake it; open it wider to make it louder. Close it to put it away.');
+        else if (!hands.length) frame.say('Open your hand to wake it. Each finger plays one color; bring your hand closer for more, move it for speed. A fist puts it to rest.');
       },
-      reset: function () { lastT = null; wake = 0; level = 0; }
+      reset: function () { lastT = null; wake = 0; near = 1; move = 0; lv = [0, 0, 0, 0, 0]; }
     };
   };
 })();

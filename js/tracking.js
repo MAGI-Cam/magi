@@ -21,7 +21,7 @@
     hands: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
     face: 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task',
     body: 'https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_segmenter/float16/1/selfie_segmenter.tflite',
-    objects: 'https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite0/float16/1/efficientdet_lite0.tflite'
+    objects: 'https://storage.googleapis.com/mediapipe-models/object_detector/efficientdet_lite2/float16/1/efficientdet_lite2.tflite'
   };
   // One Euro settings, in frame pixels: steady at rest (1.5 Hz cutoff), opening up by 0.05 Hz per
   // pixel/second of speed, with the speed itself filtered at 4 Hz so the filter opens within a few
@@ -316,11 +316,14 @@
     };
   }
 
-  // Objects: MediaPipe's Object Detector (EfficientDet-Lite0, the 80 COCO classes) on a copy of
-  // the frame at most 320 px across, mirrored like the preview, about 10 times a second (it is
-  // heavier than the landmarkers). Detections are followed between runs: each is matched to the
-  // track it overlaps most (intersection over union ≥ 0.3), so an object keeps its id; a track's
-  // box eases toward each new detection (half-life about 0.1 s) and is dropped after 0.5 s unseen.
+  // Objects: MediaPipe's Object Detector (EfficientDet-Lite2, the 80 COCO classes; markedly more
+  // accurate than Lite0 at about 3× the cost) on a copy of the frame at most 448 px across (the
+  // model's own input size), mirrored like the preview, about 7 times a second. Up to 15 objects a
+  // run, so a smaller object inside a larger one is still found. Detections are followed between
+  // runs: each is matched to the track it overlaps most (intersection over union ≥ 0.3), so an
+  // object keeps its id; a track's box eases toward each new detection (half-life about 0.1 s) and
+  // is dropped after 0.6 s unseen. A track is reported once it has been seen twice, or once at 60%
+  // confidence, so a one-off false detection never shows.
   // detect(frame) → [{ id, x, y, w, h, label, score }] in frame pixels.
   function createObjects() {
     var status = 'idle', task = null, lastTs = 0, lastRun = -1e9, tracks = [], nextId = 1, lastT = null;
@@ -331,7 +334,7 @@
         function create(delegate) {
           return v.m.ObjectDetector.createFromOptions(v.files, {
             baseOptions: { modelAssetPath: MODELS.objects, delegate: delegate },
-            runningMode: 'VIDEO', scoreThreshold: 0.35, maxResults: 8
+            runningMode: 'VIDEO', scoreThreshold: 0.3, maxResults: 15
           });
         }
         return create('GPU').catch(function () { return create('CPU'); });
@@ -349,9 +352,9 @@
         if (status === 'idle') load();
         var now = frame.time, dt = lastT === null ? 1 / 60 : Math.max(0, Math.min(0.2, (now - lastT) / 1000));
         lastT = now;
-        if (task && now - lastRun >= 100) {
+        if (task && now - lastRun >= 140) {
           lastRun = now;
-          var k = Math.min(1, 320 / Math.max(frame.width, frame.height));
+          var k = Math.min(1, 448 / Math.max(frame.width, frame.height));
           var w = Math.max(1, Math.round(frame.width * k)), h = Math.max(1, Math.round(frame.height * k));
           if (small.width !== w || small.height !== h) { small.width = w; small.height = h; }
           frame.draw(sctx, w, h);
@@ -367,15 +370,15 @@
             found.forEach(function (f) {
               var best = null, bi = 0.3;
               tracks.forEach(function (t) { if (!used[t.id] && t.label === f.label) { var v = iou(t, f); if (v > bi) { bi = v; best = t; } } });
-              if (!best) { best = { id: nextId++, x: f.x, y: f.y, w: f.w, h: f.h, label: f.label }; tracks.push(best); }
-              used[best.id] = true; best.target = f; best.score = f.score; best.seen = now;
+              if (!best) { best = { id: nextId++, x: f.x, y: f.y, w: f.w, h: f.h, label: f.label, hits: 0 }; tracks.push(best); }
+              used[best.id] = true; best.target = f; best.score = f.score; best.seen = now; best.hits++;
             });
-            tracks = tracks.filter(function (t) { return now - t.seen < 500; });
+            tracks = tracks.filter(function (t) { return now - t.seen < 600; });
           }
         }
         var e = 1 - Math.pow(0.5, dt / 0.1);
         tracks.forEach(function (t) { var f = t.target; if (!f) return; t.x += (f.x - t.x) * e; t.y += (f.y - t.y) * e; t.w += (f.w - t.w) * e; t.h += (f.h - t.h) * e; });
-        return tracks.map(function (t) { return { id: t.id, x: t.x, y: t.y, w: t.w, h: t.h, label: t.label, score: t.score }; });
+        return tracks.filter(function (t) { return t.hits >= 2 || t.score >= 0.6; }).map(function (t) { return { id: t.id, x: t.x, y: t.y, w: t.w, h: t.h, label: t.label, score: t.score }; });
       }
     };
   }

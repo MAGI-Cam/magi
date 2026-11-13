@@ -12,12 +12,17 @@
 //   Fist: the offsets shrink to zero and the swarm merges into a single cursor at your fingertip
 //     (cursors that have arrived fade out, leaving one).
 //   Open palm: unleash. The cursors leave your hand for the objects MediaPipe's Object Detector
-//     finds (Magi.tracking.objects), shared out among them; each cursor runs round its object's
-//     box (one lap per 4 s ÷ Speed, spaced evenly). Each found object is drawn as a selection: a
-//     blue box with corner handles, guides out to the edges of the frame and a tag with what it
-//     is and how sure. With nothing found, the cursors spread out and search.
+//     finds (Magi.tracking.objects). Each points at a spot on an object (a handle, an edge, the
+//     center or somewhere inside), dwells 0.5–1.8 s ÷ Speed, then hops to another spot, often on
+//     another object, like people pointing things out. Each found object, including a smaller one
+//     inside a bigger one, is drawn as a selection: a blue box with handles, guides out to the
+//     edges of the frame and a tag with what it is and how sure. With nothing found, the cursors
+//     spread out and search.
 //   No hand: they drift.
 (function () {
+  // Where a cursor can point on an object, as fractions of its box: the eight handles, the center,
+  // and (null) a random spot inside.
+  var SPOTS = [[0, 0], [0.5, 0], [1, 0], [1, 0.5], [1, 1], [0.5, 1], [0, 1], [0, 0.5], [0.5, 0.5], null, null, null];
   var BLUE = '#2f6bff', COLORS = ['#ffffff', '#2f6bff', '#ffd23a', '#ff4d5e', '#4be38a', '#ff7ad9', '#7fd0ff'];
   // The classic arrow pointer, in units of its height (tip at 0, 0).
   var ARROW = [[0, 0], [0, 1], [0.27, 0.76], [0.45, 1.12], [0.6, 1.05], [0.43, 0.7], [0.75, 0.7]];
@@ -55,7 +60,8 @@
         mode = !hd ? 'idle' : hd.fist ? 'merge' : (hd.count >= 5 && !hd.pinched) ? 'unleash' : 'follow';
         unleash += ((mode === 'unleash' ? 1 : 0) - unleash) * (1 - Math.exp(-dt / 0.25));
         // Objects: only looked for once you have opened your palm, so the detector loads on demand.
-        var objs = (mode === 'unleash' || unleash > 0.05) ? Magi.tracking.objects.detect(frame) : [];
+        // Biggest first, so a smaller object inside a bigger one is drawn over it.
+        var objs = (mode === 'unleash' || unleash > 0.05) ? Magi.tracking.objects.detect(frame).sort(function (a, b) { return b.w * b.h - a.w * a.h; }) : [];
         var hold = tip ? { x: tip.x, y: tip.y } : null;
 
         C.forEach(function (c, i) {
@@ -63,13 +69,19 @@
           if (mode === 'merge') { tx = hold.x; ty = hold.y; }
           else if (mode === 'follow') { tx = hold.x + c.ox * size; ty = hold.y + c.oy * size; }
           else if (mode === 'unleash' && objs.length) {
-            // Shared out among the objects; each runs round its box, evenly spaced.
-            var ob = objs[i % objs.length], m = Math.floor(i / objs.length), share = Math.ceil(C.length / objs.length);
-            var per = 2 * (ob.w + ob.h), d = ((m / share + t * sp / 4) % 1) * per;
-            if (d < ob.w) { tx = ob.x + d; ty = ob.y; }
-            else if (d < ob.w + ob.h) { tx = ob.x + ob.w; ty = ob.y + d - ob.w; }
-            else if (d < 2 * ob.w + ob.h) { tx = ob.x + ob.w - (d - ob.w - ob.h); ty = ob.y + ob.h; }
-            else { tx = ob.x; ty = ob.y + ob.h - (d - 2 * ob.w - ob.h); }
+            // Each cursor points at one spot on one object (a handle, an edge, the center or a spot
+            // inside), dwells there, then hops to another, often on another object; objects are
+            // chosen evenly, so a small object inside a big one gets its share. Spots are kept as
+            // fractions of the box, so they follow it as it moves.
+            var ob = null;
+            objs.forEach(function (o) { if (o.id === c.obj) ob = o; });
+            if (!ob || t > c.until) {
+              ob = objs[Math.floor(Math.random() * objs.length)];
+              var sp2 = SPOTS[Math.floor(Math.random() * SPOTS.length)];
+              c.obj = ob.id; c.fx = sp2 ? sp2[0] : 0.15 + 0.7 * Math.random(); c.fy = sp2 ? sp2[1] : 0.15 + 0.7 * Math.random();
+              c.until = t + (0.5 + Math.random() * 1.3) / sp;
+            }
+            tx = ob.x + c.fx * ob.w; ty = ob.y + c.fy * ob.h;
           } else {
             // Searching (or no hand): each drifts over its own slow Lissajous path across the frame.
             var sx = mode === 'unleash' ? 0.45 : 0.35;
