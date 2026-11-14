@@ -5,10 +5,11 @@
 // the four fingers (1 − curl, mapped so a fist is 0 and a flat hand 1), followed like an audio level
 // meter (0.06 s attack, 0.18 s release); a closed palm damps the wave down to a murmur but keeps it
 // awake. The wave sits at mid-height and follows your hand from side to side (time constant
-// 0.15 s); pinch and spread thumb and index to shrink and grow it (0.4× to 1.4×). Only when your
+// 0.15 s); pinch and spread thumb and index to lower and raise its height (0.4× to 1.4×); its
+// length stays fixed. Only when your
 // hand leaves the picture does Siri go back to the bottom to rest.
 //
-// iOS 10 (after the classic iOS 9/10 Siri wave, as in the SiriWave library): three colors, blue
+// The look (after the classic iOS 9/10 Siri wave, as in the SiriWave library): three colors, blue
 // (32, 133, 252), green (94, 252, 169) and red (253, 71, 103), added as light ('lighter'), so where
 // they cross they make cyan, magenta and white, over a thin white line across the screen. Each
 // color is the sum of 2–5 curves, each A·sin²(f·x − φ)·att((x − c)/w) with
@@ -17,20 +18,14 @@
 // either direction), filled between y and −y, lens-shaped. Each
 // curve lives 1.5–3.5 s, swelling and fading as sin(π·age/life), then is born again elsewhere,
 // so the wave keeps reshaping as it does when it listens. No glow, no reflection.
-// iOS 27 (after the newer glowing Siri): the same curves in blue, magenta, amber and cyan, drawn
-// soft and luminous: a blurred glow (the drawing at a quarter size, scaled up), translucent lobes
-// and a white-hot core. Resting, it curls into a small glass orb at the bottom with the wave
-// inside it.
 (function () {
   var IOS10 = [[32, 133, 252], [94, 252, 169], [253, 71, 103]];
-  var IOS27 = [[70, 120, 255], [255, 70, 160], [255, 180, 70], [80, 220, 255]];
   function att(x) { var K = 4; return Math.pow(K / (K + x * x), K); }
   function smooth(x) { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); }
   function rnd(a, b) { return a + Math.random() * (b - a); }
 
   Magi.renderers.siri = function () {
     var wake = 0, level = 0, lastT = null, cx = null, cy = null, sz = 1, groups = {};
-    var glow = document.createElement('canvas'), gctx = glow.getContext('2d');
     function curve() { return { A: rnd(0.35, 1), c: rnd(-2, 2), w: rnd(0.5, 1.3), f: (Math.random() < 0.5 ? -1 : 1) * rnd(2.2, 3.8), sp: rnd(0.5, 1), ph: rnd(0, 6.28), age: 0, life: rnd(1.5, 3.5) }; }
     function colorCurves() { var c = [], k = Math.round(rnd(2, 5)); for (var i = 0; i < k; i++) { var q = curve(); q.age = rnd(0, q.life); c.push(q); } return c; }
     function setFor(key, n) {
@@ -82,7 +77,6 @@
         var ctx = out.getContext('2d');
         frame.draw(ctx, W, H);
         var dt = lastT === null ? 1 / 60 : Math.max(0, Math.min(0.1, t - lastT)); lastT = t;
-        var ios27 = params.mode === 'ios27';
 
         // Hand: awake unless low or gone; loudness = openness (a fist damps it); x and size.
         var hands = Magi.interaction.read(frame).hands, hd = hands[0], open = 0;
@@ -101,45 +95,18 @@
         var dim = params.dim / 100 * (0.35 + 0.65 * wake);
         if (dim > 0) { ctx.fillStyle = 'rgba(0,0,0,' + dim.toFixed(3) + ')'; ctx.fillRect(0, 0, W, H); }
 
-        var colors = ios27 ? IOS27 : IOS10, set = setFor(ios27 ? 'b' : 'a', colors.length);
+        var colors = IOS10, set = setFor('a', colors.length);
         step(set, dt, 2 + params.speed / 100 * 7);
         var s = smooth(wake), size = 0.45 + params.size / 100 * 0.55;
-        var half = W * (0.12 + (0.46 * size * sz - 0.12) * s);
+        // A fixed length: the same whether resting, rising or awake, and whatever the pinch.
+        var half = W * 0.46 * size;
         var amp = M * 0.2 * params.height / 100 * size * sz * (0.03 + 0.97 * level) * (0.25 + 0.75 * s) + M * 0.004;
 
-        if (!ios27) {
-          // The thin white line across the screen, fading at its ends.
-          var lw = W * (0.3 + 0.65 * s), gr = ctx.createLinearGradient(cx - lw / 2, 0, cx + lw / 2, 0);
-          gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.5, 'rgba(255,255,255,0.9)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
-          ctx.fillStyle = gr; ctx.fillRect(cx - lw / 2, cy - Math.max(0.5, 0.6 * u), lw, Math.max(1, 1.2 * u));
-          lobes(ctx, set, colors, cx, cy, half, amp, 0.75, false);
-        } else {
-          // Glow: the lobes at a quarter size, scaled up twice; then translucent lobes and a white core.
-          var q = 4, gw = Math.max(1, Math.round(W / q)), gh = Math.max(1, Math.round(H / q));
-          if (glow.width !== gw || glow.height !== gh) { glow.width = gw; glow.height = gh; }
-          gctx.setTransform(1, 0, 0, 1, 0, 0); gctx.clearRect(0, 0, gw, gh);
-          gctx.setTransform(1 / q, 0, 0, 1 / q, 0, 0);
-          lobes(gctx, set, colors, cx, cy, half, amp * 1.15, 0.9, false);
-          var orbR = M * 0.055;
-          ctx.save();
-          if (s < 0.98) { var R = orbR + (Math.max(W, H) - orbR) * s; ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.clip(); }
-          ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.6 + 0.4 * params.glow / 100;
-          ctx.imageSmoothingEnabled = true;
-          ctx.drawImage(glow, 0, 0, W, H);
-          ctx.drawImage(glow, -W * 0.03, -H * 0.05, W * 1.06, H * 1.1);
-          ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
-          lobes(ctx, set, colors, cx, cy, half, amp, 0.45, false);
-          lobes(ctx, set, colors, cx, cy, half, amp * 0.18, 0.22, true);
-          ctx.restore();
-          if (s < 0.9) {
-            // Resting: a glass orb round the curled-up wave (a rim of light, brighter at the top).
-            var a = 1 - s / 0.9, rg = ctx.createRadialGradient(cx, cy, orbR * 0.75, cx, cy, orbR);
-            rg.addColorStop(0, 'rgba(255,255,255,0)'); rg.addColorStop(1, 'rgba(255,255,255,' + (0.35 * a).toFixed(3) + ')');
-            ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(cx, cy, orbR, 0, Math.PI * 2); ctx.fill();
-            ctx.strokeStyle = 'rgba(255,255,255,' + (0.7 * a).toFixed(3) + ')'; ctx.lineWidth = Math.max(1, 0.9 * u);
-            ctx.beginPath(); ctx.arc(cx, cy, orbR, Math.PI * 1.05, Math.PI * 1.95); ctx.stroke();
-          }
-        }
+        // The thin white line across the screen, fading at its ends, and the colored lobes.
+        var lw = W * 0.95, gr = ctx.createLinearGradient(cx - lw / 2, 0, cx + lw / 2, 0);
+        gr.addColorStop(0, 'rgba(255,255,255,0)'); gr.addColorStop(0.5, 'rgba(255,255,255,0.9)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = gr; ctx.fillRect(cx - lw / 2, cy - Math.max(0.5, 0.6 * u), lw, Math.max(1, 1.2 * u));
+        lobes(ctx, set, colors, cx, cy, half, amp, 0.75, false);
 
         var tracker = Magi.tracking.hands;
         if (tracker.status() !== 'ready') Magi.tracking.drawStatus(ctx, frame, tracker, 'hand');

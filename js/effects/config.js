@@ -647,15 +647,10 @@ Magi.effectConfig = [
     group: 'hand',
     ready: true,
     photoType: 'image/jpeg',
-    modes: [
-      { id: 'ios10', name: 'iOS 10' },
-      { id: 'ios27', name: 'iOS 27' }
-    ],
     params: [
       range('height', 'Height', 0, 100, 60),
       range('size', 'Size', 0, 100, 60),
       range('speed', 'Speed', 0, 100, 40),
-      { id: 'glow', label: 'Glow', min: 0, max: 100, step: 1, default: 60, modes: ['ios27'] },
       range('dim', 'Dim', 0, 100, 55)
     ]
   },
@@ -1063,9 +1058,9 @@ Magi.effectGuides = {
     'Labels, Text: how many names and how big. Spin: turning with no hand. Dim, Squares, Axes: background, color squares, axes.'
   ],
   siri: [
-    'How it works: a voice assistant’s listening wave, driven by your hand instead of your voice. Raise a hand to wake it, even one finger up; the more fingers and the more open your hand, the louder it is, and a closed palm damps it to a murmur. It stays at mid-height and follows your hand from side to side; pinch and spread thumb and index to shrink and grow it. When your hand leaves the picture it goes back down to rest at the bottom.',
-    'Modes: tap the tile. iOS 10: the classic wave, blue, green and red curves that make cyan, magenta and white where they cross, over a thin white line, endlessly reshaping. iOS 27: the newer glowing wave in blue, magenta, amber and cyan with a white-hot core, resting as a small glass orb.',
-    'Height: how tall the waves get. Size: how wide. Speed: how fast they move. Glow (iOS 27): the halo. Dim: darkens the camera while it is awake.'
+    'How it works: a voice assistant’s listening wave, driven by your hand instead of your voice. Raise a hand to wake it, even one finger up; the more fingers and the more open your hand, the louder it is, and a closed palm damps it to a murmur. It stays at mid-height and follows your hand from side to side; pinch and spread thumb and index to make it shorter or taller (its length stays fixed). When your hand leaves the picture it goes back down to rest at the bottom.',
+    'The wave: the classic Siri look, blue, green and red curves that make cyan, magenta and white where they cross, over a thin white line, endlessly reshaping.',
+    'Height: how tall the waves get. Size: how long the wave is. Speed: how fast they move. Dim: darkens the camera while it is awake.'
   ],
   swarm: [
     'How it works: a flock of mouse cursors. Each is steered to its own target by a critically damped spring and kept apart from its neighbors (a boid rule), so a moving target pulls them into a stream.',
