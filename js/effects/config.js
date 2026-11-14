@@ -1058,7 +1058,7 @@ Magi.effectGuides = {
     'Labels, Text: how many names and how big. Spin: turning with no hand. Dim, Squares, Axes: background, color squares, axes.'
   ],
   siri: [
-    'How it works: a voice assistant’s listening wave, driven by your hand instead of your voice. Raise a hand to wake it, even one finger up; the more fingers and the more open your hand, the louder it is, and a closed palm damps it to a murmur. It stays at mid-height and follows your hand from side to side; pinch and spread thumb and index to make it shorter or taller (its length stays fixed). When your hand leaves the picture it goes back down to rest at the bottom.',
+    'How it works: a voice assistant’s listening wave, driven by your hand instead of your voice. Raise a hand to wake it, even one finger up; the more fingers and the more open your hand, the louder it is, and a closed palm damps it to a murmur. The bar stays put at mid-height, its ends fixed; inside it the swell of the wave drifts toward your hand; pinch and spread thumb and index to make it shorter or taller (its length stays fixed). When your hand leaves the picture it goes back down to rest at the bottom.',
     'The wave: the classic Siri look, blue, green and red curves that make cyan, magenta and white where they cross, over a thin white line, endlessly reshaping.',
     'Height: how tall the waves get. Size: how long the wave is. Speed: how fast they move. Dim: darkens the camera while it is awake.'
   ],
